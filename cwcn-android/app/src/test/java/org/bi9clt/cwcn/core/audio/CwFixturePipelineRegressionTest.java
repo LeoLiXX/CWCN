@@ -147,6 +147,20 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
+    public void burstyDualInterfererBoundaryFixtureCanExposeWrongToneTracking() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("bursty_dual_interferer_boundary_report");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertEquals(summary, "TRK", result.likelyBottleneckCode());
+        assertEquals(summary, "WRONG", result.frontEndQualityCode());
+        assertTrue(summary, bundle.signalSnapshot.targetToneLocked());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) >= 40);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 7000.0d);
+    }
+
+    @Test
     public void sweepingBoundaryInterfererFixtureExposesWrongToneAcquisitionRisk() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("sweeping_boundary_interferer_directed_report");
         CwFixtureEvaluationResult result = bundle.result;

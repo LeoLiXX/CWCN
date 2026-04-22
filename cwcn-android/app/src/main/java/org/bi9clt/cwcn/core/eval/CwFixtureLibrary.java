@@ -402,6 +402,41 @@ public final class CwFixtureLibrary {
                     new CwFixtureScenario.ContinuousInterfererProfile(820, 1100, -10.0d, 70, 130, 25)
             )),
             new CwFixtureScenario(
+                    "bursty_dual_interferer_boundary_report",
+                    "Bursty Dual Interferer Boundary Report",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ UR 5NN BK"),
+                    1800,
+                    19,
+                    670,
+                    17800,
+                    930,
+                    2400,
+                    180,
+                    0.04d,
+                    2300,
+                    0.0d,
+                    0.0d,
+                    Collections.singletonList(PartTimingProfile.defaultProfile()),
+                    250,
+                    450,
+                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    Collections.singletonList("BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Directed report to called station",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    null,
+                    "599",
+                    "Exercises a harsher bursty crowded-band boundary with intermittent nearby occupancy plus a second drifting burst carrier."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(760, 2200, 0.0d, 90, 70, 15),
+                    new CwFixtureScenario.ContinuousInterfererProfile(835, 2100, -35.0d, 110, 80, 55)
+            )),
+            new CwFixtureScenario(
                     "drifting_nearby_interferer_directed_report",
                     "Drifting Nearby Interferer Report",
                     "BI9CLT DE BG7YOZ UR 5NN BK",

@@ -1199,6 +1199,36 @@
 - [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
 
+## 2026-04-22 Bursty Boundary Fixture Split
+
+- Took the new burst-capable interferer framework one step further by explicitly splitting bursty crowded-band stress into:
+- a workable baseline
+- an allowed boundary failure
+- The existing `bursty_interferer_directed_report` remains the softer baseline.
+- Added a stronger boundary partner:
+- `bursty_dual_interferer_boundary_report`
+- This fixture combines:
+- intermittent nearby occupancy
+- plus a second drifting burst carrier
+- so the stress is no longer just “carrier is always there”, but “carrier pressure appears and disappears while the local spectral picture is moving”.
+- Current observed locked-in behavior for this new boundary:
+- front-end quality `WRONG`
+- likely bottleneck `TRK`
+- meaning the tracker can still form a strong stable lock, but on the wrong tone under bursty multi-source pressure
+- Practical value:
+- burst-style occupancy is now also split into baseline vs boundary, instead of only continuous-carrier stress having that structure
+- so later front-end tuning can target:
+- better resilience to intermittent adjacent activity
+- without losing sight of which scenarios are intentionally still allowed to fail today
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
 ## 2026-04-22 Bursty Interferer Fixture Support
 
 - Extended `ContinuousInterfererProfile` one step further so an added interferer can now be either:
