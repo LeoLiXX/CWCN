@@ -102,6 +102,20 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
+    public void sweepingBoundaryInterfererFixtureExposesWrongToneAcquisitionRisk() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("sweeping_boundary_interferer_directed_report");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertEquals(summary, "GOOD", result.frontEndQualityCode());
+        assertTrue(summary, bundle.signalSnapshot.targetToneLocked());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) >= 40);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 8000.0d);
+    }
+
+    @Test
     public void humanOpTimingFixtureDoesNotCollapseIntoFrontEndFailure() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("human_op_timing_full_qso");
         CwFixtureEvaluationResult result = bundle.result;

@@ -1877,10 +1877,15 @@
 - `SyntheticFixtureRxAudioSource` now renders the interferer with a gradual instantaneous-frequency change while keeping phase continuous across the stream.
 - Added a new regression fixture:
 - `drifting_nearby_interferer_directed_report`
+- Added a second explicit boundary fixture:
+- `sweeping_boundary_interferer_directed_report`
 - This fixture is intentionally calibrated as a `moderate drifting interferer baseline`:
 - harder than the fixed-carrier nearby/moderate interferer cases
 - but not so aggressive that it immediately drags the tracker into a non-usable boundary failure
 - After replay verification, this baseline is now explicitly locked at front-end quality `GOOD`.
+- The new sweeping boundary fixture deliberately captures a different failure mode:
+- front-end lock can still look `GOOD`
+- but the tracker can be pulled onto the wrong nearby tone strongly enough that the overall bottleneck is still classified as `SIG`
 - Added focused JVM coverage for:
 - fixture-model exposure of interferer drift
 - summary-string exposure of interferer drift
