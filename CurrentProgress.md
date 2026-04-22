@@ -1973,3 +1973,38 @@
 - [CwFixtureEvaluationResultTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResultTest.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
 - [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+
+## 2026-04-22 Live Front-End Health Classification Alignment
+
+- Aligned live Debug UI microphone observability with the newer offline front-end grading semantics instead of keeping a separate ad-hoc wording path.
+- Added a reusable `CwFrontEndHealthClassifier` so snapshot-based live runs can now emit the same compact concepts used by fixture evaluation:
+- `GOOD`
+- `WRONG`
+- `DROP`
+- `MISS`
+- `WEAK`
+- `NA`
+- The classifier also exposes a compact live diagnosis code:
+- `OK`
+- `TRK`
+- `SIG`
+- `NA`
+- `InputDebugActivity` now uses this classifier in three places:
+- microphone tone watch
+- signal state panel
+- signal health summary
+- Practical effect on live microphone/debug sessions:
+- a strong off-target lock is now shown explicitly as `WRONG / TRK`
+- a healthy retained lock or clean release is shown as `GOOD / OK`
+- a run with earlier healthy lock that later fell back to search is shown as `DROP / SIG`
+- a run that never formed a convincing lock is shown as `MISS / SIG`
+- Added focused JVM tests for the classifier so the live-view semantics stay pinned even if thresholds are adjusted later.
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFrontEndHealthClassifierTest --tests org.bi9clt.cwcn.core.eval.CwFixtureEvaluationResultTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwFrontEndHealthClassifier.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifier.java)
+- [CwFrontEndHealthClassifierTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifierTest.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)

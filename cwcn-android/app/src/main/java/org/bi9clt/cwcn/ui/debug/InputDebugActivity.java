@@ -45,6 +45,7 @@ import org.bi9clt.cwcn.core.eval.CwFixtureEvaluationResult;
 import org.bi9clt.cwcn.core.eval.CwFixtureEvaluator;
 import org.bi9clt.cwcn.core.eval.CwFixtureLibrary;
 import org.bi9clt.cwcn.core.eval.CwFixtureScenario;
+import org.bi9clt.cwcn.core.eval.CwFrontEndHealthClassifier;
 import org.bi9clt.cwcn.core.interpreter.CwInterpretationEvent;
 import org.bi9clt.cwcn.core.interpreter.CwInterpretedToken;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreter;
@@ -425,7 +426,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
     private String renderMicrophoneToneWatch() {
         CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
-        int trackingErrorHz = snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz();
+        int trackingErrorHz = CwFrontEndHealthClassifier.trackingErrorHz(snapshot);
         String offsetLabel;
         if (Math.abs(trackingErrorHz) <= 15) {
             offsetLabel = "near target";
@@ -434,7 +435,15 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         } else {
             offsetLabel = "below preferred";
         }
-        return "Mic Tone Watch: "
+        return "Mic Front-End: "
+                + CwFrontEndHealthClassifier.qualityCode(snapshot)
+                + " / "
+                + CwFrontEndHealthClassifier.bottleneckCode(snapshot)
+                + " - "
+                + CwFrontEndHealthClassifier.qualityLabel(snapshot)
+                + "\nMic Reason: "
+                + CwFrontEndHealthClassifier.reason(snapshot)
+                + "\nMic Tone Watch: "
                 + (snapshot.targetToneLocked() ? "LOCKED" : "SEARCH")
                 + " | tracked "
                 + snapshot.targetToneFrequencyHz()
@@ -718,9 +727,13 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
     private String renderSignalState() {
         CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
-        int toneErrorHz = snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz();
+        int toneErrorHz = CwFrontEndHealthClassifier.trackingErrorHz(snapshot);
         return "Tone: " + (snapshot.toneActive() ? getString(R.string.signal_tone_active) : getString(R.string.signal_tone_idle))
                 + "\nTarget Tone Lock: " + (snapshot.targetToneLocked() ? "LOCKED" : "SEARCH")
+                + "\nFront-End Class: " + CwFrontEndHealthClassifier.qualityCode(snapshot)
+                + " (" + CwFrontEndHealthClassifier.qualityLabel(snapshot) + ")"
+                + "\nLikely Bottleneck: " + CwFrontEndHealthClassifier.bottleneckCode(snapshot)
+                + " (" + CwFrontEndHealthClassifier.bottleneckLabel(snapshot) + ")"
                 + "\nPreferred Tone: " + snapshot.preferredToneFrequencyHz() + " Hz"
                 + "\nTracked Tone: " + snapshot.targetToneFrequencyHz() + " Hz"
                 + "\nTracking Error: " + String.format(Locale.US, "%+d", toneErrorHz) + " Hz"
@@ -754,7 +767,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
     private String renderSignalHealthSummary() {
         CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
-        int trackingErrorHz = snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz();
+        int trackingErrorHz = CwFrontEndHealthClassifier.trackingErrorHz(snapshot);
         int attackHeadroom = snapshot.signalFloorEstimate() - snapshot.currentThreshold();
         int releaseMargin = snapshot.releaseThreshold() - snapshot.noiseFloorEstimate();
         double dominancePercent = snapshot.toneDominanceRatio() * 100.0d;
@@ -763,39 +776,11 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         double lockCoveragePercent = snapshot.lockedFrameRatio() * 100.0d;
         double toneActiveUnlockPercent = snapshot.toneActiveUnlockedFrameRatio() * 100.0d;
 
-        String label;
-        String reason;
-        if (!snapshot.targetToneLocked() && dominancePercent < 28.0d && snapshot.lastToneRmsAmplitude() < 40.0d) {
-            label = "Searching / no stable target";
-            reason = "No reliable narrow-band tone is standing out yet.";
-        } else if (isWrongToneLockCandidate(snapshot)) {
-            label = "Strong lock on off-target tone";
-            reason = "The front end is locked confidently, but the tracked tone is sitting far enough away from the preferred pitch that this looks like wrong-tone acquisition.";
-        } else if (snapshot.targetToneLocked() && Math.abs(trackingErrorHz) >= 45) {
-            label = "Tracking drift rising";
-            reason = "The tracked tone is moving away from the preferred pitch and should be watched.";
-        } else if (isCleanReleaseCandidate(snapshot)) {
-            label = "Healthy lock with clean release";
-            reason = "Active tone windows stayed comfortably locked, and the latest unlocked state looks like a normal tone-off tail.";
-        } else if (!snapshot.targetToneLocked() && peakIsolationPercent >= 55.0d && lockCoveragePercent >= 20.0d) {
-            label = "Recovered earlier lock";
-            reason = "The front end had a healthy lock earlier in this run, but is not locked on the latest frame.";
-        } else if (!snapshot.targetToneLocked() && isolationPercent < 36.0d) {
-            label = "Tone detected but confidence low";
-            reason = "Some target-like tone energy is present, but it is still mixed with too much residue.";
-        } else if (!snapshot.targetToneLocked()) {
-            label = "Tone detected but confidence low";
-            reason = "A candidate tone is present, but lock confidence is still below the stable range.";
-        } else if (dominancePercent < 45.0d || isolationPercent < 52.0d || attackHeadroom < 8 || releaseMargin < 6) {
-            label = "Weak lock / low dominance";
-            reason = "Lock exists, but tone separation from noise or interference is still not very comfortable.";
-        } else {
-            label = "Healthy lock";
-            reason = "Tone lock, dominance, and threshold margins all look stable.";
-        }
-
-        return "Health: " + label
-                + "\nReason: " + reason
+        return "Health: " + CwFrontEndHealthClassifier.qualityLabel(snapshot)
+                + " [" + CwFrontEndHealthClassifier.qualityCode(snapshot)
+                + " / " + CwFrontEndHealthClassifier.bottleneckCode(snapshot) + "]"
+                + "\nReason: " + CwFrontEndHealthClassifier.reason(snapshot)
+                + "\nDiagnosis: " + CwFrontEndHealthClassifier.bottleneckLabel(snapshot)
                 + "\nDominance: " + Math.round(dominancePercent) + "%"
                 + " | Isolation: " + Math.round(isolationPercent) + "%"
                 + " | Tone RMS: " + String.format(Locale.US, "%.1f", snapshot.lastToneRmsAmplitude())
@@ -807,27 +792,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "\nTone-active unlock: " + Math.round(toneActiveUnlockPercent) + "%"
                 + " | Worst active gap: " + snapshot.maxConsecutiveToneActiveUnlockedFrames() + " frame(s)"
                 + "\nTrack offset: " + String.format(Locale.US, "%+d", trackingErrorHz) + " Hz";
-    }
-
-    private boolean isWrongToneLockCandidate(CwSignalSnapshot snapshot) {
-        return snapshot != null
-                && snapshot.targetToneLocked()
-                && Math.abs(snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz()) >= 45
-                && snapshot.peakNarrowbandIsolationRatio() >= 0.60d
-                && snapshot.lockedFrameRatio() >= 0.30d
-                && snapshot.maxConsecutiveLockedFrames() >= 4;
-    }
-
-    private boolean isCleanReleaseCandidate(CwSignalSnapshot snapshot) {
-        return snapshot != null
-                && !snapshot.targetToneLocked()
-                && snapshot.lastEvent() != null
-                && snapshot.lastEvent().type() == CwToneEvent.Type.TONE_OFF
-                && snapshot.peakNarrowbandIsolationRatio() >= 0.55d
-                && snapshot.lockedFrameRatio() >= 0.25d
-                && snapshot.maxConsecutiveLockedFrames() >= 4
-                && snapshot.toneActiveUnlockedFrameRatio() <= 0.12d
-                && snapshot.maxConsecutiveToneActiveUnlockedFrames() <= 2;
     }
 
     private String renderLastSignalEvent() {
