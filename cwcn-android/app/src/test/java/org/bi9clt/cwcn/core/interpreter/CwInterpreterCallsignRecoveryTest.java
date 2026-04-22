@@ -149,12 +149,56 @@ public final class CwInterpreterCallsignRecoveryTest {
     }
 
     @Test
+    public void closingChainWrappedSpeakerCallsignStillRecoversCleanCandidate() {
+        CwInterpreter interpreter = new CwInterpreter();
+
+        interpreter.process(decode("BI9CLT DE BG7YOZ UR 5NN BK", 1000L));
+        interpreter.process(decode("?? DE ?BBG7YOZTU73BK??", 2000L));
+
+        CwInterpreterSnapshot snapshot = interpreter.snapshot();
+        assertEquals("BG7YOZ", snapshot.primaryCallsignCandidate());
+        assertTrue(snapshot.callsignCandidates().contains("BG7YOZ"));
+        assertFalse(snapshot.callsignCandidates().contains("?BBG7YOZTU73BK??"));
+    }
+
+    @Test
+    public void gluedAckReportClosingResidueDoesNotBeatCleanRememberedCallsign() {
+        CwInterpreter interpreter = new CwInterpreter();
+
+        interpreter.process(decode("BI9CLT DE BG7YOZ UR 5NN BK", 1000L));
+        interpreter.process(decode("?? DE BG7YOZR5NNTU73BK", 2000L));
+
+        CwInterpreterSnapshot snapshot = interpreter.snapshot();
+        assertEquals("BG7YOZ", snapshot.primaryCallsignCandidate());
+        assertTrue(snapshot.callsignCandidates().contains("BG7YOZ"));
+        assertFalse(snapshot.callsignCandidates().contains("BG7YOZR5NNTU73BK"));
+    }
+
+    @Test
     public void partialCallBeforeClarificationKeywordsStillCountsAsUncertainCallsign() {
         CwInterpreterSnapshot snapshot = runSequence("H??Z AGN PSE K");
 
         assertTrue(snapshot.callsignCandidates().contains("H??Z"));
         assertTrue(snapshot.phraseHints().contains("Partial callsign / uncertain copy"));
         assertTrue(snapshot.phraseHints().contains("Repeat / clarification request"));
+    }
+
+    @Test
+    public void uncertainCallsignAheadOfCallsignAgainPleaseFlowIsPreserved() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9??Z UR CALLSIGN AGAIN PSE");
+
+        assertTrue(snapshot.callsignCandidates().contains("BI9??Z"));
+        assertTrue(snapshot.phraseHints().contains("Partial callsign / uncertain copy"));
+        assertTrue(snapshot.phraseHints().contains("Repeat / clarification request"));
+    }
+
+    @Test
+    public void portableSuffixCallsignIsKeptAsValidCandidate() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ/P UR 5NN BK");
+
+        assertEquals("BG7YOZ/P", snapshot.primaryCallsignCandidate());
+        assertTrue(snapshot.callsignCandidates().contains("BG7YOZ/P"));
+        assertTrue(snapshot.phraseHints().contains("Station identification / callsign exchange"));
     }
 
     @Test

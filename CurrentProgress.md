@@ -2087,3 +2087,22 @@
 - [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
 - [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
 - [CwFrontEndHealthClassifierTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifierTest.java)
+
+## 2026-04-22 Extra Callsign Pollution Recovery Fixtures
+
+- Added another small batch of interpreter regression cases focused on more realistic callsign contamination patterns rather than idealized spaced tokens.
+- Newly pinned cases now include:
+- leading-noise plus glued closing chain around a remembered callsign such as `?BBG7YOZTU73BK??`
+- glued ack/report/closing residue such as `BG7YOZR5NNTU73BK`
+- uncertain callsign followed by clarification flow such as `BI9??Z UR CALLSIGN AGAIN PSE`
+- portable callsign form such as `BG7YOZ/P`
+- Current result:
+- the existing callsign cleanup / remembered-context recovery logic already handles these cases without additional implementation changes
+- so exact-callsign recovery coverage is now pinned more tightly by tests instead of only by manual reasoning
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
