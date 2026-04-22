@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="cwcn_primary">#0F5965</color>
+    <color name="cwcn_primary_variant">#0A414A</color>
+    <color name="cwcn_secondary">#D7A93A</color>
+    <color name="cwcn_secondary_variant">#A97214</color>
+    <color name="cwcn_screen_background">#091218</color>
+    <color name="cwcn_panel_background">#12212A</color>
+    <color name="cwcn_field_background">#0E1B22</color>
+    <color name="cwcn_panel_stroke">#27404D</color>
+    <color name="cwcn_title">#F7FBFC</color>
+    <color name="cwcn_body">#D0DEE3</color>
+    <color name="cwcn_subtitle">#8FA8B1</color>
+    <color name="cwcn_accent">#74EBDD</color>
+</resources>

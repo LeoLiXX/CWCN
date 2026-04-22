@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="cwcn_icon_bg_deep">#071117</color>
+    <color name="cwcn_icon_bg_mid">#123540</color>
+    <color name="cwcn_icon_bg_edge">#0B1820</color>
+    <color name="cwcn_icon_teal">#6FEDE0</color>
+    <color name="cwcn_icon_teal_dim">#2FB7CF</color>
+    <color name="cwcn_icon_brass_light">#F6D26E</color>
+    <color name="cwcn_icon_brass_dark">#B7701A</color>
+    <color name="cwcn_icon_metal_light">#F2F8FA</color>
+    <color name="cwcn_icon_metal_dark">#8FA7B1</color>
+    <color name="cwcn_icon_mono">#F3F7F8</color>
+</resources>

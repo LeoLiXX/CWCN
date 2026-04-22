@@ -1,0 +1,122 @@
+package org.bi9clt.cwcn.core.eval;
+
+import org.bi9clt.cwcn.core.qso.QsoPhase;
+import org.junit.Test;
+
+import java.util.Arrays;
+import java.util.Collections;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+public final class CwFixtureScenarioTest {
+    @Test
+    public void timingProfileSummaryIncludesPerPartOverrides() {
+        CwFixtureScenario scenario = new CwFixtureScenario(
+                "test",
+                "Test",
+                "CQ / TU",
+                Arrays.asList("CQ", "TU"),
+                1800,
+                18,
+                650,
+                18000,
+                500,
+                0.10d,
+                2000,
+                0.12d,
+                0.08d,
+                Arrays.asList(
+                        new CwFixtureScenario.PartTimingProfile(0.92d, 1.08d, 0.30d, 0.20d, 0.06d, 1.20d, 1.40d, 1.80d, 4, 2.0d),
+                        new CwFixtureScenario.PartTimingProfile(1.08d, 1.12d, 0.06d, 0.02d, 0.00d, 0.90d, 0.95d, 1.10d, 0, 0.0d)
+                ),
+                250,
+                450,
+                "CQ TU",
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("CQ / calling flow"),
+                QsoPhase.CALLING_CQ,
+                null,
+                null,
+                "test"
+        );
+
+        String summary = scenario.timingProfileSummary();
+
+        assertTrue(summary.contains("global jitter 12%"));
+        assertTrue(summary.contains("global dot swing 8%"));
+        assertTrue(summary.contains("P1"));
+        assertTrue(summary.contains("P2"));
+        assertTrue(summary.contains("drift to 108%"));
+        assertTrue(summary.contains("handoff gap x1.8"));
+        assertTrue(summary.contains("pause +2 dot / 4 char"));
+    }
+
+    @Test
+    public void missingPartProfileFallsBackToDefault() {
+        CwFixtureScenario scenario = new CwFixtureScenario(
+                "test",
+                "Test",
+                "CQ / K",
+                Arrays.asList("CQ", "K"),
+                1800,
+                18,
+                650,
+                18000,
+                500,
+                0.0d,
+                0,
+                0.0d,
+                0.0d,
+                Collections.singletonList(
+                        new CwFixtureScenario.PartTimingProfile(0.95d, 0.20d, null, 0.05d, 1.10d, 1.30d, 3, 1.5d)
+                ),
+                250,
+                450,
+                "CQ K",
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("CQ / calling flow"),
+                QsoPhase.CALLING_CQ,
+                null,
+                null,
+                "test"
+        );
+
+        assertEquals(0.95d, scenario.timingProfileForPart(0).wpmScale(), 0.0001d);
+        assertTrue(scenario.timingProfileForPart(1).isDefault());
+    }
+
+    @Test
+    public void interfererToneConfigurationIsExposed() {
+        CwFixtureScenario scenario = new CwFixtureScenario(
+                "test",
+                "Test",
+                "CQ CQ",
+                Arrays.asList("CQ CQ"),
+                1800,
+                18,
+                650,
+                18000,
+                830,
+                22000,
+                500,
+                0.0d,
+                0,
+                0.0d,
+                0.0d,
+                Collections.singletonList(CwFixtureScenario.PartTimingProfile.defaultProfile()),
+                250,
+                450,
+                "CQ CQ",
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("CQ / calling flow"),
+                QsoPhase.CALLING_CQ,
+                null,
+                null,
+                "test"
+        );
+
+        assertEquals(830, scenario.interfererToneFrequencyHz());
+        assertEquals(22000, scenario.interfererToneAmplitude());
+    }
+}
