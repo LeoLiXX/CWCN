@@ -228,6 +228,10 @@ public final class CwSignalProcessorTest {
         assertTrue(snapshot.consecutiveLockedFrames() >= 4);
         assertTrue(snapshot.maxConsecutiveLockedFrames() >= snapshot.consecutiveLockedFrames());
         assertTrue(Math.abs(snapshot.pendingRetuneCandidateFrequencyHz() - snapshot.targetToneFrequencyHz()) <= 20);
+        assertTrue(snapshot.recentHistoryFrameCount() >= 12);
+        assertEquals(snapshot.recentHistoryFrameCount(), snapshot.recentFrontEndStateHistory().length);
+        assertEquals(snapshot.recentHistoryFrameCount(), snapshot.recentTrackingOffsetHistoryHz().length);
+        assertTrue(new String(snapshot.recentFrontEndStateHistory()).contains("L"));
     }
 
     @Test
@@ -244,6 +248,7 @@ public final class CwSignalProcessorTest {
         assertTrue(snapshot.toneActiveUnlockedFrameCount() <= 1);
         assertTrue(snapshot.toneActiveUnlockedFrameRatio() <= 0.12d);
         assertTrue(snapshot.maxConsecutiveToneActiveUnlockedFrames() <= 1);
+        assertTrue(snapshot.recentHistoryFrameCount() > 0);
     }
 
     @Test

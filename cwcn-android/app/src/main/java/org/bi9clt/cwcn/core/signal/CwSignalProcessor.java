@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class CwSignalProcessor {
+    private static final int RECENT_HISTORY_WINDOW_FRAMES = 24;
     private static final int DEFAULT_PREFERRED_TONE_FREQUENCY_HZ = 650;
     private static final int MIN_TRACKED_TONE_FREQUENCY_HZ = 450;
     private static final int MAX_TRACKED_TONE_FREQUENCY_HZ = 850;
@@ -73,6 +74,10 @@ public final class CwSignalProcessor {
     private int maxConsecutiveLockedFrames;
     private int consecutiveToneActiveUnlockedFrames;
     private int maxConsecutiveToneActiveUnlockedFrames;
+    private int recentHistoryFrameCount;
+    private int recentHistoryNextIndex;
+    private final char[] recentFrontEndStateHistory = new char[RECENT_HISTORY_WINDOW_FRAMES];
+    private final int[] recentTrackingOffsetHistoryHz = new int[RECENT_HISTORY_WINDOW_FRAMES];
     private CwToneEvent lastEvent;
 
     public synchronized List<CwToneEvent> process(AudioFrame frame) {
@@ -196,6 +201,8 @@ public final class CwSignalProcessor {
         maxConsecutiveLockedFrames = 0;
         consecutiveToneActiveUnlockedFrames = 0;
         maxConsecutiveToneActiveUnlockedFrames = 0;
+        recentHistoryFrameCount = 0;
+        recentHistoryNextIndex = 0;
         targetToneFrequencyHz = preferredToneFrequencyHz;
         pendingRetuneCandidateFrequencyHz = preferredToneFrequencyHz;
         pendingRetuneCandidateStableScans = 0;
@@ -214,6 +221,9 @@ public final class CwSignalProcessor {
 
     public synchronized CwSignalSnapshot snapshot() {
         return new CwSignalSnapshot(
+                recentHistoryFrameCount,
+                orderedRecentFrontEndStateHistory(),
+                orderedRecentTrackingOffsetHistoryHz(),
                 toneActive,
                 targetToneLocked,
                 preferredToneFrequencyHz,
@@ -318,6 +328,45 @@ public final class CwSignalProcessor {
     private void rememberFrame(long timestampMs, double detectionLevel) {
         lastFrameTimestampMs = timestampMs;
         lastDetectionLevel = detectionLevel;
+        rememberRecentFrontEndHistory();
+    }
+
+    private void rememberRecentFrontEndHistory() {
+        recentFrontEndStateHistory[recentHistoryNextIndex] = currentFrontEndStateCode();
+        recentTrackingOffsetHistoryHz[recentHistoryNextIndex] = targetToneFrequencyHz - preferredToneFrequencyHz;
+        recentHistoryNextIndex = (recentHistoryNextIndex + 1) % RECENT_HISTORY_WINDOW_FRAMES;
+        recentHistoryFrameCount = Math.min(RECENT_HISTORY_WINDOW_FRAMES, recentHistoryFrameCount + 1);
+    }
+
+    private char currentFrontEndStateCode() {
+        if (toneActive) {
+            return targetToneLocked ? 'L' : 'u';
+        }
+        return targetToneLocked ? 'l' : '.';
+    }
+
+    private char[] orderedRecentFrontEndStateHistory() {
+        char[] ordered = new char[recentHistoryFrameCount];
+        if (recentHistoryFrameCount <= 0) {
+            return ordered;
+        }
+        int startIndex = recentHistoryFrameCount < RECENT_HISTORY_WINDOW_FRAMES ? 0 : recentHistoryNextIndex;
+        for (int index = 0; index < recentHistoryFrameCount; index++) {
+            ordered[index] = recentFrontEndStateHistory[(startIndex + index) % RECENT_HISTORY_WINDOW_FRAMES];
+        }
+        return ordered;
+    }
+
+    private int[] orderedRecentTrackingOffsetHistoryHz() {
+        int[] ordered = new int[recentHistoryFrameCount];
+        if (recentHistoryFrameCount <= 0) {
+            return ordered;
+        }
+        int startIndex = recentHistoryFrameCount < RECENT_HISTORY_WINDOW_FRAMES ? 0 : recentHistoryNextIndex;
+        for (int index = 0; index < recentHistoryFrameCount; index++) {
+            ordered[index] = recentTrackingOffsetHistoryHz[(startIndex + index) % RECENT_HISTORY_WINDOW_FRAMES];
+        }
+        return ordered;
     }
 
     private void rememberToneActivityWindow() {

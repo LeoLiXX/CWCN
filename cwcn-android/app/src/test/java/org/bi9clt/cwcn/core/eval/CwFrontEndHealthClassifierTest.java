@@ -147,6 +147,9 @@ public final class CwFrontEndHealthClassifierTest {
         int processedFrameCount = 100;
         int toneActiveFrameCount = 100;
         return new CwSignalSnapshot(
+                0,
+                new char[0],
+                new int[0],
                 toneActive,
                 targetToneLocked,
                 preferredToneFrequencyHz,

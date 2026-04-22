@@ -2063,9 +2063,15 @@
 - current tone-active unlock streak
 - pending retune candidate frequency
 - pending retune candidate stability scan count
+- This has now been extended one step further with a small recent-history ring buffer:
+- recent front-end state history
+- recent tracked-tone offset history relative to preferred tone
 - Debug UI uses those fields in two places:
 - `Mic Trend` inside microphone tone watch
 - extra signal-state lines for current lock streak and pending retune candidate
+- plus a compact recent-history line in microphone tone watch:
+- state history such as `..uLLLLLL...`
+- offset history such as `0000++>>>`
 - Practical effect:
 - when a nearby interferer is trying to pull the tracker away, the UI can now say that retune pressure is building and show which frequency it is leaning toward
 - when lock is simply stable, the UI says so explicitly instead of making us infer it from coverage percentages alone

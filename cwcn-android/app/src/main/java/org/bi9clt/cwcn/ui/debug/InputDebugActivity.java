@@ -488,6 +488,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "%, lock coverage "
                 + Math.round(snapshot.lockedFrameRatio() * 100.0d)
                 + "%"
+                + "\nMic history: "
+                + renderRecentFrontEndHistory(snapshot)
                 + "\nMic release view: active unlock "
                 + Math.round(snapshot.toneActiveUnlockedFrameRatio() * 100.0d)
                 + "%, worst gap "
@@ -551,6 +553,39 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         }
 
         return "Still searching with no stable retune candidate yet.";
+    }
+
+    private String renderRecentFrontEndHistory(CwSignalSnapshot snapshot) {
+        if (snapshot == null || snapshot.recentHistoryFrameCount() <= 0) {
+            return "(empty)";
+        }
+        return "state "
+                + new String(snapshot.recentFrontEndStateHistory())
+                + " | offset "
+                + renderTrackingOffsetHistory(snapshot.recentTrackingOffsetHistoryHz())
+                + " | legend L=locked, u=active-unlocked, l=quiet-lock, .=idle/search";
+    }
+
+    private String renderTrackingOffsetHistory(int[] offsetsHz) {
+        if (offsetsHz == null || offsetsHz.length == 0) {
+            return "(empty)";
+        }
+        StringBuilder builder = new StringBuilder(offsetsHz.length);
+        for (int offsetHz : offsetsHz) {
+            builder.append(offsetHistoryCode(offsetHz));
+        }
+        return builder.toString();
+    }
+
+    private char offsetHistoryCode(int offsetHz) {
+        int absoluteOffsetHz = Math.abs(offsetHz);
+        if (absoluteOffsetHz <= 15) {
+            return '0';
+        }
+        if (absoluteOffsetHz >= 45) {
+            return offsetHz > 0 ? '>' : '<';
+        }
+        return offsetHz > 0 ? '+' : '-';
     }
 
     private void restorePreferredToneFrequency() {

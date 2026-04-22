@@ -1,6 +1,9 @@
 package org.bi9clt.cwcn.core.signal;
 
 public final class CwSignalSnapshot {
+    private final int recentHistoryFrameCount;
+    private final char[] recentFrontEndStateHistory;
+    private final int[] recentTrackingOffsetHistoryHz;
     private final boolean toneActive;
     private final boolean targetToneLocked;
     private final int preferredToneFrequencyHz;
@@ -31,6 +34,9 @@ public final class CwSignalSnapshot {
     private final CwToneEvent lastEvent;
 
     public CwSignalSnapshot(
+            int recentHistoryFrameCount,
+            char[] recentFrontEndStateHistory,
+            int[] recentTrackingOffsetHistoryHz,
             boolean toneActive,
             boolean targetToneLocked,
             int preferredToneFrequencyHz,
@@ -60,6 +66,13 @@ public final class CwSignalSnapshot {
             int totalToneOffEvents,
             CwToneEvent lastEvent
     ) {
+        this.recentHistoryFrameCount = recentHistoryFrameCount;
+        this.recentFrontEndStateHistory = recentFrontEndStateHistory == null
+                ? new char[0]
+                : recentFrontEndStateHistory.clone();
+        this.recentTrackingOffsetHistoryHz = recentTrackingOffsetHistoryHz == null
+                ? new int[0]
+                : recentTrackingOffsetHistoryHz.clone();
         this.toneActive = toneActive;
         this.targetToneLocked = targetToneLocked;
         this.preferredToneFrequencyHz = preferredToneFrequencyHz;
@@ -88,6 +101,18 @@ public final class CwSignalSnapshot {
         this.totalToneOnEvents = totalToneOnEvents;
         this.totalToneOffEvents = totalToneOffEvents;
         this.lastEvent = lastEvent;
+    }
+
+    public int recentHistoryFrameCount() {
+        return recentHistoryFrameCount;
+    }
+
+    public char[] recentFrontEndStateHistory() {
+        return recentFrontEndStateHistory.clone();
+    }
+
+    public int[] recentTrackingOffsetHistoryHz() {
+        return recentTrackingOffsetHistoryHz.clone();
     }
 
     public boolean toneActive() {
