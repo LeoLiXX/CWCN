@@ -98,6 +98,22 @@ public final class CwSignalProcessorTest {
     }
 
     @Test
+    public void activeToneLockCanRideThroughTemporaryModerateInterfererPressure() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 2, 670.0d, 15000.0d, 930.0d, 7000.0d);
+        processFramesCollecting(processor, 2, 670.0d, 2500.0d, 930.0d, 7000.0d, 10);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.toneActive());
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue(Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
+        assertTrue(snapshot.toneActiveUnlockedFrameRatio() <= 0.25d);
+    }
+
+    @Test
     public void broadbandNoiseOnlyDoesNotCreateStableTargetLock() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(650);
@@ -144,6 +160,22 @@ public final class CwSignalProcessorTest {
         assertTrue(snapshot.peakToneRmsAmplitude() >= snapshot.lastToneRmsAmplitude());
         assertTrue(snapshot.peakNarrowbandIsolationRatio() >= 0.50d);
         assertTrue(snapshot.maxConsecutiveLockedFrames() >= 4);
+    }
+
+    @Test
+    public void cleanToneRunKeepsToneActiveUnlockedRatioNearZero() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 10, 670.0d, 16000.0d);
+        processFrames(processor, 6, 0.0d, 0.0d);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.toneActiveFrameCount() > 0);
+        assertTrue(snapshot.toneActiveUnlockedFrameCount() <= 1);
+        assertTrue(snapshot.toneActiveUnlockedFrameRatio() <= 0.12d);
+        assertTrue(snapshot.maxConsecutiveToneActiveUnlockedFrames() <= 1);
     }
 
     @Test

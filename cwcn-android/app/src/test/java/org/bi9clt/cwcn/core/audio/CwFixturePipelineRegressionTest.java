@@ -56,7 +56,7 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
-    public void nearbyInterfererFixtureCurrentlyExposesFrontEndLimit() {
+    public void nearbyInterfererFixtureNowEndsWithHealthyFrontEndGrade() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("nearby_interferer_directed_report");
         CwFixtureEvaluationResult result = bundle.result;
 
@@ -66,6 +66,7 @@ public final class CwFixturePipelineRegressionTest {
         assertTrue(summary, bundle.signalSnapshot.lastToneRmsAmplitude() > 0.0d);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertEquals(summary, "GOOD", result.frontEndQualityCode());
         assertTrue(summary, result.textTokenRecall() >= 0.60d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
     }

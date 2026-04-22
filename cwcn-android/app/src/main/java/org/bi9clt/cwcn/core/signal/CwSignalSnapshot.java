@@ -18,7 +18,10 @@ public final class CwSignalSnapshot {
     private final double peakNarrowbandIsolationRatio;
     private final int processedFrameCount;
     private final int lockedFrameCount;
+    private final int toneActiveFrameCount;
+    private final int toneActiveUnlockedFrameCount;
     private final int maxConsecutiveLockedFrames;
+    private final int maxConsecutiveToneActiveUnlockedFrames;
     private final int totalToneOnEvents;
     private final int totalToneOffEvents;
     private final CwToneEvent lastEvent;
@@ -41,7 +44,10 @@ public final class CwSignalSnapshot {
             double peakNarrowbandIsolationRatio,
             int processedFrameCount,
             int lockedFrameCount,
+            int toneActiveFrameCount,
+            int toneActiveUnlockedFrameCount,
             int maxConsecutiveLockedFrames,
+            int maxConsecutiveToneActiveUnlockedFrames,
             int totalToneOnEvents,
             int totalToneOffEvents,
             CwToneEvent lastEvent
@@ -63,7 +69,10 @@ public final class CwSignalSnapshot {
         this.peakNarrowbandIsolationRatio = peakNarrowbandIsolationRatio;
         this.processedFrameCount = processedFrameCount;
         this.lockedFrameCount = lockedFrameCount;
+        this.toneActiveFrameCount = toneActiveFrameCount;
+        this.toneActiveUnlockedFrameCount = toneActiveUnlockedFrameCount;
         this.maxConsecutiveLockedFrames = maxConsecutiveLockedFrames;
+        this.maxConsecutiveToneActiveUnlockedFrames = maxConsecutiveToneActiveUnlockedFrames;
         this.totalToneOnEvents = totalToneOnEvents;
         this.totalToneOffEvents = totalToneOffEvents;
         this.lastEvent = lastEvent;
@@ -137,8 +146,20 @@ public final class CwSignalSnapshot {
         return lockedFrameCount;
     }
 
+    public int toneActiveFrameCount() {
+        return toneActiveFrameCount;
+    }
+
+    public int toneActiveUnlockedFrameCount() {
+        return toneActiveUnlockedFrameCount;
+    }
+
     public int maxConsecutiveLockedFrames() {
         return maxConsecutiveLockedFrames;
+    }
+
+    public int maxConsecutiveToneActiveUnlockedFrames() {
+        return maxConsecutiveToneActiveUnlockedFrames;
     }
 
     public double lockedFrameRatio() {
@@ -146,6 +167,13 @@ public final class CwSignalSnapshot {
             return 0.0d;
         }
         return Math.max(0.0d, Math.min(1.0d, lockedFrameCount / (double) processedFrameCount));
+    }
+
+    public double toneActiveUnlockedFrameRatio() {
+        if (toneActiveFrameCount <= 0) {
+            return 0.0d;
+        }
+        return Math.max(0.0d, Math.min(1.0d, toneActiveUnlockedFrameCount / (double) toneActiveFrameCount));
     }
 
     public int totalToneOnEvents() {

@@ -4,6 +4,7 @@ import org.bi9clt.cwcn.core.interpreter.CwInterpreterSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoPhase;
 import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
+import org.bi9clt.cwcn.core.signal.CwToneEvent;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -127,10 +128,15 @@ public final class CwFixtureEvaluator {
                 missingHints,
                 failureReasons,
                 signalSnapshot != null && signalSnapshot.targetToneLocked(),
+                signalSnapshot != null
+                        && signalSnapshot.lastEvent() != null
+                        && signalSnapshot.lastEvent().type() == CwToneEvent.Type.TONE_OFF,
                 signalSnapshot == null ? 0.0d : signalSnapshot.peakToneRmsAmplitude(),
                 signalSnapshot == null ? 0.0d : signalSnapshot.peakNarrowbandIsolationRatio(),
                 signalSnapshot == null ? 0.0d : signalSnapshot.lockedFrameRatio(),
-                signalSnapshot == null ? 0 : signalSnapshot.maxConsecutiveLockedFrames()
+                signalSnapshot == null ? 0 : signalSnapshot.maxConsecutiveLockedFrames(),
+                signalSnapshot == null ? 0.0d : signalSnapshot.toneActiveUnlockedFrameRatio(),
+                signalSnapshot == null ? 0 : signalSnapshot.maxConsecutiveToneActiveUnlockedFrames()
         );
     }
 

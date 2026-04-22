@@ -449,7 +449,12 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + Math.round(snapshot.peakNarrowbandIsolationRatio() * 100.0d)
                 + "%, lock coverage "
                 + Math.round(snapshot.lockedFrameRatio() * 100.0d)
-                + "%";
+                + "%"
+                + "\nMic release view: active unlock "
+                + Math.round(snapshot.toneActiveUnlockedFrameRatio() * 100.0d)
+                + "%, worst gap "
+                + snapshot.maxConsecutiveToneActiveUnlockedFrames()
+                + " frame(s)";
     }
 
     private void restorePreferredToneFrequency() {
@@ -727,7 +732,10 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "\nPeak Isolation: " + Math.round(snapshot.peakNarrowbandIsolationRatio() * 100.0d) + "%"
                 + "\nLock Coverage: " + Math.round(snapshot.lockedFrameRatio() * 100.0d) + "%"
                 + " (" + snapshot.lockedFrameCount() + "/" + snapshot.processedFrameCount() + " frames)"
-                + "\nBest Lock Run: " + snapshot.maxConsecutiveLockedFrames() + " frame(s)";
+                + "\nBest Lock Run: " + snapshot.maxConsecutiveLockedFrames() + " frame(s)"
+                + "\nTone-Active Unlock: " + Math.round(snapshot.toneActiveUnlockedFrameRatio() * 100.0d) + "%"
+                + " (" + snapshot.toneActiveUnlockedFrameCount() + "/" + snapshot.toneActiveFrameCount() + " active frames)"
+                + "\nWorst Active Unlock Gap: " + snapshot.maxConsecutiveToneActiveUnlockedFrames() + " frame(s)";
     }
 
     private String renderSignalEventStats() {
@@ -748,6 +756,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         double isolationPercent = snapshot.narrowbandIsolationRatio() * 100.0d;
         double peakIsolationPercent = snapshot.peakNarrowbandIsolationRatio() * 100.0d;
         double lockCoveragePercent = snapshot.lockedFrameRatio() * 100.0d;
+        double toneActiveUnlockPercent = snapshot.toneActiveUnlockedFrameRatio() * 100.0d;
 
         String label;
         String reason;
@@ -757,6 +766,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         } else if (snapshot.targetToneLocked() && Math.abs(trackingErrorHz) >= 45) {
             label = "Tracking drift rising";
             reason = "The tracked tone is moving away from the preferred pitch and should be watched.";
+        } else if (isCleanReleaseCandidate(snapshot)) {
+            label = "Healthy lock with clean release";
+            reason = "Active tone windows stayed comfortably locked, and the latest unlocked state looks like a normal tone-off tail.";
         } else if (!snapshot.targetToneLocked() && peakIsolationPercent >= 55.0d && lockCoveragePercent >= 20.0d) {
             label = "Recovered earlier lock";
             reason = "The front end had a healthy lock earlier in this run, but is not locked on the latest frame.";
@@ -784,7 +796,21 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + " | Release margin: " + String.format(Locale.US, "%+d", releaseMargin)
                 + "\nPeak isolation: " + Math.round(peakIsolationPercent) + "%"
                 + " | Lock coverage: " + Math.round(lockCoveragePercent) + "%"
+                + "\nTone-active unlock: " + Math.round(toneActiveUnlockPercent) + "%"
+                + " | Worst active gap: " + snapshot.maxConsecutiveToneActiveUnlockedFrames() + " frame(s)"
                 + "\nTrack offset: " + String.format(Locale.US, "%+d", trackingErrorHz) + " Hz";
+    }
+
+    private boolean isCleanReleaseCandidate(CwSignalSnapshot snapshot) {
+        return snapshot != null
+                && !snapshot.targetToneLocked()
+                && snapshot.lastEvent() != null
+                && snapshot.lastEvent().type() == CwToneEvent.Type.TONE_OFF
+                && snapshot.peakNarrowbandIsolationRatio() >= 0.55d
+                && snapshot.lockedFrameRatio() >= 0.25d
+                && snapshot.maxConsecutiveLockedFrames() >= 4
+                && snapshot.toneActiveUnlockedFrameRatio() <= 0.12d
+                && snapshot.maxConsecutiveToneActiveUnlockedFrames() <= 2;
     }
 
     private String renderLastSignalEvent() {

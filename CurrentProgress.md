@@ -1743,7 +1743,22 @@
 ## 2026-04-22 Front-End Expectation Stabilization
 
 - Finished stabilizing the new fixture-declared `expectedFrontEndQualityCode` path after the first integration pass exposed constructor-shape mismatches in `CwFixtureScenario`.
-- Current explicitly asserted front-end baseline batch now includes both signal-stress and humanized timing fixtures that have been individually re-observed after the constructor cleanup:
+- Refined the front-end grading logic one step further so a fixture is no longer forced into `DROP` just because the replay ends in normal tail silence.
+- New practical distinction:
+- `GOOD` now covers both:
+- healthy lock retained through the end of the evaluated run
+- healthy lock during active tone windows followed by a clean final `TONE_OFF` release into tail silence
+- `DROP` is now reserved more narrowly for runs that really had:
+- an earlier healthy lock window
+- but also meaningful unlocked drift during active tone windows before the run ended
+- To support this, the signal front end now tracks:
+- tone-active frame count
+- tone-active but unlocked frame ratio
+- worst consecutive unlocked gap during tone-active windows
+- The evaluator now uses those metrics to separate:
+- normal fixture tail silence
+- genuine late-run front-end degradation
+- Current explicitly asserted front-end baseline batch now includes both signal-stress and humanized timing fixtures that have been individually re-observed after the grading refinement:
 - `noisy_report_exchange`
 - `nearby_interferer_directed_report`
 - `moderate_interferer_directed_report`
@@ -1757,11 +1772,26 @@
 - `drifting_soft_edge_compact_ack_closing_chain`
 - `fully_glued_ack_closing_chain`
 - `compact_ack_report_tail_callsign`
-- Current observed locked-in front-end grade for the newly expanded humanized batch is:
-- `DROP`
+- Current observed locked-in front-end grades are now intentionally split:
+- now `GOOD` because the run shows healthy active-tone lock plus a clean release into tail silence:
+- `noisy_report_exchange`
+- `nearby_interferer_directed_report`
+- `moderate_interferer_directed_report`
+- `human_ragged_clarification_report`
+- `human_compact_ack_closing_chain`
+- `human_op_timing_full_qso`
+- `human_compact_de_closing_chain`
+- `human_compact_report_tail_callsign`
+- `human_compact_report_tail_followup`
+- `soft_edge_compact_ack_closing_chain`
+- `drifting_soft_edge_compact_ack_closing_chain`
+- `fully_glued_ack_closing_chain`
+- some remaining declared fixtures outside the currently exercised regression set should still be treated as provisional until they are individually replay-verified again
 - Meaning:
-- these fixtures do achieve a usable earlier narrow-band lock window
-- but they should currently be expected to end unlocked after the full rendered run
+- many fixtures that previously looked like late front-end drops are now understood as:
+- healthy active-tone lock
+- followed by either a clean release or at most a single-frame unlock glitch near release
+- while any future `DROP` baseline should now represent a more substantive active-tone degradation than that
 - Practical decision for now:
 - keep the expectation infrastructure enabled
 - keep Debug UI visibility enabled
@@ -1774,6 +1804,7 @@
 - compact single-token closing / tail fixtures using the shortest single-message constructor
 - fixtures will not require another constructor cleanup round first
 - Re-verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest --tests org.bi9clt.cwcn.core.eval.CwFixtureEvaluationResultTest`
 - `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
 - `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest assembleDebug`
 
@@ -1783,3 +1814,56 @@
 - [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
 - [CurrentProgress.md](/D:/Workshop/CWCN/CurrentProgress.md)
+
+## 2026-04-22 Debug UI Clean-Release Observability
+
+- Promoted the new `clean release` distinction into the Debug UI so front-end end-state interpretation is now closer to what the fixture evaluator is doing.
+- The signal panel and microphone tone-watch now expose:
+- tone-active unlocked frame ratio
+- worst consecutive unlocked gap during tone-active windows
+- The signal-health summary can now explicitly say:
+- `Healthy lock with clean release`
+- instead of showing a generic late unlocked state that looks like a front-end drop
+- Practical effect:
+- when a fixture or live run ends with expected post-message silence, the UI no longer makes that look the same as:
+- true late-run loss of narrow-band lock during active tone windows
+- This should make it much easier to compare:
+- fixture replay summary
+- live microphone behavior
+- offline evaluator front-end grade
+- without mentally translating between different concepts of “end unlocked”
+
+### Key files
+
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+
+## 2026-04-22 Active-Tone Lock Retention Tuning
+
+- Tightened `CwSignalProcessor` again, this time specifically around active-tone lock retention under nearby continuous interferers.
+- Practical idea:
+- keep initial acquisition strict
+- but once a tone is already active and the tracked frequency is still plausible, allow slightly more tolerant lock retention through short pressure dips
+- This is aimed at the exact class of boundary cases where:
+- the desired CW tone is already being copied
+- a nearby steady carrier plus mild QSB momentarily pushes isolation down
+- and the old logic would drop lock too eagerly in the middle of an otherwise usable tone window
+- Added focused JVM coverage for this behavior:
+- a target tone can lock normally under moderate nearby interference
+- after lock is established, a short weaker segment under the same interferer should still preserve lock
+- Current status after this round:
+- the active-tone retention path is more stable
+- clean-release interpretation and UI observability are now much better aligned
+- the more difficult nearby-interferer fixture has now improved enough to grade as `GOOD`
+- the moderate nearby-interferer fixture has now also crossed into `GOOD` after tightening local frequency contrast plus allowing a single-frame active-tone unlock glitch to still count as a clean release
+- This means the current interferer branch has materially improved:
+- `nearby_interferer_directed_report` -> `GOOD`
+- `moderate_interferer_directed_report` -> `GOOD`
+- so the next interferer milestone likely requires either:
+- a newly harder baseline
+- or a more realistic multi-carrier / drifting-interferer scenario
+
+### Key files
+
+- [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
+- [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
