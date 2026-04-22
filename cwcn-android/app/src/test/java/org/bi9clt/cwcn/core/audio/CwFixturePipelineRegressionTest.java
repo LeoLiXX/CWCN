@@ -108,8 +108,8 @@ public final class CwFixturePipelineRegressionTest {
 
         assertNotNull(result);
         String summary = renderDebugSummary(result, bundle);
-        assertEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertEquals(summary, "GOOD", result.frontEndQualityCode());
+        assertEquals(summary, "TRK", result.likelyBottleneckCode());
+        assertEquals(summary, "WRONG", result.frontEndQualityCode());
         assertTrue(summary, bundle.signalSnapshot.targetToneLocked());
         assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) >= 40);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 8000.0d);

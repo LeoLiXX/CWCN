@@ -1933,3 +1933,43 @@
 - [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
 - [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-22 Wrong-Tone Evaluation Semantics
+
+- Promoted `wrong-tone acquisition` from an implied diagnosis into an explicit evaluation state.
+- `CwFixtureEvaluationResult` now carries:
+- preferred tone frequency
+- tracked tone frequency
+- tracking error in Hz
+- New front-end quality state:
+- `WRONG`
+- Meaning:
+- the front end formed a strong stable lock
+- but it stayed far enough away from the preferred tone that this should not be treated as ordinary `GOOD` acquisition
+- New likely bottleneck state:
+- `TRK`
+- Label:
+- `Wrong-tone acquisition / tracking`
+- Practical effect:
+- we can now clearly distinguish:
+- `MISS` = never formed a convincing lock
+- `DROP` = had earlier healthy lock then lost it
+- `GOOD` = healthy target acquisition
+- `WRONG` = locked confidently, but on the wrong tone
+- Offline regression has been updated accordingly:
+- `sweeping_boundary_interferer_directed_report` is now intentionally asserted as:
+- front-end quality `WRONG`
+- bottleneck `TRK`
+- Debug UI signal health summary now also exposes the same class of condition as:
+- `Strong lock on off-target tone`
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureEvaluationResultTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwFixtureEvaluator.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluator.java)
+- [CwFixtureEvaluationResult.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResult.java)
+- [CwFixtureEvaluationResultTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResultTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)

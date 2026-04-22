@@ -43,7 +43,9 @@ public final class CwFixtureEvaluationResultTest {
                 0.02d,
                 1,
                 0.80d,
-                6
+                6,
+                650,
+                650
         );
 
         assertEquals("SIG", result.likelyBottleneckCode());
@@ -88,7 +90,9 @@ public final class CwFixtureEvaluationResultTest {
                 0.38d,
                 8,
                 0.28d,
-                4
+                4,
+                650,
+                650
         );
 
         assertEquals("QSO", result.likelyBottleneckCode());
@@ -132,7 +136,9 @@ public final class CwFixtureEvaluationResultTest {
                 0.32d,
                 7,
                 0.24d,
-                5
+                5,
+                650,
+                650
         );
 
         assertEquals("INT", result.likelyBottleneckCode());
@@ -176,7 +182,9 @@ public final class CwFixtureEvaluationResultTest {
                 0.42d,
                 9,
                 0.0d,
-                0
+                0,
+                650,
+                650
         );
 
         assertEquals("GOOD", result.frontEndQualityCode());
@@ -219,11 +227,59 @@ public final class CwFixtureEvaluationResultTest {
                 0.39d,
                 8,
                 0.05d,
-                1
+                1,
+                650,
+                650
         );
 
         assertEquals("GOOD", result.frontEndQualityCode());
         assertTrue(result.renderSummary().contains("Healthy lock with clean release"));
         assertTrue(result.diagnosticNotes().get(0).contains("clean tone-off release"));
+    }
+
+    @Test
+    public void strongLockedOffsetToneIsClassifiedAsWrongToneTracking() {
+        CwFixtureEvaluationResult result = new CwFixtureEvaluationResult(
+                "fixture",
+                "Fixture",
+                1L,
+                true,
+                false,
+                false,
+                0.0d,
+                0.10d,
+                0.0d,
+                0.0d,
+                0.0d,
+                "BI9CLT DE BG7YOZ UR 599 BK",
+                "BI9CL",
+                "REPORT_EXCHANGE",
+                "REPLY_DETECTED",
+                "",
+                "",
+                "599",
+                "",
+                Collections.singletonList("BI9CL"),
+                Collections.emptyList(),
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("BG7YOZ"),
+                Collections.singletonList("Directed report to called station"),
+                Collections.singletonList("Text token recall below baseline"),
+                true,
+                false,
+                14000.0d,
+                0.88d,
+                0.85d,
+                12,
+                0.06d,
+                1,
+                650,
+                740
+        );
+
+        assertEquals("WRONG", result.frontEndQualityCode());
+        assertEquals("TRK", result.likelyBottleneckCode());
+        assertTrue(result.renderSummary().contains("wrongTone=yes"));
+        assertTrue(result.renderSummary().contains("Wrong-tone acquisition / tracking"));
     }
 }

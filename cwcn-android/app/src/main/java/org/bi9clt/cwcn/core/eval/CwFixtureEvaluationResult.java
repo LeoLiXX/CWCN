@@ -38,6 +38,8 @@ public final class CwFixtureEvaluationResult {
     private final int maxConsecutiveLockedFrames;
     private final double toneActiveUnlockedFrameRatio;
     private final int maxConsecutiveToneActiveUnlockedFrames;
+    private final int preferredToneFrequencyHz;
+    private final int trackedToneFrequencyHz;
 
     public CwFixtureEvaluationResult(
             String scenarioId,
@@ -99,6 +101,8 @@ public final class CwFixtureEvaluationResult {
                 0.0d,
                 0,
                 0.0d,
+                0,
+                0,
                 0
         );
     }
@@ -136,7 +140,9 @@ public final class CwFixtureEvaluationResult {
             double lockedFrameRatio,
             int maxConsecutiveLockedFrames,
             double toneActiveUnlockedFrameRatio,
-            int maxConsecutiveToneActiveUnlockedFrames
+            int maxConsecutiveToneActiveUnlockedFrames,
+            int preferredToneFrequencyHz,
+            int trackedToneFrequencyHz
     ) {
         this.scenarioId = scenarioId;
         this.scenarioDisplayName = scenarioDisplayName;
@@ -171,6 +177,8 @@ public final class CwFixtureEvaluationResult {
         this.maxConsecutiveLockedFrames = maxConsecutiveLockedFrames;
         this.toneActiveUnlockedFrameRatio = toneActiveUnlockedFrameRatio;
         this.maxConsecutiveToneActiveUnlockedFrames = maxConsecutiveToneActiveUnlockedFrames;
+        this.preferredToneFrequencyHz = preferredToneFrequencyHz;
+        this.trackedToneFrequencyHz = trackedToneFrequencyHz;
     }
 
     public String scenarioId() {
@@ -305,6 +313,18 @@ public final class CwFixtureEvaluationResult {
         return maxConsecutiveToneActiveUnlockedFrames;
     }
 
+    public int preferredToneFrequencyHz() {
+        return preferredToneFrequencyHz;
+    }
+
+    public int trackedToneFrequencyHz() {
+        return trackedToneFrequencyHz;
+    }
+
+    public int trackingErrorHz() {
+        return trackedToneFrequencyHz - preferredToneFrequencyHz;
+    }
+
     private boolean frontEndHistorySuggestsSignalLoss() {
         return peakToneRmsAmplitude > 0.0d
                 && peakNarrowbandIsolationRatio < 0.35d
@@ -326,6 +346,14 @@ public final class CwFixtureEvaluationResult {
                 && maxConsecutiveToneActiveUnlockedFrames <= 1;
     }
 
+    private boolean frontEndHistorySuggestsWrongToneLock() {
+        return finalToneLocked
+                && Math.abs(trackingErrorHz()) >= 45
+                && peakNarrowbandIsolationRatio >= 0.60d
+                && lockedFrameRatio >= 0.30d
+                && maxConsecutiveLockedFrames >= 4;
+    }
+
     public String frontEndQualityCode() {
         boolean hasFrontEndHistory = peakToneRmsAmplitude > 0.0d
                 || peakNarrowbandIsolationRatio > 0.0d
@@ -333,6 +361,9 @@ public final class CwFixtureEvaluationResult {
                 || maxConsecutiveLockedFrames > 0;
         if (!hasFrontEndHistory) {
             return "NA";
+        }
+        if (frontEndHistorySuggestsWrongToneLock()) {
+            return "WRONG";
         }
         if ((finalToneLocked || frontEndHistorySuggestsCleanRelease())
                 && peakNarrowbandIsolationRatio >= 0.55d
@@ -351,6 +382,8 @@ public final class CwFixtureEvaluationResult {
 
     public String frontEndQualityLabel() {
         switch (frontEndQualityCode()) {
+            case "WRONG":
+                return "Strong lock on off-target tone";
             case "GOOD":
                 return frontEndHistorySuggestsCleanRelease()
                         ? "Healthy lock with clean release"
@@ -372,6 +405,9 @@ public final class CwFixtureEvaluationResult {
         }
         if (!completed) {
             return "RUN";
+        }
+        if (frontEndHistorySuggestsWrongToneLock()) {
+            return "TRK";
         }
         if (frontEndHistorySuggestsSignalLoss()) {
             return "SIG";
@@ -417,6 +453,8 @@ public final class CwFixtureEvaluationResult {
                 return "Baseline pass";
             case "RUN":
                 return "Replay did not complete";
+            case "TRK":
+                return "Wrong-tone acquisition / tracking";
             case "SIG":
                 return "Front-end signal/timing acquisition";
             case "DEC":
@@ -437,6 +475,8 @@ public final class CwFixtureEvaluationResult {
         }
         if (frontEndHistorySuggestsSignalLoss()) {
             notes.add("Front-end history never formed a convincing narrow-band lock, so this looks more like acquisition loss than late-stage interpretation drift.");
+        } else if (frontEndHistorySuggestsWrongToneLock()) {
+            notes.add("Front-end formed a strong stable lock, but the tracked tone stayed meaningfully offset from the preferred target, which suggests wrong-tone acquisition rather than ordinary weak copy.");
         } else if (frontEndHistorySuggestsCleanRelease()) {
             notes.add("Front-end held a healthy lock during active tone windows and then ended on a clean tone-off release, so the final unlocked state looks like normal tail silence rather than a true late drop.");
         } else if (frontEndHistorySuggestsEarlierHealthyLock()) {
@@ -502,6 +542,10 @@ public final class CwFixtureEvaluationResult {
         if (peakToneRmsAmplitude > 0.0d || peakNarrowbandIsolationRatio > 0.0d || lockedFrameRatio > 0.0d) {
             builder.append("\nFront-end history: finalLock=").append(finalToneLocked ? "yes" : "no")
                     .append(", cleanRelease=").append(frontEndHistorySuggestsCleanRelease() ? "yes" : "no")
+                    .append(", wrongTone=").append(frontEndHistorySuggestsWrongToneLock() ? "yes" : "no")
+                    .append(", pref=").append(preferredToneFrequencyHz).append("Hz")
+                    .append(", tracked=").append(trackedToneFrequencyHz).append("Hz")
+                    .append(", error=").append(String.format(Locale.US, "%+d", trackingErrorHz())).append("Hz")
                     .append(", peakToneRms=").append(String.format(Locale.US, "%.0f", peakToneRmsAmplitude))
                     .append(", peakIsolation=").append(percent(peakNarrowbandIsolationRatio))
                     .append(", lockCoverage=").append(percent(lockedFrameRatio))

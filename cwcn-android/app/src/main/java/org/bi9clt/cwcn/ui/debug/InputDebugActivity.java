@@ -768,6 +768,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         if (!snapshot.targetToneLocked() && dominancePercent < 28.0d && snapshot.lastToneRmsAmplitude() < 40.0d) {
             label = "Searching / no stable target";
             reason = "No reliable narrow-band tone is standing out yet.";
+        } else if (isWrongToneLockCandidate(snapshot)) {
+            label = "Strong lock on off-target tone";
+            reason = "The front end is locked confidently, but the tracked tone is sitting far enough away from the preferred pitch that this looks like wrong-tone acquisition.";
         } else if (snapshot.targetToneLocked() && Math.abs(trackingErrorHz) >= 45) {
             label = "Tracking drift rising";
             reason = "The tracked tone is moving away from the preferred pitch and should be watched.";
@@ -804,6 +807,15 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "\nTone-active unlock: " + Math.round(toneActiveUnlockPercent) + "%"
                 + " | Worst active gap: " + snapshot.maxConsecutiveToneActiveUnlockedFrames() + " frame(s)"
                 + "\nTrack offset: " + String.format(Locale.US, "%+d", trackingErrorHz) + " Hz";
+    }
+
+    private boolean isWrongToneLockCandidate(CwSignalSnapshot snapshot) {
+        return snapshot != null
+                && snapshot.targetToneLocked()
+                && Math.abs(snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz()) >= 45
+                && snapshot.peakNarrowbandIsolationRatio() >= 0.60d
+                && snapshot.lockedFrameRatio() >= 0.30d
+                && snapshot.maxConsecutiveLockedFrames() >= 4;
     }
 
     private boolean isCleanReleaseCandidate(CwSignalSnapshot snapshot) {

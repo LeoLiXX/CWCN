@@ -136,7 +136,9 @@ public final class CwFixtureEvaluator {
                 signalSnapshot == null ? 0.0d : signalSnapshot.lockedFrameRatio(),
                 signalSnapshot == null ? 0 : signalSnapshot.maxConsecutiveLockedFrames(),
                 signalSnapshot == null ? 0.0d : signalSnapshot.toneActiveUnlockedFrameRatio(),
-                signalSnapshot == null ? 0 : signalSnapshot.maxConsecutiveToneActiveUnlockedFrames()
+                signalSnapshot == null ? 0 : signalSnapshot.maxConsecutiveToneActiveUnlockedFrames(),
+                signalSnapshot == null ? 0 : signalSnapshot.preferredToneFrequencyHz(),
+                signalSnapshot == null ? 0 : signalSnapshot.targetToneFrequencyHz()
         );
     }
 
