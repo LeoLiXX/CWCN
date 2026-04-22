@@ -2204,3 +2204,33 @@
 ### Key files
 
 - [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+
+## 2026-04-22 Deterministic Wobbly Bursty Interferer Fixture
+
+- Extended the synthetic interferer model one step beyond fixed-duty burst behavior.
+- `CwFixtureScenario.ContinuousInterfererProfile` now supports a deterministic `burst wobble` layer:
+- `burstWobbleDepth`
+- `burstWobbleCycleMs`
+- Practical meaning:
+- the adjacent carrier can still be fully deterministic and replay-stable
+- but its burst timing is no longer strictly periodic frame after frame
+- this better approximates real intermittent nearby activity than a perfectly repeating `70/130 ms` or `90/70 ms` rhythm
+- `SyntheticFixtureRxAudioSource` now applies that wobble as a bounded low-frequency timing offset before burst gating, so occupancy feels less synthetic while remaining regression-friendly.
+- Debug UI fixture summary now also exposes wobble parameters for additional interferers.
+- Added a new moderate baseline fixture:
+- `wobbly_bursty_interferer_directed_report`
+- Current observed role of that fixture:
+- front-end should still grade `GOOD`
+- but it is meaningfully closer to a real adjacent intermittent activity pattern than the earlier strictly periodic burst baseline
+- Added model coverage for summary-string exposure of wobble configuration and offline pipeline coverage for the new baseline.
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+### Key files
+
+- [CwFixtureScenario.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureScenario.java)
+- [SyntheticFixtureRxAudioSource.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/audio/SyntheticFixtureRxAudioSource.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)

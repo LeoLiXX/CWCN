@@ -1304,13 +1304,15 @@ public final class CwFixtureScenario {
         private final int burstOnMs;
         private final int burstOffMs;
         private final int burstOffsetMs;
+        private final double burstWobbleDepth;
+        private final int burstWobbleCycleMs;
 
         public ContinuousInterfererProfile(int toneFrequencyHz, int toneAmplitude) {
-            this(toneFrequencyHz, toneAmplitude, 0.0d, 0, 0, 0);
+            this(toneFrequencyHz, toneAmplitude, 0.0d, 0, 0, 0, 0.0d, 0);
         }
 
         public ContinuousInterfererProfile(int toneFrequencyHz, int toneAmplitude, double toneDriftHz) {
-            this(toneFrequencyHz, toneAmplitude, toneDriftHz, 0, 0, 0);
+            this(toneFrequencyHz, toneAmplitude, toneDriftHz, 0, 0, 0, 0.0d, 0);
         }
 
         public ContinuousInterfererProfile(
@@ -1321,12 +1323,36 @@ public final class CwFixtureScenario {
                 int burstOffMs,
                 int burstOffsetMs
         ) {
+            this(
+                    toneFrequencyHz,
+                    toneAmplitude,
+                    toneDriftHz,
+                    burstOnMs,
+                    burstOffMs,
+                    burstOffsetMs,
+                    0.0d,
+                    0
+            );
+        }
+
+        public ContinuousInterfererProfile(
+                int toneFrequencyHz,
+                int toneAmplitude,
+                double toneDriftHz,
+                int burstOnMs,
+                int burstOffMs,
+                int burstOffsetMs,
+                double burstWobbleDepth,
+                int burstWobbleCycleMs
+        ) {
             this.toneFrequencyHz = toneFrequencyHz;
             this.toneAmplitude = toneAmplitude;
             this.toneDriftHz = toneDriftHz;
             this.burstOnMs = Math.max(0, burstOnMs);
             this.burstOffMs = Math.max(0, burstOffMs);
             this.burstOffsetMs = Math.max(0, burstOffsetMs);
+            this.burstWobbleDepth = Math.max(0.0d, Math.min(0.45d, burstWobbleDepth));
+            this.burstWobbleCycleMs = Math.max(0, burstWobbleCycleMs);
         }
 
         public int toneFrequencyHz() {
@@ -1353,8 +1379,20 @@ public final class CwFixtureScenario {
             return burstOffsetMs;
         }
 
+        public double burstWobbleDepth() {
+            return burstWobbleDepth;
+        }
+
+        public int burstWobbleCycleMs() {
+            return burstWobbleCycleMs;
+        }
+
         public boolean isBursting() {
             return burstOnMs > 0 && burstOffMs > 0;
+        }
+
+        public boolean hasBurstWobble() {
+            return isBursting() && burstWobbleDepth > 0.0d && burstWobbleCycleMs > 0;
         }
 
         public String summaryLabel() {
@@ -1376,6 +1414,13 @@ public final class CwFixtureScenario {
                 if (burstOffsetMs > 0) {
                     builder.append(" offset ")
                             .append(burstOffsetMs)
+                            .append("ms");
+                }
+                if (hasBurstWobble()) {
+                    builder.append(" wobble ")
+                            .append(Math.round(burstWobbleDepth * 100.0d))
+                            .append("%/")
+                            .append(burstWobbleCycleMs)
                             .append("ms");
                 }
             }

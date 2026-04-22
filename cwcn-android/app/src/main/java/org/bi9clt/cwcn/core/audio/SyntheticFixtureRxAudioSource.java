@@ -575,6 +575,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
             return 1.0d;
         }
         double elapsedMs = (absoluteSampleIndex * 1000.0d / SAMPLE_RATE_HZ) + interferer.burstOffsetMs();
+        elapsedMs += burstWobbleOffsetMs(interferer, elapsedMs);
         double cycleMs = interferer.burstOnMs() + interferer.burstOffMs();
         if (cycleMs <= 0.0d) {
             return 1.0d;
@@ -594,6 +595,27 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         double attackScale = Math.min(1.0d, cyclePositionMs / rampMs);
         double releaseScale = Math.min(1.0d, (interferer.burstOnMs() - cyclePositionMs) / rampMs);
         return smoothRamp(Math.min(attackScale, releaseScale));
+    }
+
+    private double burstWobbleOffsetMs(
+            CwFixtureScenario.ContinuousInterfererProfile interferer,
+            double elapsedMs
+    ) {
+        if (interferer == null || !interferer.hasBurstWobble()) {
+            return 0.0d;
+        }
+        double cycleMs = interferer.burstOnMs() + interferer.burstOffMs();
+        if (cycleMs <= 0.0d) {
+            return 0.0d;
+        }
+        double primaryRadians = (2.0d * Math.PI * elapsedMs) / interferer.burstWobbleCycleMs();
+        double phaseOffset = (2.0d * Math.PI * interferer.burstOffsetMs()) / Math.max(1.0d, cycleMs);
+        double normalizedWobble = (
+                Math.sin(primaryRadians + phaseOffset)
+                        + (0.55d * Math.sin((primaryRadians * 1.89d) + (phaseOffset * 0.7d)))
+                        + (0.30d * Math.sin((primaryRadians * 0.63d) + (phaseOffset * 1.6d)))
+        ) / 1.85d;
+        return normalizedWobble * cycleMs * interferer.burstWobbleDepth();
     }
 
     private double toneEdgeScale(CwFixtureScenario scenario, int segmentSampleCount, int segmentSampleIndex) {

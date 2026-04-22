@@ -411,6 +411,13 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                                     .append(interferer.burstOffsetMs())
                                     .append(" ms");
                         }
+                        if (interferer.hasBurstWobble()) {
+                            builder.append(", wobble ")
+                                    .append(Math.round(interferer.burstWobbleDepth() * 100.0d))
+                                    .append("%/")
+                                    .append(interferer.burstWobbleCycleMs())
+                                    .append(" ms");
+                        }
                         builder.append("]");
                     }
                 }

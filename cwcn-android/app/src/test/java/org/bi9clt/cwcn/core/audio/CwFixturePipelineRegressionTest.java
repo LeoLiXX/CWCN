@@ -147,6 +147,22 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
+    public void wobblyBurstyInterfererFixtureStillRemainsWorkable() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("wobbly_bursty_interferer_directed_report");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertNotEquals(summary, "WRONG", result.frontEndQualityCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 25);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 3000.0d);
+        assertTrue(summary, result.textTokenRecall() >= 0.45d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+    }
+
+    @Test
     public void burstyDualInterfererBoundaryFixtureCanExposeWrongToneTracking() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("bursty_dual_interferer_boundary_report");
         CwFixtureEvaluationResult result = bundle.result;

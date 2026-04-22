@@ -402,6 +402,41 @@ public final class CwFixtureLibrary {
                     new CwFixtureScenario.ContinuousInterfererProfile(820, 1100, -10.0d, 70, 130, 25)
             )),
             new CwFixtureScenario(
+                    "wobbly_bursty_interferer_directed_report",
+                    "Wobbly Bursty Interferer Report",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ UR 5NN BK"),
+                    1800,
+                    19,
+                    670,
+                    17800,
+                    930,
+                    1500,
+                    150,
+                    0.03d,
+                    2300,
+                    0.0d,
+                    0.0d,
+                    Collections.singletonList(PartTimingProfile.defaultProfile()),
+                    250,
+                    450,
+                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    Collections.singletonList("BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Directed report to called station",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    null,
+                    "599",
+                    "GOOD",
+                    "Exercises a moderate nearby-occupancy baseline where the adjacent burst carrier is deterministic but no longer strictly periodic, closer to real intermittent activity."
+            ).withAdditionalInterferers(Collections.singletonList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(805, 950, -15.0d, 80, 120, 35, 0.14d, 320)
+            )),
+            new CwFixtureScenario(
                     "bursty_dual_interferer_boundary_report",
                     "Bursty Dual Interferer Boundary Report",
                     "BI9CLT DE BG7YOZ UR 5NN BK",
