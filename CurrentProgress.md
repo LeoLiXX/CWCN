@@ -2050,3 +2050,32 @@
 ### Key files
 
 - [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+
+## 2026-04-22 Debug UI Lock Trend And Retune Pressure View
+
+- Added a lightweight live `trend` layer on top of the existing front-end health summary so microphone and fixture testing can show whether the tone tracker is:
+- steadily holding lock
+- building retune pressure toward another tone
+- sitting inside an active unlock gap
+- still searching without a stable candidate
+- `CwSignalSnapshot` now exposes a few extra real-time observability fields from `CwSignalProcessor`:
+- current lock streak
+- current tone-active unlock streak
+- pending retune candidate frequency
+- pending retune candidate stability scan count
+- Debug UI uses those fields in two places:
+- `Mic Trend` inside microphone tone watch
+- extra signal-state lines for current lock streak and pending retune candidate
+- Practical effect:
+- when a nearby interferer is trying to pull the tracker away, the UI can now say that retune pressure is building and show which frequency it is leaning toward
+- when lock is simply stable, the UI says so explicitly instead of making us infer it from coverage percentages alone
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest --tests org.bi9clt.cwcn.core.eval.CwFrontEndHealthClassifierTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
+- [CwSignalSnapshot.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalSnapshot.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwFrontEndHealthClassifierTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifierTest.java)

@@ -233,8 +233,12 @@ public final class CwSignalProcessor {
                 lockedFrameCount,
                 toneActiveFrameCount,
                 toneActiveUnlockedFrameCount,
+                consecutiveLockedFrames,
                 maxConsecutiveLockedFrames,
+                consecutiveToneActiveUnlockedFrames,
                 maxConsecutiveToneActiveUnlockedFrames,
+                pendingRetuneCandidateFrequencyHz,
+                pendingRetuneCandidateStableScans,
                 totalToneOnEvents,
                 totalToneOffEvents,
                 lastEvent

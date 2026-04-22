@@ -465,6 +465,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + CwFrontEndHealthClassifier.qualityLabel(snapshot)
                 + "\nMic Reason: "
                 + CwFrontEndHealthClassifier.reason(snapshot)
+                + "\nMic Trend: "
+                + renderMicrophoneTrend(snapshot)
                 + "\nMic Tone Watch: "
                 + (snapshot.targetToneLocked() ? "LOCKED" : "SEARCH")
                 + " | tracked "
@@ -491,6 +493,64 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "%, worst gap "
                 + snapshot.maxConsecutiveToneActiveUnlockedFrames()
                 + " frame(s)";
+    }
+
+    private String renderMicrophoneTrend(CwSignalSnapshot snapshot) {
+        if (snapshot == null) {
+            return "No front-end history yet.";
+        }
+        int pendingCandidateFrequencyHz = snapshot.pendingRetuneCandidateFrequencyHz();
+        int pendingCandidateOffsetHz = pendingCandidateFrequencyHz - snapshot.targetToneFrequencyHz();
+        String pendingDirectionLabel;
+        if (Math.abs(pendingCandidateOffsetHz) <= 15) {
+            pendingDirectionLabel = "near current track";
+        } else if (pendingCandidateOffsetHz > 0) {
+            pendingDirectionLabel = "above current track";
+        } else {
+            pendingDirectionLabel = "below current track";
+        }
+
+        if (snapshot.targetToneLocked()) {
+            if (snapshot.pendingRetuneCandidateStableScans() > 0
+                    && Math.abs(pendingCandidateOffsetHz) >= 20) {
+                return "Lock streak "
+                        + snapshot.consecutiveLockedFrames()
+                        + " frame(s), but retune pressure is building toward "
+                        + pendingCandidateFrequencyHz
+                        + " Hz ("
+                        + String.format(Locale.US, "%+d", pendingCandidateOffsetHz)
+                        + " Hz, "
+                        + pendingDirectionLabel
+                        + ", stable scans "
+                        + snapshot.pendingRetuneCandidateStableScans()
+                        + ")";
+            }
+            return "Lock is steady with current streak "
+                    + snapshot.consecutiveLockedFrames()
+                    + " frame(s) and no meaningful retune pressure.";
+        }
+
+        if (snapshot.toneActive() && snapshot.consecutiveToneActiveUnlockedFrames() > 0) {
+            return "Tone is active but currently unlocked for "
+                    + snapshot.consecutiveToneActiveUnlockedFrames()
+                    + " frame(s); candidate watch is "
+                    + pendingCandidateFrequencyHz
+                    + " Hz (stable scans "
+                    + snapshot.pendingRetuneCandidateStableScans()
+                    + ").";
+        }
+
+        if (snapshot.pendingRetuneCandidateStableScans() > 0) {
+            return "Still searching; candidate watch is "
+                    + pendingCandidateFrequencyHz
+                    + " Hz ("
+                    + pendingDirectionLabel
+                    + ", stable scans "
+                    + snapshot.pendingRetuneCandidateStableScans()
+                    + ").";
+        }
+
+        return "Still searching with no stable retune candidate yet.";
     }
 
     private void restorePreferredToneFrequency() {
@@ -758,6 +818,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + " (" + CwFrontEndHealthClassifier.bottleneckLabel(snapshot) + ")"
                 + "\nPreferred Tone: " + snapshot.preferredToneFrequencyHz() + " Hz"
                 + "\nTracked Tone: " + snapshot.targetToneFrequencyHz() + " Hz"
+                + "\nPending Retune Candidate: " + snapshot.pendingRetuneCandidateFrequencyHz()
+                + " Hz"
+                + " (" + snapshot.pendingRetuneCandidateStableScans() + " stable scans)"
                 + "\nTracking Error: " + String.format(Locale.US, "%+d", toneErrorHz) + " Hz"
                 + "\nAttack Threshold: " + snapshot.currentThreshold()
                 + "\nRelease Threshold: " + snapshot.releaseThreshold()
@@ -772,9 +835,11 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "\nPeak Isolation: " + Math.round(snapshot.peakNarrowbandIsolationRatio() * 100.0d) + "%"
                 + "\nLock Coverage: " + Math.round(snapshot.lockedFrameRatio() * 100.0d) + "%"
                 + " (" + snapshot.lockedFrameCount() + "/" + snapshot.processedFrameCount() + " frames)"
+                + "\nCurrent Lock Streak: " + snapshot.consecutiveLockedFrames() + " frame(s)"
                 + "\nBest Lock Run: " + snapshot.maxConsecutiveLockedFrames() + " frame(s)"
                 + "\nTone-Active Unlock: " + Math.round(snapshot.toneActiveUnlockedFrameRatio() * 100.0d) + "%"
                 + " (" + snapshot.toneActiveUnlockedFrameCount() + "/" + snapshot.toneActiveFrameCount() + " active frames)"
+                + "\nCurrent Active Unlock Gap: " + snapshot.consecutiveToneActiveUnlockedFrames() + " frame(s)"
                 + "\nWorst Active Unlock Gap: " + snapshot.maxConsecutiveToneActiveUnlockedFrames() + " frame(s)";
     }
 

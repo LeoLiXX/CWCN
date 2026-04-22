@@ -166,8 +166,12 @@ public final class CwFrontEndHealthClassifierTest {
                 (int) Math.round(processedFrameCount * lockedFrameRatio),
                 toneActiveFrameCount,
                 (int) Math.round(toneActiveFrameCount * toneActiveUnlockedFrameRatio),
+                Math.max(0, maxConsecutiveLockedFrames - 1),
                 maxConsecutiveLockedFrames,
+                Math.max(0, maxConsecutiveToneActiveUnlockedFrames - 1),
                 maxConsecutiveToneActiveUnlockedFrames,
+                targetToneFrequencyHz,
+                0,
                 3,
                 3,
                 lastEvent

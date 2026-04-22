@@ -20,8 +20,12 @@ public final class CwSignalSnapshot {
     private final int lockedFrameCount;
     private final int toneActiveFrameCount;
     private final int toneActiveUnlockedFrameCount;
+    private final int consecutiveLockedFrames;
     private final int maxConsecutiveLockedFrames;
+    private final int consecutiveToneActiveUnlockedFrames;
     private final int maxConsecutiveToneActiveUnlockedFrames;
+    private final int pendingRetuneCandidateFrequencyHz;
+    private final int pendingRetuneCandidateStableScans;
     private final int totalToneOnEvents;
     private final int totalToneOffEvents;
     private final CwToneEvent lastEvent;
@@ -46,8 +50,12 @@ public final class CwSignalSnapshot {
             int lockedFrameCount,
             int toneActiveFrameCount,
             int toneActiveUnlockedFrameCount,
+            int consecutiveLockedFrames,
             int maxConsecutiveLockedFrames,
+            int consecutiveToneActiveUnlockedFrames,
             int maxConsecutiveToneActiveUnlockedFrames,
+            int pendingRetuneCandidateFrequencyHz,
+            int pendingRetuneCandidateStableScans,
             int totalToneOnEvents,
             int totalToneOffEvents,
             CwToneEvent lastEvent
@@ -71,8 +79,12 @@ public final class CwSignalSnapshot {
         this.lockedFrameCount = lockedFrameCount;
         this.toneActiveFrameCount = toneActiveFrameCount;
         this.toneActiveUnlockedFrameCount = toneActiveUnlockedFrameCount;
+        this.consecutiveLockedFrames = consecutiveLockedFrames;
         this.maxConsecutiveLockedFrames = maxConsecutiveLockedFrames;
+        this.consecutiveToneActiveUnlockedFrames = consecutiveToneActiveUnlockedFrames;
         this.maxConsecutiveToneActiveUnlockedFrames = maxConsecutiveToneActiveUnlockedFrames;
+        this.pendingRetuneCandidateFrequencyHz = pendingRetuneCandidateFrequencyHz;
+        this.pendingRetuneCandidateStableScans = pendingRetuneCandidateStableScans;
         this.totalToneOnEvents = totalToneOnEvents;
         this.totalToneOffEvents = totalToneOffEvents;
         this.lastEvent = lastEvent;
@@ -154,12 +166,28 @@ public final class CwSignalSnapshot {
         return toneActiveUnlockedFrameCount;
     }
 
+    public int consecutiveLockedFrames() {
+        return consecutiveLockedFrames;
+    }
+
     public int maxConsecutiveLockedFrames() {
         return maxConsecutiveLockedFrames;
     }
 
+    public int consecutiveToneActiveUnlockedFrames() {
+        return consecutiveToneActiveUnlockedFrames;
+    }
+
     public int maxConsecutiveToneActiveUnlockedFrames() {
         return maxConsecutiveToneActiveUnlockedFrames;
+    }
+
+    public int pendingRetuneCandidateFrequencyHz() {
+        return pendingRetuneCandidateFrequencyHz;
+    }
+
+    public int pendingRetuneCandidateStableScans() {
+        return pendingRetuneCandidateStableScans;
     }
 
     public double lockedFrameRatio() {
