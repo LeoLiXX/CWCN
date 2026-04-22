@@ -1880,6 +1880,7 @@
 - This fixture is intentionally calibrated as a `moderate drifting interferer baseline`:
 - harder than the fixed-carrier nearby/moderate interferer cases
 - but not so aggressive that it immediately drags the tracker into a non-usable boundary failure
+- After replay verification, this baseline is now explicitly locked at front-end quality `GOOD`.
 - Added focused JVM coverage for:
 - fixture-model exposure of interferer drift
 - summary-string exposure of interferer drift

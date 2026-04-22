@@ -331,7 +331,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.REPORT_EXCHANGE,
                     null,
                     "599",
-                    null,
+                    "GOOD",
                     "Exercises a harder nearby-carrier case where the interferer sweeps across the local contrast neighborhood instead of sitting at one fixed frequency."
             ),
             new CwFixtureScenario(
