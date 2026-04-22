@@ -4,73 +4,151 @@ import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 import org.bi9clt.cwcn.core.signal.CwToneEvent;
 
 public final class CwFrontEndHealthClassifier {
+    public static final String QUALITY_NA = "NA";
+    public static final String QUALITY_WRONG = "WRONG";
+    public static final String QUALITY_GOOD = "GOOD";
+    public static final String QUALITY_DROP = "DROP";
+    public static final String QUALITY_MISS = "MISS";
+    public static final String QUALITY_WEAK = "WEAK";
+
+    public static final String BOTTLENECK_NA = "NA";
+    public static final String BOTTLENECK_OK = "OK";
+    public static final String BOTTLENECK_TRK = "TRK";
+    public static final String BOTTLENECK_SIG = "SIG";
+
     private CwFrontEndHealthClassifier() {
     }
 
     public static String qualityCode(CwSignalSnapshot snapshot) {
-        if (!hasFrontEndHistory(snapshot)) {
-            return "NA";
+        if (snapshot == null) {
+            return QUALITY_NA;
         }
-        if (suggestsWrongToneLock(snapshot)) {
-            return "WRONG";
-        }
-        if ((snapshot.targetToneLocked() || suggestsCleanRelease(snapshot))
-                && snapshot.peakNarrowbandIsolationRatio() >= 0.55d
-                && snapshot.lockedFrameRatio() >= 0.25d
-                && snapshot.maxConsecutiveLockedFrames() >= 4) {
-            return "GOOD";
-        }
-        if (!snapshot.targetToneLocked() && suggestsEarlierHealthyLock(snapshot)) {
-            return "DROP";
-        }
-        if (suggestsSignalLoss(snapshot)) {
-            return "MISS";
-        }
-        return "WEAK";
+        return qualityCode(
+                snapshot.targetToneLocked(),
+                snapshot.lastEvent() != null && snapshot.lastEvent().type() == CwToneEvent.Type.TONE_OFF,
+                snapshot.peakToneRmsAmplitude(),
+                snapshot.peakNarrowbandIsolationRatio(),
+                snapshot.lockedFrameRatio(),
+                snapshot.maxConsecutiveLockedFrames(),
+                snapshot.toneActiveUnlockedFrameRatio(),
+                snapshot.maxConsecutiveToneActiveUnlockedFrames(),
+                trackingErrorHz(snapshot)
+        );
     }
 
     public static String qualityLabel(CwSignalSnapshot snapshot) {
-        switch (qualityCode(snapshot)) {
-            case "WRONG":
+        return qualityLabel(qualityCode(snapshot), suggestsCleanRelease(snapshot));
+    }
+
+    public static String bottleneckCode(CwSignalSnapshot snapshot) {
+        return bottleneckCode(qualityCode(snapshot));
+    }
+
+    public static String bottleneckLabel(CwSignalSnapshot snapshot) {
+        return bottleneckLabel(bottleneckCode(snapshot));
+    }
+
+    public static String qualityCode(
+            boolean finalToneLocked,
+            boolean endedOnToneOffEvent,
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames,
+            double toneActiveUnlockedFrameRatio,
+            int maxConsecutiveToneActiveUnlockedFrames,
+            int trackingErrorHz
+    ) {
+        if (!hasFrontEndHistory(
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames
+        )) {
+            return QUALITY_NA;
+        }
+        if (suggestsWrongToneLock(
+                finalToneLocked,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames,
+                trackingErrorHz
+        )) {
+            return QUALITY_WRONG;
+        }
+        if ((finalToneLocked || suggestsCleanRelease(
+                finalToneLocked,
+                endedOnToneOffEvent,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames,
+                toneActiveUnlockedFrameRatio,
+                maxConsecutiveToneActiveUnlockedFrames
+        ))
+                && peakNarrowbandIsolationRatio >= 0.55d
+                && lockedFrameRatio >= 0.25d
+                && maxConsecutiveLockedFrames >= 4) {
+            return QUALITY_GOOD;
+        }
+        if (!finalToneLocked && suggestsEarlierHealthyLock(
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames
+        )) {
+            return QUALITY_DROP;
+        }
+        if (suggestsSignalLoss(
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames
+        )) {
+            return QUALITY_MISS;
+        }
+        return QUALITY_WEAK;
+    }
+
+    public static String qualityLabel(String qualityCode, boolean cleanRelease) {
+        switch (qualityCode) {
+            case QUALITY_WRONG:
                 return "Strong lock on off-target tone";
-            case "GOOD":
-                return suggestsCleanRelease(snapshot)
+            case QUALITY_GOOD:
+                return cleanRelease
                         ? "Healthy lock with clean release"
                         : "Healthy lock retained";
-            case "DROP":
+            case QUALITY_DROP:
                 return "Earlier lock, later drop";
-            case "MISS":
+            case QUALITY_MISS:
                 return "No convincing lock formed";
-            case "WEAK":
+            case QUALITY_WEAK:
                 return "Partial / unstable acquisition";
             default:
                 return "No front-end history available";
         }
     }
 
-    public static String bottleneckCode(CwSignalSnapshot snapshot) {
-        String qualityCode = qualityCode(snapshot);
+    public static String bottleneckCode(String qualityCode) {
         switch (qualityCode) {
-            case "GOOD":
-                return "OK";
-            case "WRONG":
-                return "TRK";
-            case "DROP":
-            case "MISS":
-            case "WEAK":
-                return "SIG";
+            case QUALITY_GOOD:
+                return BOTTLENECK_OK;
+            case QUALITY_WRONG:
+                return BOTTLENECK_TRK;
+            case QUALITY_DROP:
+            case QUALITY_MISS:
+            case QUALITY_WEAK:
+                return BOTTLENECK_SIG;
             default:
-                return "NA";
+                return BOTTLENECK_NA;
         }
     }
 
-    public static String bottleneckLabel(CwSignalSnapshot snapshot) {
-        switch (bottleneckCode(snapshot)) {
-            case "OK":
+    public static String bottleneckLabel(String bottleneckCode) {
+        switch (bottleneckCode) {
+            case BOTTLENECK_OK:
                 return "Front-end looks healthy";
-            case "TRK":
+            case BOTTLENECK_TRK:
                 return "Wrong-tone acquisition / tracking";
-            case "SIG":
+            case BOTTLENECK_SIG:
                 return "Front-end signal/timing acquisition";
             default:
                 return "No diagnosis yet";
@@ -101,44 +179,123 @@ public final class CwFrontEndHealthClassifier {
 
     public static boolean suggestsWrongToneLock(CwSignalSnapshot snapshot) {
         return snapshot != null
-                && snapshot.targetToneLocked()
-                && Math.abs(trackingErrorHz(snapshot)) >= 45
-                && snapshot.peakNarrowbandIsolationRatio() >= 0.60d
-                && snapshot.lockedFrameRatio() >= 0.30d
-                && snapshot.maxConsecutiveLockedFrames() >= 4;
+                && suggestsWrongToneLock(
+                snapshot.targetToneLocked(),
+                snapshot.peakNarrowbandIsolationRatio(),
+                snapshot.lockedFrameRatio(),
+                snapshot.maxConsecutiveLockedFrames(),
+                trackingErrorHz(snapshot)
+        );
     }
 
     public static boolean suggestsCleanRelease(CwSignalSnapshot snapshot) {
         return snapshot != null
-                && !snapshot.targetToneLocked()
-                && snapshot.lastEvent() != null
-                && snapshot.lastEvent().type() == CwToneEvent.Type.TONE_OFF
-                && suggestsEarlierHealthyLock(snapshot)
-                && snapshot.toneActiveUnlockedFrameRatio() <= 0.16d
-                && snapshot.maxConsecutiveToneActiveUnlockedFrames() <= 1;
+                && suggestsCleanRelease(
+                snapshot.targetToneLocked(),
+                snapshot.lastEvent() != null && snapshot.lastEvent().type() == CwToneEvent.Type.TONE_OFF,
+                snapshot.peakNarrowbandIsolationRatio(),
+                snapshot.lockedFrameRatio(),
+                snapshot.maxConsecutiveLockedFrames(),
+                snapshot.toneActiveUnlockedFrameRatio(),
+                snapshot.maxConsecutiveToneActiveUnlockedFrames()
+        );
     }
 
     public static boolean suggestsEarlierHealthyLock(CwSignalSnapshot snapshot) {
         return snapshot != null
-                && snapshot.peakNarrowbandIsolationRatio() >= 0.55d
-                && snapshot.lockedFrameRatio() >= 0.15d
-                && snapshot.maxConsecutiveLockedFrames() >= 3;
+                && suggestsEarlierHealthyLock(
+                snapshot.peakNarrowbandIsolationRatio(),
+                snapshot.lockedFrameRatio(),
+                snapshot.maxConsecutiveLockedFrames()
+        );
     }
 
     public static boolean suggestsSignalLoss(CwSignalSnapshot snapshot) {
         return snapshot != null
-                && snapshot.peakToneRmsAmplitude() > 0.0d
-                && snapshot.peakNarrowbandIsolationRatio() < 0.35d
-                && snapshot.lockedFrameRatio() < 0.08d
-                && snapshot.maxConsecutiveLockedFrames() < 2;
+                && suggestsSignalLoss(
+                snapshot.peakToneRmsAmplitude(),
+                snapshot.peakNarrowbandIsolationRatio(),
+                snapshot.lockedFrameRatio(),
+                snapshot.maxConsecutiveLockedFrames()
+        );
     }
 
     public static boolean hasFrontEndHistory(CwSignalSnapshot snapshot) {
         return snapshot != null
-                && (snapshot.peakToneRmsAmplitude() > 0.0d
-                || snapshot.peakNarrowbandIsolationRatio() > 0.0d
-                || snapshot.lockedFrameRatio() > 0.0d
-                || snapshot.maxConsecutiveLockedFrames() > 0);
+                && hasFrontEndHistory(
+                snapshot.peakToneRmsAmplitude(),
+                snapshot.peakNarrowbandIsolationRatio(),
+                snapshot.lockedFrameRatio(),
+                snapshot.maxConsecutiveLockedFrames()
+        );
+    }
+
+    public static boolean suggestsWrongToneLock(
+            boolean finalToneLocked,
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames,
+            int trackingErrorHz
+    ) {
+        return finalToneLocked
+                && Math.abs(trackingErrorHz) >= 45
+                && peakNarrowbandIsolationRatio >= 0.60d
+                && lockedFrameRatio >= 0.30d
+                && maxConsecutiveLockedFrames >= 4;
+    }
+
+    public static boolean suggestsCleanRelease(
+            boolean finalToneLocked,
+            boolean endedOnToneOffEvent,
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames,
+            double toneActiveUnlockedFrameRatio,
+            int maxConsecutiveToneActiveUnlockedFrames
+    ) {
+        return !finalToneLocked
+                && endedOnToneOffEvent
+                && suggestsEarlierHealthyLock(
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames
+        )
+                && toneActiveUnlockedFrameRatio <= 0.16d
+                && maxConsecutiveToneActiveUnlockedFrames <= 1;
+    }
+
+    public static boolean suggestsEarlierHealthyLock(
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames
+    ) {
+        return peakNarrowbandIsolationRatio >= 0.55d
+                && lockedFrameRatio >= 0.15d
+                && maxConsecutiveLockedFrames >= 3;
+    }
+
+    public static boolean suggestsSignalLoss(
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames
+    ) {
+        return peakToneRmsAmplitude > 0.0d
+                && peakNarrowbandIsolationRatio < 0.35d
+                && lockedFrameRatio < 0.08d
+                && maxConsecutiveLockedFrames < 2;
+    }
+
+    public static boolean hasFrontEndHistory(
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames
+    ) {
+        return peakToneRmsAmplitude > 0.0d
+                || peakNarrowbandIsolationRatio > 0.0d
+                || lockedFrameRatio > 0.0d
+                || maxConsecutiveLockedFrames > 0;
     }
 
     public static int trackingErrorHz(CwSignalSnapshot snapshot) {

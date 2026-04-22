@@ -326,77 +326,63 @@ public final class CwFixtureEvaluationResult {
     }
 
     private boolean frontEndHistorySuggestsSignalLoss() {
-        return peakToneRmsAmplitude > 0.0d
-                && peakNarrowbandIsolationRatio < 0.35d
-                && lockedFrameRatio < 0.08d
-                && maxConsecutiveLockedFrames < 2;
+        return CwFrontEndHealthClassifier.suggestsSignalLoss(
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames
+        );
     }
 
     private boolean frontEndHistorySuggestsEarlierHealthyLock() {
-        return peakNarrowbandIsolationRatio >= 0.55d
-                && lockedFrameRatio >= 0.15d
-                && maxConsecutiveLockedFrames >= 3;
+        return CwFrontEndHealthClassifier.suggestsEarlierHealthyLock(
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames
+        );
     }
 
     private boolean frontEndHistorySuggestsCleanRelease() {
-        return !finalToneLocked
-                && endedOnToneOffEvent
-                && frontEndHistorySuggestsEarlierHealthyLock()
-                && toneActiveUnlockedFrameRatio <= 0.16d
-                && maxConsecutiveToneActiveUnlockedFrames <= 1;
+        return CwFrontEndHealthClassifier.suggestsCleanRelease(
+                finalToneLocked,
+                endedOnToneOffEvent,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames,
+                toneActiveUnlockedFrameRatio,
+                maxConsecutiveToneActiveUnlockedFrames
+        );
     }
 
     private boolean frontEndHistorySuggestsWrongToneLock() {
-        return finalToneLocked
-                && Math.abs(trackingErrorHz()) >= 45
-                && peakNarrowbandIsolationRatio >= 0.60d
-                && lockedFrameRatio >= 0.30d
-                && maxConsecutiveLockedFrames >= 4;
+        return CwFrontEndHealthClassifier.suggestsWrongToneLock(
+                finalToneLocked,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames,
+                trackingErrorHz()
+        );
     }
 
     public String frontEndQualityCode() {
-        boolean hasFrontEndHistory = peakToneRmsAmplitude > 0.0d
-                || peakNarrowbandIsolationRatio > 0.0d
-                || lockedFrameRatio > 0.0d
-                || maxConsecutiveLockedFrames > 0;
-        if (!hasFrontEndHistory) {
-            return "NA";
-        }
-        if (frontEndHistorySuggestsWrongToneLock()) {
-            return "WRONG";
-        }
-        if ((finalToneLocked || frontEndHistorySuggestsCleanRelease())
-                && peakNarrowbandIsolationRatio >= 0.55d
-                && lockedFrameRatio >= 0.25d
-                && maxConsecutiveLockedFrames >= 4) {
-            return "GOOD";
-        }
-        if (!finalToneLocked && frontEndHistorySuggestsEarlierHealthyLock()) {
-            return "DROP";
-        }
-        if (frontEndHistorySuggestsSignalLoss()) {
-            return "MISS";
-        }
-        return "WEAK";
+        return CwFrontEndHealthClassifier.qualityCode(
+                finalToneLocked,
+                endedOnToneOffEvent,
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames,
+                toneActiveUnlockedFrameRatio,
+                maxConsecutiveToneActiveUnlockedFrames,
+                trackingErrorHz()
+        );
     }
 
     public String frontEndQualityLabel() {
-        switch (frontEndQualityCode()) {
-            case "WRONG":
-                return "Strong lock on off-target tone";
-            case "GOOD":
-                return frontEndHistorySuggestsCleanRelease()
-                        ? "Healthy lock with clean release"
-                        : "Healthy lock retained";
-            case "DROP":
-                return "Earlier lock, later drop";
-            case "MISS":
-                return "No convincing lock formed";
-            case "WEAK":
-                return "Partial / unstable acquisition";
-            default:
-                return "No front-end history available";
-        }
+        return CwFrontEndHealthClassifier.qualityLabel(
+                frontEndQualityCode(),
+                frontEndHistorySuggestsCleanRelease()
+        );
     }
 
     public String likelyBottleneckCode() {

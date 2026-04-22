@@ -2008,3 +2008,25 @@
 - [CwFrontEndHealthClassifier.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifier.java)
 - [CwFrontEndHealthClassifierTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifierTest.java)
 - [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+
+## 2026-04-22 Shared Front-End Health Logic
+
+- Finished the follow-through so live Debug UI and offline fixture evaluation now share the same front-end grading implementation instead of only sharing wording.
+- `CwFrontEndHealthClassifier` was expanded into the single place that owns:
+- front-end quality code thresholds
+- clean-release / wrong-tone / earlier-lock / signal-loss predicates
+- compact quality and diagnosis labels
+- `CwFixtureEvaluationResult` now delegates its front-end history grading to that classifier instead of keeping a second copy of the thresholds inline.
+- Practical benefit:
+- future threshold tuning for `GOOD / WRONG / DROP / MISS / WEAK` can happen in one place
+- live microphone observation and offline replay regression are less likely to silently drift apart
+- the existing evaluator tests now also act as a backstop for the shared classifier path
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFrontEndHealthClassifierTest --tests org.bi9clt.cwcn.core.eval.CwFixtureEvaluationResultTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwFrontEndHealthClassifier.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifier.java)
+- [CwFixtureEvaluationResult.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResult.java)
+- [CwFixtureEvaluationResultTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResultTest.java)
