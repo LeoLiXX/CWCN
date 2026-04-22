@@ -2030,3 +2030,23 @@
 - [CwFrontEndHealthClassifier.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifier.java)
 - [CwFixtureEvaluationResult.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResult.java)
 - [CwFixtureEvaluationResultTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResultTest.java)
+
+## 2026-04-22 Debug UI Expected-vs-Observed Front-End Status
+
+- Tightened the synthetic fixture workflow in Debug UI one more step.
+- When a fixture declares an expected front-end quality, the selected-source summary now also shows:
+- current observed front-end quality
+- current observed bottleneck code
+- whether the current live state matches the fixture expectation
+- This means fixture replay checking is now easier to do at a glance:
+- `Expected front-end: GOOD`
+- `Observed front-end: GOOD / OK (matches expected)`
+- or
+- `Observed front-end: WEAK / SIG (expected GOOD)`
+- This is intentionally lightweight, but it saves a lot of panel-hopping while iterating on interferer/timing fixtures.
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)

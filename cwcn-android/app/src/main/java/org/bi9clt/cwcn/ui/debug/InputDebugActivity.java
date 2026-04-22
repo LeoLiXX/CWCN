@@ -411,7 +411,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             builder.append("\nTiming: ").append(scenario.timingProfileSummary());
             if (scenario.expectedFrontEndQualityCode() != null) {
                 builder.append("\nExpected front-end: ")
-                        .append(scenario.expectedFrontEndQualityCode());
+                        .append(scenario.expectedFrontEndQualityCode())
+                        .append("\nObserved front-end: ")
+                        .append(renderObservedFrontEndStatus(scenario.expectedFrontEndQualityCode()));
             }
             builder.append("\nNotes: ").append(scenario.notes());
         }
@@ -421,6 +423,26 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         builder.append("\nPreferred Tone: ")
                 .append(cwSignalProcessor.snapshot().preferredToneFrequencyHz())
                 .append(" Hz");
+        return builder.toString();
+    }
+
+    private String renderObservedFrontEndStatus(@Nullable String expectedQualityCode) {
+        CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
+        String observedQualityCode = CwFrontEndHealthClassifier.qualityCode(snapshot);
+        String observedBottleneckCode = CwFrontEndHealthClassifier.bottleneckCode(snapshot);
+        StringBuilder builder = new StringBuilder()
+                .append(observedQualityCode)
+                .append(" / ")
+                .append(observedBottleneckCode)
+                .append(" - ")
+                .append(CwFrontEndHealthClassifier.qualityLabel(snapshot));
+        if (expectedQualityCode != null) {
+            if (expectedQualityCode.equals(observedQualityCode)) {
+                builder.append(" (matches expected)");
+            } else {
+                builder.append(" (expected ").append(expectedQualityCode).append(")");
+            }
+        }
         return builder.toString();
     }
 
