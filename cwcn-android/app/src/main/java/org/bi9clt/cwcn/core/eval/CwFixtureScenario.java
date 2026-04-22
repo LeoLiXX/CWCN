@@ -23,6 +23,7 @@ public final class CwFixtureScenario {
     private final double qsbDepth;
     private final int qsbCycleMs;
     private final double toneDriftHz;
+    private final double interfererToneDriftHz;
     private final double timingJitterDepth;
     private final double dotSwingDepth;
     private final int riseRampMs;
@@ -54,6 +55,7 @@ public final class CwFixtureScenario {
             double qsbDepth,
             int qsbCycleMs,
             double toneDriftHz,
+            double interfererToneDriftHz,
             double timingJitterDepth,
             double dotSwingDepth,
             int riseRampMs,
@@ -84,6 +86,7 @@ public final class CwFixtureScenario {
                 qsbDepth,
                 qsbCycleMs,
                 toneDriftHz,
+                interfererToneDriftHz,
                 timingJitterDepth,
                 dotSwingDepth,
                 riseRampMs,
@@ -98,6 +101,70 @@ public final class CwFixtureScenario {
                 expectedRstSent,
                 expectedRstRcvd,
                 null,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double toneDriftHz,
+            double interfererToneDriftHz,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                0,
+                0,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                0.0d,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
                 notes
         );
     }
@@ -146,6 +213,7 @@ public final class CwFixtureScenario {
                 qsbDepth,
                 qsbCycleMs,
                 toneDriftHz,
+                0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
                 riseRampMs,
@@ -207,6 +275,7 @@ public final class CwFixtureScenario {
                 qsbDepth,
                 qsbCycleMs,
                 0.0d,
+                0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
                 0,
@@ -240,6 +309,7 @@ public final class CwFixtureScenario {
             double qsbDepth,
             int qsbCycleMs,
             double toneDriftHz,
+            double interfererToneDriftHz,
             double timingJitterDepth,
             double dotSwingDepth,
             int riseRampMs,
@@ -270,6 +340,7 @@ public final class CwFixtureScenario {
         this.qsbDepth = qsbDepth;
         this.qsbCycleMs = qsbCycleMs;
         this.toneDriftHz = toneDriftHz;
+        this.interfererToneDriftHz = interfererToneDriftHz;
         this.timingJitterDepth = timingJitterDepth;
         this.dotSwingDepth = dotSwingDepth;
         this.riseRampMs = Math.max(0, riseRampMs);
@@ -329,6 +400,7 @@ public final class CwFixtureScenario {
                 qsbDepth,
                 qsbCycleMs,
                 0.0d,
+                0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
                 0,
@@ -387,6 +459,7 @@ public final class CwFixtureScenario {
                 qsbDepth,
                 qsbCycleMs,
                 0.0d,
+                0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
                 riseRampMs,
@@ -444,6 +517,7 @@ public final class CwFixtureScenario {
                 noiseAmplitude,
                 qsbDepth,
                 qsbCycleMs,
+                0.0d,
                 0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
@@ -561,6 +635,7 @@ public final class CwFixtureScenario {
                 qsbDepth,
                 qsbCycleMs,
                 toneDriftHz,
+                0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
                 riseRampMs,
@@ -620,6 +695,7 @@ public final class CwFixtureScenario {
                 qsbDepth,
                 qsbCycleMs,
                 0.0d,
+                0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
                 riseRampMs,
@@ -673,7 +749,6 @@ public final class CwFixtureScenario {
                 noiseAmplitude,
                 qsbDepth,
                 qsbCycleMs,
-                0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
                 0,
@@ -727,7 +802,6 @@ public final class CwFixtureScenario {
                 qsbCycleMs,
                 0.0d,
                 0.0d,
-                0.0d,
                 0,
                 0,
                 new ArrayList<>(),
@@ -780,7 +854,6 @@ public final class CwFixtureScenario {
                 qsbCycleMs,
                 0.0d,
                 0.0d,
-                0.0d,
                 0,
                 0,
                 new ArrayList<>(),
@@ -831,7 +904,6 @@ public final class CwFixtureScenario {
                 qsbCycleMs,
                 0.0d,
                 0.0d,
-                0.0d,
                 0,
                 0,
                 new ArrayList<>(),
@@ -880,7 +952,6 @@ public final class CwFixtureScenario {
                 noiseAmplitude,
                 qsbDepth,
                 qsbCycleMs,
-                0.0d,
                 0.0d,
                 0.0d,
                 0,
@@ -953,6 +1024,10 @@ public final class CwFixtureScenario {
 
     public double toneDriftHz() {
         return toneDriftHz;
+    }
+
+    public double interfererToneDriftHz() {
+        return interfererToneDriftHz;
     }
 
     public double timingJitterDepth() {
@@ -1032,6 +1107,9 @@ public final class CwFixtureScenario {
         }
         if (Math.abs(toneDriftHz) > 0.0d) {
             parts.add("tone drift " + trimDouble(toneDriftHz) + "Hz");
+        }
+        if (Math.abs(interfererToneDriftHz) > 0.0d) {
+            parts.add("interferer drift " + trimDouble(interfererToneDriftHz) + "Hz");
         }
         if (riseRampMs > 0 || fallRampMs > 0) {
             parts.add("edge ramp " + riseRampMs + "/" + fallRampMs + "ms");

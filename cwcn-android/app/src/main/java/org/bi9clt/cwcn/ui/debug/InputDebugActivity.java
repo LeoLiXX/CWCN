@@ -382,6 +382,11 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                         .append(scenario.interfererToneFrequencyHz())
                         .append(" Hz @ ")
                         .append(scenario.interfererToneAmplitude());
+                if (Math.abs(scenario.interfererToneDriftHz()) > 0.0d) {
+                    builder.append(" (drift ")
+                            .append(String.format(Locale.US, "%+.1f", scenario.interfererToneDriftHz()))
+                            .append(" Hz)");
+                }
             }
             if (scenario.qsbDepth() > 0.0d) {
                 builder.append(", QSB ")

@@ -191,6 +191,44 @@ public final class CwFixtureScenarioTest {
     }
 
     @Test
+    public void interfererToneDriftConfigurationIsExposedAndIncludedInSummary() {
+        CwFixtureScenario scenario = new CwFixtureScenario(
+                "test",
+                "Test",
+                "CQ CQ",
+                Arrays.asList("CQ CQ"),
+                1800,
+                18,
+                650,
+                18000,
+                910,
+                9000,
+                500,
+                0.08d,
+                2000,
+                0.0d,
+                -120.0d,
+                0.10d,
+                0.04d,
+                5,
+                7,
+                Collections.singletonList(CwFixtureScenario.PartTimingProfile.defaultProfile()),
+                250,
+                450,
+                "CQ CQ",
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("CQ / calling flow"),
+                QsoPhase.CALLING_CQ,
+                null,
+                null,
+                "test"
+        );
+
+        assertEquals(-120.0d, scenario.interfererToneDriftHz(), 0.0001d);
+        assertTrue(scenario.timingProfileSummary().contains("interferer drift -120Hz"));
+    }
+
+    @Test
     public void expectedFrontEndQualityCodeIsNormalizedAndExposed() {
         CwFixtureScenario scenario = new CwFixtureScenario(
                 "test",
@@ -206,6 +244,7 @@ public final class CwFixtureScenarioTest {
                 500,
                 0.08d,
                 2000,
+                0.0d,
                 0.0d,
                 0.10d,
                 0.04d,

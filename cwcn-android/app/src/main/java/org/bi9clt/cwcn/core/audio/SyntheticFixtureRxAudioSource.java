@@ -157,9 +157,6 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         Random random = new Random(scenario.id().hashCode());
         double tonePhase = 0.0d;
         double interfererPhase = 0.0d;
-        double interfererPhaseStep = scenario.interfererToneFrequencyHz() > 0
-                ? 2.0d * Math.PI * scenario.interfererToneFrequencyHz() / SAMPLE_RATE_HZ
-                : 0.0d;
         int absoluteIndex = 0;
         for (Segment segment : segments) {
             for (int i = 0; i < segment.sampleCount; i++) {
@@ -175,6 +172,8 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
                             * qsbScale;
                 }
                 double interfererComponent = 0.0d;
+                double interfererFrequencyHz = instantaneousInterfererFrequencyHz(scenario, absoluteIndex, totalSamples);
+                double interfererPhaseStep = 2.0d * Math.PI * interfererFrequencyHz / SAMPLE_RATE_HZ;
                 if (scenario.interfererToneAmplitude() > 0 && interfererPhaseStep > 0.0d) {
                     interfererComponent = Math.sin(interfererPhase)
                             * scenario.interfererToneAmplitude();
@@ -509,6 +508,21 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         }
         double progress = Math.max(0.0d, Math.min(1.0d, sampleIndex / (double) (totalSamples - 1)));
         return Math.max(1.0d, scenario.toneFrequencyHz() + (scenario.toneDriftHz() * progress));
+    }
+
+    private double instantaneousInterfererFrequencyHz(
+            CwFixtureScenario scenario,
+            int sampleIndex,
+            int totalSamples
+    ) {
+        if (scenario.interfererToneFrequencyHz() <= 0) {
+            return 0.0d;
+        }
+        if (Math.abs(scenario.interfererToneDriftHz()) < 0.0001d || totalSamples <= 1) {
+            return scenario.interfererToneFrequencyHz();
+        }
+        double progress = Math.max(0.0d, Math.min(1.0d, sampleIndex / (double) (totalSamples - 1)));
+        return Math.max(1.0d, scenario.interfererToneFrequencyHz() + (scenario.interfererToneDriftHz() * progress));
     }
 
     private double toneEdgeScale(CwFixtureScenario scenario, int segmentSampleCount, int segmentSampleIndex) {

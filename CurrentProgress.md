@@ -1867,3 +1867,35 @@
 - [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
 - [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-22 Drifting Interferer Fixture Support
+
+- Extended the offline fixture model so the synthetic interferer tone can now drift over the full rendered waveform, not just the primary CW tone.
+- `CwFixtureScenario` now exposes:
+- `interfererToneDriftHz`
+- timing-profile summary text now includes `interferer drift ... Hz` when present
+- `SyntheticFixtureRxAudioSource` now renders the interferer with a gradual instantaneous-frequency change while keeping phase continuous across the stream.
+- Added a new regression fixture:
+- `drifting_nearby_interferer_directed_report`
+- This fixture is intentionally calibrated as a `moderate drifting interferer baseline`:
+- harder than the fixed-carrier nearby/moderate interferer cases
+- but not so aggressive that it immediately drags the tracker into a non-usable boundary failure
+- Added focused JVM coverage for:
+- fixture-model exposure of interferer drift
+- summary-string exposure of interferer drift
+- offline pipeline regression for the new drifting-interferer baseline
+- Debug UI synthetic fixture summary now also shows interferer drift when present, so later real-input comparison work can more easily distinguish:
+- fixed nearby carrier pressure
+- drifting nearby carrier pressure
+- target-tone drift
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+### Key files
+
+- [CwFixtureScenario.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureScenario.java)
+- [SyntheticFixtureRxAudioSource.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/audio/SyntheticFixtureRxAudioSource.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)

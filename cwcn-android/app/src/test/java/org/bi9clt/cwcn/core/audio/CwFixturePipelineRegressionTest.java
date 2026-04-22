@@ -87,6 +87,21 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
+    public void driftingNearbyInterfererFixtureStillTracksTheTargetTone() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("drifting_nearby_interferer_directed_report");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 35);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 4000.0d);
+        assertTrue(summary, result.textTokenRecall() >= 0.20d);
+        assertTrue(summary, result.qsoSemanticScore() >= 0.50d);
+    }
+
+    @Test
     public void humanOpTimingFixtureDoesNotCollapseIntoFrontEndFailure() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("human_op_timing_full_qso");
         CwFixtureEvaluationResult result = bundle.result;
