@@ -437,6 +437,78 @@ public final class CwFixtureLibrary {
                     new CwFixtureScenario.ContinuousInterfererProfile(805, 950, -15.0d, 80, 120, 35, 0.14d, 320)
             )),
             new CwFixtureScenario(
+                    "wobbly_dual_interferer_directed_report",
+                    "Wobbly Dual Interferer Report",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ UR 5NN BK"),
+                    1800,
+                    19,
+                    670,
+                    17800,
+                    930,
+                    1450,
+                    150,
+                    0.03d,
+                    2300,
+                    0.0d,
+                    0.0d,
+                    Collections.singletonList(PartTimingProfile.defaultProfile()),
+                    250,
+                    450,
+                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    Collections.singletonList("BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Directed report to called station",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    null,
+                    "599",
+                    "GOOD",
+                    "Exercises a moderate crowded-band baseline with one bursty nearby carrier plus a second drifting intermittent carrier whose occupancy is deterministic but irregular."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(760, 950, 0.0d, 85, 125, 20, 0.12d, 340),
+                    new CwFixtureScenario.ContinuousInterfererProfile(825, 760, -18.0d, 95, 110, 60, 0.10d, 290)
+            )),
+            new CwFixtureScenario(
+                    "wobbly_dual_interferer_boundary_report",
+                    "Wobbly Dual Interferer Boundary Report",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ UR 5NN BK"),
+                    1800,
+                    19,
+                    670,
+                    17800,
+                    930,
+                    2500,
+                    180,
+                    0.04d,
+                    2300,
+                    0.0d,
+                    0.0d,
+                    Collections.singletonList(PartTimingProfile.defaultProfile()),
+                    250,
+                    450,
+                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    Collections.singletonList("BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Directed report to called station",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    null,
+                    "599",
+                    "GOOD",
+                    "Exercises a harsher crowded-band boundary where the front-end can still keep the target tone, but downstream decode quality drops sharply under irregular intermittent adjacent activity."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(760, 2100, 0.0d, 90, 95, 15, 0.18d, 330),
+                    new CwFixtureScenario.ContinuousInterfererProfile(835, 1950, -32.0d, 110, 85, 55, 0.16d, 280)
+            )),
+            new CwFixtureScenario(
                     "bursty_dual_interferer_boundary_report",
                     "Bursty Dual Interferer Boundary Report",
                     "BI9CLT DE BG7YOZ UR 5NN BK",

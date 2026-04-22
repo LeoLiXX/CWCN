@@ -2234,3 +2234,34 @@
 - [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
 - [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-22 Wobbly Dual-Interferer Split
+
+- Extended the new `wobbly occupancy` idea from a single intermittent adjacent carrier into a two-interferer crowded-band family.
+- Added two new fixtures:
+- `wobbly_dual_interferer_directed_report`
+- `wobbly_dual_interferer_boundary_report`
+- Important finding from replay calibration:
+- these scenarios did **not** primarily expose wrong-tone acquisition
+- the front-end still held the preferred target tone well enough to grade `GOOD`
+- but decode / interpretation quality degraded much earlier than in the simpler burst or wobble baselines
+- Practical implication:
+- we now have a clearer fixture split between:
+- front-end tracking boundaries such as `WRONG / TRK`
+- downstream decode-stress boundaries where front-end lock remains healthy but copied text/QSO semantics fall apart
+- The moderate `wobbly_dual_interferer_directed_report` fixture was tuned down until it stayed usable as a crowded-but-workable baseline.
+- The harsher `wobbly_dual_interferer_boundary_report` fixture is now intentionally pinned as:
+- front-end `GOOD`
+- bottleneck `SIG`
+- very low text / semantic recovery
+- This gives us a much better next target for future work:
+- timing/decoder robustness under irregular intermittent adjacent occupancy
+- not just more retune / tracker hardening
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest.wobblyDualInterfererFixtureStillRemainsWorkable --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest.wobblyDualInterfererBoundaryFixtureCanExposeWrongToneTracking`
+
+### Key files
+
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+- [CurrentProgress.md](/D:/Workshop/CWCN/CurrentProgress.md)
