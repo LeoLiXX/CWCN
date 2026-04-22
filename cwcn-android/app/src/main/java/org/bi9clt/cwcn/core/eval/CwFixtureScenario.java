@@ -1301,15 +1301,32 @@ public final class CwFixtureScenario {
         private final int toneFrequencyHz;
         private final int toneAmplitude;
         private final double toneDriftHz;
+        private final int burstOnMs;
+        private final int burstOffMs;
+        private final int burstOffsetMs;
 
         public ContinuousInterfererProfile(int toneFrequencyHz, int toneAmplitude) {
-            this(toneFrequencyHz, toneAmplitude, 0.0d);
+            this(toneFrequencyHz, toneAmplitude, 0.0d, 0, 0, 0);
         }
 
         public ContinuousInterfererProfile(int toneFrequencyHz, int toneAmplitude, double toneDriftHz) {
+            this(toneFrequencyHz, toneAmplitude, toneDriftHz, 0, 0, 0);
+        }
+
+        public ContinuousInterfererProfile(
+                int toneFrequencyHz,
+                int toneAmplitude,
+                double toneDriftHz,
+                int burstOnMs,
+                int burstOffMs,
+                int burstOffsetMs
+        ) {
             this.toneFrequencyHz = toneFrequencyHz;
             this.toneAmplitude = toneAmplitude;
             this.toneDriftHz = toneDriftHz;
+            this.burstOnMs = Math.max(0, burstOnMs);
+            this.burstOffMs = Math.max(0, burstOffMs);
+            this.burstOffsetMs = Math.max(0, burstOffsetMs);
         }
 
         public int toneFrequencyHz() {
@@ -1324,6 +1341,22 @@ public final class CwFixtureScenario {
             return toneDriftHz;
         }
 
+        public int burstOnMs() {
+            return burstOnMs;
+        }
+
+        public int burstOffMs() {
+            return burstOffMs;
+        }
+
+        public int burstOffsetMs() {
+            return burstOffsetMs;
+        }
+
+        public boolean isBursting() {
+            return burstOnMs > 0 && burstOffMs > 0;
+        }
+
         public String summaryLabel() {
             StringBuilder builder = new StringBuilder()
                     .append(toneFrequencyHz)
@@ -1333,6 +1366,18 @@ public final class CwFixtureScenario {
                 builder.append(" drift ")
                         .append(trimDouble(toneDriftHz))
                         .append("Hz");
+            }
+            if (isBursting()) {
+                builder.append(" burst ")
+                        .append(burstOnMs)
+                        .append("/")
+                        .append(burstOffMs)
+                        .append("ms");
+                if (burstOffsetMs > 0) {
+                    builder.append(" offset ")
+                            .append(burstOffsetMs)
+                            .append("ms");
+                }
             }
             return builder.toString();
         }

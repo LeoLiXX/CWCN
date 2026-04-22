@@ -274,6 +274,48 @@ public final class CwFixtureScenarioTest {
     }
 
     @Test
+    public void burstyAdditionalInterfererIsExposedAndIncludedInSummary() {
+        CwFixtureScenario scenario = new CwFixtureScenario(
+                "test",
+                "Test",
+                "CQ CQ",
+                Arrays.asList("CQ CQ"),
+                1800,
+                18,
+                650,
+                18000,
+                500,
+                0.0d,
+                0,
+                0.0d,
+                0.0d,
+                Collections.singletonList(CwFixtureScenario.PartTimingProfile.defaultProfile()),
+                250,
+                450,
+                "CQ CQ",
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("CQ / calling flow"),
+                QsoPhase.CALLING_CQ,
+                null,
+                null,
+                "test"
+        ).withAdditionalInterferers(Collections.singletonList(
+                new CwFixtureScenario.ContinuousInterfererProfile(780, 1800, -12.0d, 70, 130, 25)
+        ));
+
+        CwFixtureScenario.ContinuousInterfererProfile interferer = scenario.additionalInterferers().get(0);
+        assertEquals(780, interferer.toneFrequencyHz());
+        assertEquals(1800, interferer.toneAmplitude());
+        assertEquals(-12.0d, interferer.toneDriftHz(), 0.0001d);
+        assertEquals(70, interferer.burstOnMs());
+        assertEquals(130, interferer.burstOffMs());
+        assertEquals(25, interferer.burstOffsetMs());
+        assertTrue(interferer.isBursting());
+        assertTrue(scenario.timingProfileSummary().contains("burst 70/130ms"));
+        assertTrue(scenario.timingProfileSummary().contains("offset 25ms"));
+    }
+
+    @Test
     public void expectedFrontEndQualityCodeIsNormalizedAndExposed() {
         CwFixtureScenario scenario = new CwFixtureScenario(
                 "test",

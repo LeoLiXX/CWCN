@@ -368,6 +368,40 @@ public final class CwFixtureLibrary {
                     new CwFixtureScenario.ContinuousInterfererProfile(810, 2600, -35.0d)
             )),
             new CwFixtureScenario(
+                    "bursty_interferer_directed_report",
+                    "Bursty Interferer Report",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ UR 5NN BK"),
+                    1800,
+                    19,
+                    670,
+                    17800,
+                    930,
+                    1600,
+                    160,
+                    0.03d,
+                    2300,
+                    0.0d,
+                    0.0d,
+                    Collections.singletonList(PartTimingProfile.defaultProfile()),
+                    250,
+                    450,
+                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    Collections.singletonList("BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Directed report to called station",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    null,
+                    "599",
+                    "Exercises a moderate directed-report baseline under bursty off-target occupancy rather than fully continuous carrier pressure."
+            ).withAdditionalInterferers(Collections.singletonList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(820, 1100, -10.0d, 70, 130, 25)
+            )),
+            new CwFixtureScenario(
                     "drifting_nearby_interferer_directed_report",
                     "Drifting Nearby Interferer Report",
                     "BI9CLT DE BG7YOZ UR 5NN BK",

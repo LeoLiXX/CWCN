@@ -185,7 +185,8 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
                         continue;
                     }
                     interfererComponent += Math.sin(interfererPhases[interfererIndex])
-                            * interferer.toneAmplitude();
+                            * interferer.toneAmplitude()
+                            * interfererActivityScale(interferer, absoluteIndex);
                     interfererPhases[interfererIndex] += interfererPhaseStep;
                 }
                 double noiseComponent = (random.nextDouble() * 2.0d - 1.0d) * scenario.noiseAmplitude();
@@ -564,6 +565,35 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         }
         interferers.addAll(scenario.additionalInterferers());
         return interferers;
+    }
+
+    private double interfererActivityScale(
+            CwFixtureScenario.ContinuousInterfererProfile interferer,
+            int absoluteSampleIndex
+    ) {
+        if (interferer == null || !interferer.isBursting()) {
+            return 1.0d;
+        }
+        double elapsedMs = (absoluteSampleIndex * 1000.0d / SAMPLE_RATE_HZ) + interferer.burstOffsetMs();
+        double cycleMs = interferer.burstOnMs() + interferer.burstOffMs();
+        if (cycleMs <= 0.0d) {
+            return 1.0d;
+        }
+        double cyclePositionMs = elapsedMs % cycleMs;
+        if (cyclePositionMs < 0.0d) {
+            cyclePositionMs += cycleMs;
+        }
+        if (cyclePositionMs >= interferer.burstOnMs()) {
+            return 0.0d;
+        }
+
+        double rampMs = Math.min(6.0d, interferer.burstOnMs() / 4.0d);
+        if (rampMs <= 0.5d) {
+            return 1.0d;
+        }
+        double attackScale = Math.min(1.0d, cyclePositionMs / rampMs);
+        double releaseScale = Math.min(1.0d, (interferer.burstOnMs() - cyclePositionMs) / rampMs);
+        return smoothRamp(Math.min(attackScale, releaseScale));
     }
 
     private double toneEdgeScale(CwFixtureScenario scenario, int segmentSampleCount, int segmentSampleIndex) {

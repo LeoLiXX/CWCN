@@ -1199,6 +1199,41 @@
 - [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
 
+## 2026-04-22 Bursty Interferer Fixture Support
+
+- Extended `ContinuousInterfererProfile` one step further so an added interferer can now be either:
+- continuous
+- drifting
+- or bursty / duty-cycled
+- New optional burst controls are now supported per added interferer:
+- `burstOnMs`
+- `burstOffMs`
+- `burstOffsetMs`
+- `SyntheticFixtureRxAudioSource` now applies a lightweight gated activity envelope to such interferers, with a small edge ramp so burst transitions do not devolve into purely hard rectangular switching.
+- Debug UI selected-source summary now shows burst settings for extra interferers, so synthetic replay inspection can distinguish:
+- continuous crowded-band occupancy
+- intermittent / pulse-like occupancy
+- Added and locked a first burst-oriented baseline fixture:
+- `bursty_interferer_directed_report`
+- This fixture keeps the QSO workable under moderate bursty off-target occupancy rather than only under continuous-carrier pressure.
+- Practical value:
+- we now have a synthetic middle ground between:
+- easy static baselines
+- and always-on crowded-band stress
+- which is closer to real intermittent adjacent activity on a busy CW segment
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwFixtureScenario.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureScenario.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [SyntheticFixtureRxAudioSource.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/audio/SyntheticFixtureRxAudioSource.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
 ## 2026-04-22 Partial Callsign Recovery v2
 
 - Extended interpreter memory from one generic remembered primary callsign into role-aware contextual memory:

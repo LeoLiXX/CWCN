@@ -400,6 +400,19 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                                 .append(String.format(Locale.US, "%+.1f", interferer.toneDriftHz()))
                                 .append(" Hz)");
                     }
+                    if (interferer.isBursting()) {
+                        builder.append(" [burst ")
+                                .append(interferer.burstOnMs())
+                                .append("/")
+                                .append(interferer.burstOffMs())
+                                .append(" ms");
+                        if (interferer.burstOffsetMs() > 0) {
+                            builder.append(", offset ")
+                                    .append(interferer.burstOffsetMs())
+                                    .append(" ms");
+                        }
+                        builder.append("]");
+                    }
                 }
             }
             if (scenario.qsbDepth() > 0.0d) {
