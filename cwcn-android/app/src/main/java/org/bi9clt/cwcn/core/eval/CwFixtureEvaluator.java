@@ -3,6 +3,7 @@ package org.bi9clt.cwcn.core.eval;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreterSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoPhase;
+import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -20,6 +21,16 @@ public final class CwFixtureEvaluator {
             CwFixtureScenario scenario,
             CwInterpreterSnapshot interpreterSnapshot,
             QsoDraftSnapshot qsoSnapshot,
+            boolean completed
+    ) {
+        return evaluate(scenario, interpreterSnapshot, qsoSnapshot, null, completed);
+    }
+
+    public static CwFixtureEvaluationResult evaluate(
+            CwFixtureScenario scenario,
+            CwInterpreterSnapshot interpreterSnapshot,
+            QsoDraftSnapshot qsoSnapshot,
+            CwSignalSnapshot signalSnapshot,
             boolean completed
     ) {
         String expectedText = normalizeText(scenario.expectedNormalizedText());
@@ -114,7 +125,12 @@ public final class CwFixtureEvaluator {
                 missingTextTokens,
                 missingCallsigns,
                 missingHints,
-                failureReasons
+                failureReasons,
+                signalSnapshot != null && signalSnapshot.targetToneLocked(),
+                signalSnapshot == null ? 0.0d : signalSnapshot.peakToneRmsAmplitude(),
+                signalSnapshot == null ? 0.0d : signalSnapshot.peakNarrowbandIsolationRatio(),
+                signalSnapshot == null ? 0.0d : signalSnapshot.lockedFrameRatio(),
+                signalSnapshot == null ? 0 : signalSnapshot.maxConsecutiveLockedFrames()
         );
     }
 

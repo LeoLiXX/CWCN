@@ -19,6 +19,7 @@ import org.junit.Test;
 
 import java.util.List;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -35,6 +36,23 @@ public final class CwFixturePipelineRegressionTest {
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
         assertTrue(summary, result.textTokenRecall() >= 0.30d);
         assertTrue(summary, result.qsoSemanticScore() >= 0.50d);
+    }
+
+    @Test
+    public void noisyReportFixtureStillStaysOutOfSignalFailureBucket() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("noisy_report_exchange");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 5000.0d);
+        assertTrue(summary, bundle.signalSnapshot.peakNarrowbandIsolationRatio() >= 0.55d);
+        assertTrue(summary, bundle.signalSnapshot.lockedFrameRatio() >= 0.15d);
+        assertTrue(summary, result.textTokenRecall() >= 0.35d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
     }
 
     @Test
@@ -137,6 +155,35 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
+    public void softEdgeCompactAckClosingFixtureStillPreservesCompletedSemantics() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("soft_edge_compact_ack_closing_chain");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 0.35d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 0.50d);
+    }
+
+    @Test
+    public void driftingSoftEdgeCompactAckClosingFixtureStillStaysOutOfSignalFailure() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("drifting_soft_edge_compact_ack_closing_chain");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 30);
+        assertTrue(summary, result.textTokenRecall() >= 0.25d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 0.50d);
+    }
+
+    @Test
     public void fullyGluedAckClosingFixtureStillPreservesCompletedQsoSemantics() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("fully_glued_ack_closing_chain");
         CwFixtureEvaluationResult result = bundle.result;
@@ -172,15 +219,24 @@ public final class CwFixturePipelineRegressionTest {
 
     private String renderDebugSummary(CwFixtureEvaluationResult result, OfflineEvalBundle bundle) {
         return result.renderSummary()
+                + "\nExpected front-end quality: " + (bundle.scenario.expectedFrontEndQualityCode() == null
+                ? "(none)"
+                : bundle.scenario.expectedFrontEndQualityCode())
                 + "\nSignal target: pref=" + bundle.signalSnapshot.preferredToneFrequencyHz()
                 + "Hz, tracked=" + bundle.signalSnapshot.targetToneFrequencyHz()
                 + "Hz, lock=" + bundle.signalSnapshot.targetToneLocked()
                 + ", toneRms=" + Math.round(bundle.signalSnapshot.lastToneRmsAmplitude())
+                + ", peakToneRms=" + Math.round(bundle.signalSnapshot.peakToneRmsAmplitude())
+                + ", residual=" + Math.round(bundle.signalSnapshot.lastWidebandResidualRmsAmplitude())
                 + ", dom=" + Math.round(bundle.signalSnapshot.toneDominanceRatio() * 100.0d) + "%"
+                + ", iso=" + Math.round(bundle.signalSnapshot.narrowbandIsolationRatio() * 100.0d) + "%"
+                + ", peakIso=" + Math.round(bundle.signalSnapshot.peakNarrowbandIsolationRatio() * 100.0d) + "%"
+                + ", lockCov=" + Math.round(bundle.signalSnapshot.lockedFrameRatio() * 100.0d) + "%"
                 + "\nSignal: threshold=" + bundle.signalSnapshot.currentThreshold()
                 + ", release=" + bundle.signalSnapshot.releaseThreshold()
                 + ", noise=" + bundle.signalSnapshot.noiseFloorEstimate()
                 + ", signal=" + bundle.signalSnapshot.signalFloorEstimate()
+                + ", bestLockRun=" + bundle.signalSnapshot.maxConsecutiveLockedFrames()
                 + ", toneOn=" + bundle.signalSnapshot.totalToneOnEvents()
                 + ", toneOff=" + bundle.signalSnapshot.totalToneOffEvents()
                 + "\nTiming: dot=" + bundle.timingSnapshot.dotEstimateMs()
@@ -219,13 +275,23 @@ public final class CwFixturePipelineRegressionTest {
             }
         }
 
+        CwFixtureEvaluationResult result = CwFixtureEvaluator.evaluate(
+                scenario,
+                interpreter.snapshot(),
+                qsoStateMachine.snapshot(),
+                signalProcessor.snapshot(),
+                true
+        );
+        if (scenario.expectedFrontEndQualityCode() != null) {
+            String summary = result.renderSummary()
+                    + "\nExpected front-end quality: " + scenario.expectedFrontEndQualityCode()
+                    + "\nActual front-end quality: " + result.frontEndQualityCode();
+            assertEquals(summary, scenario.expectedFrontEndQualityCode(), result.frontEndQualityCode());
+        }
+
         return new OfflineEvalBundle(
-                CwFixtureEvaluator.evaluate(
-                        scenario,
-                        interpreter.snapshot(),
-                        qsoStateMachine.snapshot(),
-                        true
-                ),
+                scenario,
+                result,
                 signalProcessor.snapshot(),
                 timingModel.snapshot(),
                 decoder.snapshot()
@@ -242,17 +308,20 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     private static final class OfflineEvalBundle {
+        private final CwFixtureScenario scenario;
         private final CwFixtureEvaluationResult result;
         private final CwSignalSnapshot signalSnapshot;
         private final CwTimingSnapshot timingSnapshot;
         private final CwDecoderSnapshot decoderSnapshot;
 
         private OfflineEvalBundle(
+                CwFixtureScenario scenario,
                 CwFixtureEvaluationResult result,
                 CwSignalSnapshot signalSnapshot,
                 CwTimingSnapshot timingSnapshot,
                 CwDecoderSnapshot decoderSnapshot
         ) {
+            this.scenario = scenario;
             this.result = result;
             this.signalSnapshot = signalSnapshot;
             this.timingSnapshot = timingSnapshot;

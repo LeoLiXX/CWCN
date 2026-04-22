@@ -155,29 +155,36 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         }
         short[] waveform = new short[totalSamples];
         Random random = new Random(scenario.id().hashCode());
-        double phaseStep = 2.0d * Math.PI * scenario.toneFrequencyHz() / SAMPLE_RATE_HZ;
+        double tonePhase = 0.0d;
+        double interfererPhase = 0.0d;
         double interfererPhaseStep = scenario.interfererToneFrequencyHz() > 0
                 ? 2.0d * Math.PI * scenario.interfererToneFrequencyHz() / SAMPLE_RATE_HZ
                 : 0.0d;
         int absoluteIndex = 0;
         for (Segment segment : segments) {
             for (int i = 0; i < segment.sampleCount; i++) {
+                double toneFrequencyHz = instantaneousToneFrequencyHz(scenario, absoluteIndex, totalSamples);
+                double tonePhaseStep = 2.0d * Math.PI * toneFrequencyHz / SAMPLE_RATE_HZ;
                 double toneComponent = 0.0d;
                 if (segment.toneOn) {
                     double qsbScale = qsbScale(scenario, absoluteIndex);
-                    toneComponent = Math.sin(absoluteIndex * phaseStep)
+                    double edgeScale = toneEdgeScale(scenario, segment.sampleCount, i);
+                    toneComponent = Math.sin(tonePhase)
                             * scenario.toneAmplitude()
+                            * edgeScale
                             * qsbScale;
                 }
                 double interfererComponent = 0.0d;
                 if (scenario.interfererToneAmplitude() > 0 && interfererPhaseStep > 0.0d) {
-                    interfererComponent = Math.sin(absoluteIndex * interfererPhaseStep)
+                    interfererComponent = Math.sin(interfererPhase)
                             * scenario.interfererToneAmplitude();
                 }
                 double noiseComponent = (random.nextDouble() * 2.0d - 1.0d) * scenario.noiseAmplitude();
                 waveform[absoluteIndex] = (short) clampToPcm16(Math.round(
                         toneComponent + interfererComponent + noiseComponent
                 ));
+                tonePhase += tonePhaseStep;
+                interfererPhase += interfererPhaseStep;
                 absoluteIndex += 1;
             }
         }
@@ -494,6 +501,35 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         double radians = 2.0d * Math.PI * sampleIndex * 1000.0d / (SAMPLE_RATE_HZ * scenario.qsbCycleMs());
         double fade = (Math.sin(radians) + 1.0d) * 0.5d;
         return 1.0d - (scenario.qsbDepth() * fade);
+    }
+
+    private double instantaneousToneFrequencyHz(CwFixtureScenario scenario, int sampleIndex, int totalSamples) {
+        if (Math.abs(scenario.toneDriftHz()) < 0.0001d || totalSamples <= 1) {
+            return scenario.toneFrequencyHz();
+        }
+        double progress = Math.max(0.0d, Math.min(1.0d, sampleIndex / (double) (totalSamples - 1)));
+        return Math.max(1.0d, scenario.toneFrequencyHz() + (scenario.toneDriftHz() * progress));
+    }
+
+    private double toneEdgeScale(CwFixtureScenario scenario, int segmentSampleCount, int segmentSampleIndex) {
+        int riseRampSamples = durationToSamples(scenario.riseRampMs());
+        int fallRampSamples = durationToSamples(scenario.fallRampMs());
+        double scale = 1.0d;
+        if (riseRampSamples > 1) {
+            double riseProgress = Math.min(1.0d, segmentSampleIndex / (double) riseRampSamples);
+            scale = Math.min(scale, smoothRamp(riseProgress));
+        }
+        if (fallRampSamples > 1) {
+            int tailSamples = Math.max(0, segmentSampleCount - 1 - segmentSampleIndex);
+            double fallProgress = Math.min(1.0d, tailSamples / (double) fallRampSamples);
+            scale = Math.min(scale, smoothRamp(fallProgress));
+        }
+        return Math.max(0.0d, Math.min(1.0d, scale));
+    }
+
+    private double smoothRamp(double progress) {
+        double clamped = Math.max(0.0d, Math.min(1.0d, progress));
+        return 0.5d - (0.5d * Math.cos(Math.PI * clamped));
     }
 
     private int clampToPcm16(long value) {

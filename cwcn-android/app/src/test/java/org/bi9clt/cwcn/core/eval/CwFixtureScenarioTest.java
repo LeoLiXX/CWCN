@@ -119,4 +119,111 @@ public final class CwFixtureScenarioTest {
         assertEquals(830, scenario.interfererToneFrequencyHz());
         assertEquals(22000, scenario.interfererToneAmplitude());
     }
+
+    @Test
+    public void edgeRampConfigurationIsExposedAndIncludedInSummary() {
+        CwFixtureScenario scenario = new CwFixtureScenario(
+                "test",
+                "Test",
+                "CQ CQ",
+                Arrays.asList("CQ CQ"),
+                1800,
+                18,
+                650,
+                18000,
+                500,
+                0.08d,
+                2000,
+                0.10d,
+                0.04d,
+                5,
+                7,
+                Collections.singletonList(CwFixtureScenario.PartTimingProfile.defaultProfile()),
+                250,
+                450,
+                "CQ CQ",
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("CQ / calling flow"),
+                QsoPhase.CALLING_CQ,
+                null,
+                null,
+                "test"
+        );
+
+        assertEquals(5, scenario.riseRampMs());
+        assertEquals(7, scenario.fallRampMs());
+        assertTrue(scenario.timingProfileSummary().contains("edge ramp 5/7ms"));
+    }
+
+    @Test
+    public void toneDriftConfigurationIsExposedAndIncludedInSummary() {
+        CwFixtureScenario scenario = new CwFixtureScenario(
+                "test",
+                "Test",
+                "CQ CQ",
+                Arrays.asList("CQ CQ"),
+                1800,
+                18,
+                650,
+                18000,
+                500,
+                0.08d,
+                2000,
+                14.0d,
+                0.10d,
+                0.04d,
+                5,
+                7,
+                Collections.singletonList(CwFixtureScenario.PartTimingProfile.defaultProfile()),
+                250,
+                450,
+                "CQ CQ",
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("CQ / calling flow"),
+                QsoPhase.CALLING_CQ,
+                null,
+                null,
+                "test"
+        );
+
+        assertEquals(14.0d, scenario.toneDriftHz(), 0.0001d);
+        assertTrue(scenario.timingProfileSummary().contains("tone drift 14Hz"));
+    }
+
+    @Test
+    public void expectedFrontEndQualityCodeIsNormalizedAndExposed() {
+        CwFixtureScenario scenario = new CwFixtureScenario(
+                "test",
+                "Test",
+                "CQ CQ",
+                Arrays.asList("CQ CQ"),
+                1800,
+                18,
+                650,
+                18000,
+                0,
+                0,
+                500,
+                0.08d,
+                2000,
+                0.0d,
+                0.10d,
+                0.04d,
+                0,
+                0,
+                Collections.singletonList(CwFixtureScenario.PartTimingProfile.defaultProfile()),
+                250,
+                450,
+                "CQ CQ",
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("CQ / calling flow"),
+                QsoPhase.CALLING_CQ,
+                null,
+                null,
+                " drop ",
+                "test"
+        );
+
+        assertEquals("DROP", scenario.expectedFrontEndQualityCode());
+    }
 }

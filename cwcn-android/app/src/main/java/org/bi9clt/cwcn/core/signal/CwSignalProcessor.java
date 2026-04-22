@@ -13,12 +13,19 @@ public final class CwSignalProcessor {
     private static final int RETUNE_INTERVAL_FRAMES = 4;
     private static final double MIN_LOCK_DOMINANCE_RATIO = 0.24d;
     private static final double MIN_NARROWBAND_DOMINANCE_RATIO = 0.12d;
+    private static final double MIN_LOCK_ISOLATION_RATIO = 0.34d;
+    private static final double MIN_NARROWBAND_ISOLATION_RATIO = 0.24d;
     private static final double LOCKED_SIGNAL_BLEND = 0.82d;
     private static final double UNLOCKED_SIGNAL_BLEND_FLOOR = 0.18d;
     private static final double UNLOCKED_TONE_GAIN = 1.18d;
     private static final int MIN_TRACKED_TONE_RMS = 120;
     private static final int MIN_THRESHOLD = 220;
     private static final int BASE_MARGIN = 140;
+    private static final int EDGE_WINDOW_SAMPLES = 12;
+    private static final int EDGE_CONFIRM_SAMPLES = 6;
+    private static final double EDGE_THRESHOLD_RATIO = 0.30d;
+    private static final double EDGE_DYNAMIC_RATIO = 0.24d;
+    private static final double EDGE_TRANSITION_REQUIRED_RATIO = 0.82d;
     private static final double NOISE_FLOOR_RISE_SMOOTHING = 0.025d;
     private static final double NOISE_FLOOR_DROP_SMOOTHING = 0.14d;
     private static final double SIGNAL_FLOOR_SMOOTHING = 0.18d;
@@ -31,7 +38,11 @@ public final class CwSignalProcessor {
     private double signalFloorEstimate;
     private double lastRmsAmplitude;
     private double lastToneRmsAmplitude;
+    private double lastWidebandResidualRmsAmplitude;
     private double toneDominanceRatio;
+    private double narrowbandIsolationRatio;
+    private double peakToneRmsAmplitude;
+    private double peakNarrowbandIsolationRatio;
     private double lastDetectionLevel;
     private long lastFrameTimestampMs = -1L;
     private long toneStartedAtMs = -1L;
@@ -41,6 +52,9 @@ public final class CwSignalProcessor {
     private int preferredToneFrequencyHz = DEFAULT_PREFERRED_TONE_FREQUENCY_HZ;
     private int targetToneFrequencyHz = DEFAULT_PREFERRED_TONE_FREQUENCY_HZ;
     private int processedFrameCount;
+    private int lockedFrameCount;
+    private int consecutiveLockedFrames;
+    private int maxConsecutiveLockedFrames;
     private CwToneEvent lastEvent;
 
     public synchronized List<CwToneEvent> process(AudioFrame frame) {
@@ -75,6 +89,10 @@ public final class CwSignalProcessor {
 
         if (!toneActive && attackQualified && detectionLevel >= attackThreshold) {
             long toneOnTimestampMs = estimateCrossingTimestamp(timestampMs, attackThreshold, detectionLevel, true);
+            long frameLocalToneOnTimestampMs = estimateFrameLocalTransitionTimestamp(frame, true);
+            if (frameLocalToneOnTimestampMs >= 0L) {
+                toneOnTimestampMs = frameLocalToneOnTimestampMs;
+            }
             toneActive = true;
             toneStartedAtMs = toneOnTimestampMs;
             silenceStartedAtMs = -1L;
@@ -96,7 +114,12 @@ public final class CwSignalProcessor {
         if (toneActive) {
             if (detectionLevel < releaseThreshold) {
                 if (silenceStartedAtMs < 0L) {
-                    silenceStartedAtMs = estimateCrossingTimestamp(timestampMs, releaseThreshold, detectionLevel, false);
+                    long frameLocalToneOffTimestampMs = estimateFrameLocalTransitionTimestamp(frame, false);
+                    if (frameLocalToneOffTimestampMs >= 0L) {
+                        silenceStartedAtMs = frameLocalToneOffTimestampMs;
+                    } else {
+                        silenceStartedAtMs = estimateCrossingTimestamp(timestampMs, releaseThreshold, detectionLevel, false);
+                    }
                 }
                 if (timestampMs - silenceStartedAtMs >= TONE_OFF_HANG_MS) {
                     toneActive = false;
@@ -134,7 +157,11 @@ public final class CwSignalProcessor {
         signalFloorEstimate = 0.0d;
         lastRmsAmplitude = 0.0d;
         lastToneRmsAmplitude = 0.0d;
+        lastWidebandResidualRmsAmplitude = 0.0d;
         toneDominanceRatio = 0.0d;
+        narrowbandIsolationRatio = 0.0d;
+        peakToneRmsAmplitude = 0.0d;
+        peakNarrowbandIsolationRatio = 0.0d;
         lastDetectionLevel = 0.0d;
         lastFrameTimestampMs = -1L;
         toneStartedAtMs = -1L;
@@ -142,6 +169,9 @@ public final class CwSignalProcessor {
         totalToneOnEvents = 0;
         totalToneOffEvents = 0;
         processedFrameCount = 0;
+        lockedFrameCount = 0;
+        consecutiveLockedFrames = 0;
+        maxConsecutiveLockedFrames = 0;
         targetToneFrequencyHz = preferredToneFrequencyHz;
         lastEvent = null;
     }
@@ -166,7 +196,14 @@ public final class CwSignalProcessor {
                 (int) Math.round(signalFloorEstimate),
                 lastRmsAmplitude,
                 lastToneRmsAmplitude,
+                lastWidebandResidualRmsAmplitude,
                 toneDominanceRatio,
+                narrowbandIsolationRatio,
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                processedFrameCount,
+                lockedFrameCount,
+                maxConsecutiveLockedFrames,
                 totalToneOnEvents,
                 totalToneOffEvents,
                 lastEvent
@@ -248,14 +285,120 @@ public final class CwSignalProcessor {
         lastDetectionLevel = detectionLevel;
     }
 
+    private long estimateFrameLocalTransitionTimestamp(AudioFrame frame, boolean risingEdge) {
+        short[] samples = frame.samples();
+        int sampleRateHz = frame.sampleRateHz();
+        if (samples == null || samples.length < (EDGE_WINDOW_SAMPLES * 3) || sampleRateHz <= 0) {
+            return -1L;
+        }
+
+        double[] envelope = buildAbsoluteEnvelope(samples);
+        double envelopeMax = 0.0d;
+        double envelopeMin = Double.MAX_VALUE;
+        for (double value : envelope) {
+            envelopeMax = Math.max(envelopeMax, value);
+            envelopeMin = Math.min(envelopeMin, value);
+        }
+        if (envelopeMax < MIN_TRACKED_TONE_RMS) {
+            return -1L;
+        }
+
+        double threshold = Math.max(
+                envelopeMax * EDGE_THRESHOLD_RATIO,
+                envelopeMin + ((envelopeMax - envelopeMin) * EDGE_DYNAMIC_RATIO)
+        );
+        int edgeRegionLength = Math.max(EDGE_WINDOW_SAMPLES * 2, samples.length / 5);
+        if (risingEdge) {
+            double earlyMax = maxEnvelope(envelope, 0, edgeRegionLength);
+            double lateAverage = averageEnvelope(envelope, samples.length - edgeRegionLength, samples.length);
+            if (earlyMax >= (threshold * EDGE_TRANSITION_REQUIRED_RATIO) || lateAverage <= threshold) {
+                return -1L;
+            }
+            for (int index = 0; index <= (samples.length - EDGE_CONFIRM_SAMPLES); index++) {
+                if (allAboveThreshold(envelope, index, EDGE_CONFIRM_SAMPLES, threshold)) {
+                    return sampleIndexToTimestamp(frame, index);
+                }
+            }
+            return -1L;
+        }
+
+        double earlyAverage = averageEnvelope(envelope, 0, edgeRegionLength);
+        double lateMax = maxEnvelope(envelope, samples.length - edgeRegionLength, samples.length);
+        if (earlyAverage <= threshold || lateMax >= (threshold * EDGE_TRANSITION_REQUIRED_RATIO)) {
+            return -1L;
+        }
+        for (int index = samples.length - 1; index >= 0; index--) {
+            if (envelope[index] >= threshold) {
+                return sampleIndexToTimestamp(frame, Math.min(samples.length - 1, index + 1));
+            }
+        }
+        return -1L;
+    }
+
+    private double[] buildAbsoluteEnvelope(short[] samples) {
+        double[] prefix = new double[samples.length + 1];
+        for (int index = 0; index < samples.length; index++) {
+            prefix[index + 1] = prefix[index] + Math.abs((int) samples[index]);
+        }
+        double[] envelope = new double[samples.length];
+        int halfWindow = Math.max(1, EDGE_WINDOW_SAMPLES / 2);
+        for (int index = 0; index < samples.length; index++) {
+            int start = Math.max(0, index - halfWindow);
+            int end = Math.min(samples.length, index + halfWindow + 1);
+            envelope[index] = (prefix[end] - prefix[start]) / Math.max(1, end - start);
+        }
+        return envelope;
+    }
+
+    private double averageEnvelope(double[] envelope, int start, int end) {
+        int safeStart = Math.max(0, start);
+        int safeEnd = Math.min(envelope.length, end);
+        if (safeStart >= safeEnd) {
+            return 0.0d;
+        }
+        double sum = 0.0d;
+        for (int index = safeStart; index < safeEnd; index++) {
+            sum += envelope[index];
+        }
+        return sum / (safeEnd - safeStart);
+    }
+
+    private double maxEnvelope(double[] envelope, int start, int end) {
+        int safeStart = Math.max(0, start);
+        int safeEnd = Math.min(envelope.length, end);
+        double maximum = 0.0d;
+        for (int index = safeStart; index < safeEnd; index++) {
+            maximum = Math.max(maximum, envelope[index]);
+        }
+        return maximum;
+    }
+
+    private boolean allAboveThreshold(double[] envelope, int start, int count, double threshold) {
+        int safeEnd = Math.min(envelope.length, start + count);
+        for (int index = start; index < safeEnd; index++) {
+            if (envelope[index] < threshold) {
+                return false;
+            }
+        }
+        return safeEnd > start;
+    }
+
+    private long sampleIndexToTimestamp(AudioFrame frame, int sampleIndex) {
+        int clampedIndex = Math.max(0, Math.min(frame.sampleCount() - 1, sampleIndex));
+        return frame.capturedAtMs() + Math.round((clampedIndex * 1000.0d) / frame.sampleRateHz());
+    }
+
     private ToneFrequencyEstimate analyzeToneFrequency(AudioFrame frame) {
         processedFrameCount += 1;
         short[] samples = frame.samples();
         if (samples == null || samples.length == 0 || frame.sampleRateHz() <= 0) {
             targetToneLocked = false;
             lastToneRmsAmplitude = 0.0d;
+            lastWidebandResidualRmsAmplitude = 0.0d;
             toneDominanceRatio = 0.0d;
-            return new ToneFrequencyEstimate(targetToneFrequencyHz, 0.0d, 0.0d, false);
+            narrowbandIsolationRatio = 0.0d;
+            rememberSignalQuality(0.0d, 0.0d, false, false);
+            return new ToneFrequencyEstimate(targetToneFrequencyHz, 0.0d, 0.0d, 0.0d, 0.0d, false);
         }
 
         boolean shouldRetune = !targetToneLocked || processedFrameCount == 1
@@ -271,12 +414,29 @@ public final class CwSignalProcessor {
         }
 
         double trackedToneRms = estimateToneRms(samples, frame.sampleRateHz(), targetToneFrequencyHz);
+        double widebandResidualRms = estimateWidebandResidualRms(frame.rmsAmplitude(), trackedToneRms);
         double dominanceRatio = trackedToneRms <= 0.0d || frame.rmsAmplitude() <= 0.0d
                 ? 0.0d
                 : Math.min(1.0d, trackedToneRms / frame.rmsAmplitude());
-        boolean stillLocked = trackedToneRms >= MIN_TRACKED_TONE_RMS && dominanceRatio >= (MIN_LOCK_DOMINANCE_RATIO * 0.75d);
+        double isolationRatio = computeNarrowbandIsolationRatio(trackedToneRms, widebandResidualRms);
+        lastWidebandResidualRmsAmplitude = widebandResidualRms;
+        narrowbandIsolationRatio = isolationRatio;
+        boolean narrowbandQualified = trackedToneRms >= MIN_TRACKED_TONE_RMS
+                && dominanceRatio >= MIN_NARROWBAND_DOMINANCE_RATIO
+                && isolationRatio >= MIN_NARROWBAND_ISOLATION_RATIO;
+        boolean stillLocked = trackedToneRms >= MIN_TRACKED_TONE_RMS
+                && dominanceRatio >= (MIN_LOCK_DOMINANCE_RATIO * 0.75d)
+                && isolationRatio >= (MIN_LOCK_ISOLATION_RATIO * 0.80d);
         targetToneLocked = targetToneLocked && stillLocked;
-        return new ToneFrequencyEstimate(targetToneFrequencyHz, trackedToneRms, dominanceRatio, targetToneLocked);
+        rememberSignalQuality(trackedToneRms, isolationRatio, targetToneLocked, narrowbandQualified);
+        return new ToneFrequencyEstimate(
+                targetToneFrequencyHz,
+                trackedToneRms,
+                widebandResidualRms,
+                dominanceRatio,
+                isolationRatio,
+                targetToneLocked
+        );
     }
 
     private ToneFrequencyEstimate scanPreferredToneWindow(short[] samples, int sampleRateHz, double frameRms) {
@@ -297,8 +457,19 @@ public final class CwSignalProcessor {
         double dominanceRatio = bestToneRms <= 0.0d || frameRms <= 0.0d
                 ? 0.0d
                 : Math.min(1.0d, bestToneRms / frameRms);
-        boolean locked = bestToneRms >= MIN_TRACKED_TONE_RMS && dominanceRatio >= MIN_LOCK_DOMINANCE_RATIO;
-        return new ToneFrequencyEstimate(bestFrequencyHz, bestToneRms, dominanceRatio, locked);
+        double widebandResidualRms = estimateWidebandResidualRms(frameRms, bestToneRms);
+        double isolationRatio = computeNarrowbandIsolationRatio(bestToneRms, widebandResidualRms);
+        boolean locked = bestToneRms >= MIN_TRACKED_TONE_RMS
+                && dominanceRatio >= MIN_LOCK_DOMINANCE_RATIO
+                && isolationRatio >= MIN_LOCK_ISOLATION_RATIO;
+        return new ToneFrequencyEstimate(
+                bestFrequencyHz,
+                bestToneRms,
+                widebandResidualRms,
+                dominanceRatio,
+                isolationRatio,
+                locked
+        );
     }
 
     private double preferredFrequencyWeight(int candidateFrequencyHz) {
@@ -310,16 +481,20 @@ public final class CwSignalProcessor {
         if (toneEstimate == null) {
             return frameRms;
         }
+        double narrowbandConfidence = narrowbandConfidence(toneEstimate);
         if (toneEstimate.locked) {
             return Math.max(
                     toneEstimate.toneRmsAmplitude,
-                    frameRms * (1.0d - ((1.0d - toneEstimate.dominanceRatio) * LOCKED_SIGNAL_BLEND))
+                    frameRms * Math.max(
+                            UNLOCKED_SIGNAL_BLEND_FLOOR,
+                            1.0d - ((1.0d - narrowbandConfidence) * LOCKED_SIGNAL_BLEND)
+                    )
             );
         }
         if (isNarrowbandQualified(toneEstimate)) {
             return Math.max(
                     toneEstimate.toneRmsAmplitude * UNLOCKED_TONE_GAIN,
-                    frameRms * Math.max(UNLOCKED_SIGNAL_BLEND_FLOOR, toneEstimate.dominanceRatio)
+                    frameRms * Math.max(UNLOCKED_SIGNAL_BLEND_FLOOR, narrowbandConfidence)
             );
         }
         return toneEstimate.toneRmsAmplitude;
@@ -328,7 +503,72 @@ public final class CwSignalProcessor {
     private boolean isNarrowbandQualified(ToneFrequencyEstimate toneEstimate) {
         return toneEstimate != null
                 && toneEstimate.toneRmsAmplitude >= MIN_TRACKED_TONE_RMS
-                && toneEstimate.dominanceRatio >= MIN_NARROWBAND_DOMINANCE_RATIO;
+                && toneEstimate.dominanceRatio >= MIN_NARROWBAND_DOMINANCE_RATIO
+                && toneEstimate.isolationRatio >= MIN_NARROWBAND_ISOLATION_RATIO;
+    }
+
+    private double narrowbandConfidence(ToneFrequencyEstimate toneEstimate) {
+        if (toneEstimate == null) {
+            return 0.0d;
+        }
+        double dominanceConfidence = normalizeBetween(
+                toneEstimate.dominanceRatio,
+                MIN_NARROWBAND_DOMINANCE_RATIO,
+                MIN_LOCK_DOMINANCE_RATIO
+        );
+        double isolationConfidence = normalizeBetween(
+                toneEstimate.isolationRatio,
+                MIN_NARROWBAND_ISOLATION_RATIO,
+                MIN_LOCK_ISOLATION_RATIO
+        );
+        return Math.max(
+                UNLOCKED_SIGNAL_BLEND_FLOOR,
+                Math.min(1.0d, (dominanceConfidence * 0.58d) + (isolationConfidence * 0.42d))
+        );
+    }
+
+    private void rememberSignalQuality(
+            double toneRmsAmplitude,
+            double isolationRatio,
+            boolean locked,
+            boolean narrowbandQualified
+    ) {
+        if (locked) {
+            lockedFrameCount += 1;
+            consecutiveLockedFrames += 1;
+            maxConsecutiveLockedFrames = Math.max(maxConsecutiveLockedFrames, consecutiveLockedFrames);
+        } else {
+            consecutiveLockedFrames = 0;
+        }
+        if (narrowbandQualified) {
+            peakToneRmsAmplitude = Math.max(peakToneRmsAmplitude, toneRmsAmplitude);
+            peakNarrowbandIsolationRatio = Math.max(peakNarrowbandIsolationRatio, isolationRatio);
+        }
+    }
+
+    private double normalizeBetween(double value, double minimum, double maximum) {
+        if (maximum <= minimum) {
+            return value >= maximum ? 1.0d : 0.0d;
+        }
+        double normalized = (value - minimum) / (maximum - minimum);
+        return Math.max(0.0d, Math.min(1.0d, normalized));
+    }
+
+    private double computeNarrowbandIsolationRatio(double toneRmsAmplitude, double widebandResidualRmsAmplitude) {
+        if (toneRmsAmplitude <= 0.0d) {
+            return 0.0d;
+        }
+        double denominator = toneRmsAmplitude + Math.max(0.0d, widebandResidualRmsAmplitude);
+        if (denominator <= 0.0d) {
+            return 0.0d;
+        }
+        return toneRmsAmplitude / denominator;
+    }
+
+    private double estimateWidebandResidualRms(double frameRms, double toneRmsAmplitude) {
+        double framePower = Math.max(0.0d, frameRms * frameRms);
+        double tonePower = Math.max(0.0d, toneRmsAmplitude * toneRmsAmplitude);
+        return Math.sqrt(Math.max(0.0d, framePower - tonePower));
     }
 
     private double estimateToneRms(short[] samples, int sampleRateHz, int targetFrequencyHz) {
@@ -366,18 +606,24 @@ public final class CwSignalProcessor {
     private static final class ToneFrequencyEstimate {
         private final int frequencyHz;
         private final double toneRmsAmplitude;
+        private final double widebandResidualRmsAmplitude;
         private final double dominanceRatio;
+        private final double isolationRatio;
         private final boolean locked;
 
         private ToneFrequencyEstimate(
                 int frequencyHz,
                 double toneRmsAmplitude,
+                double widebandResidualRmsAmplitude,
                 double dominanceRatio,
+                double isolationRatio,
                 boolean locked
         ) {
             this.frequencyHz = frequencyHz;
             this.toneRmsAmplitude = toneRmsAmplitude;
+            this.widebandResidualRmsAmplitude = widebandResidualRmsAmplitude;
             this.dominanceRatio = dominanceRatio;
+            this.isolationRatio = isolationRatio;
             this.locked = locked;
         }
     }

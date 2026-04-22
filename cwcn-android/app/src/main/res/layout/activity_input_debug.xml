@@ -815,6 +815,17 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/signalHealthText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:lineSpacingExtra="3dp"
+                android:padding="12dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="13sp" />
+
+            <TextView
                 android:id="@+id/signalEventStatsText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

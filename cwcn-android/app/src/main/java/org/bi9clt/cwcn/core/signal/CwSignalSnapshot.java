@@ -11,7 +11,14 @@ public final class CwSignalSnapshot {
     private final int signalFloorEstimate;
     private final double lastRmsAmplitude;
     private final double lastToneRmsAmplitude;
+    private final double lastWidebandResidualRmsAmplitude;
     private final double toneDominanceRatio;
+    private final double narrowbandIsolationRatio;
+    private final double peakToneRmsAmplitude;
+    private final double peakNarrowbandIsolationRatio;
+    private final int processedFrameCount;
+    private final int lockedFrameCount;
+    private final int maxConsecutiveLockedFrames;
     private final int totalToneOnEvents;
     private final int totalToneOffEvents;
     private final CwToneEvent lastEvent;
@@ -27,7 +34,14 @@ public final class CwSignalSnapshot {
             int signalFloorEstimate,
             double lastRmsAmplitude,
             double lastToneRmsAmplitude,
+            double lastWidebandResidualRmsAmplitude,
             double toneDominanceRatio,
+            double narrowbandIsolationRatio,
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            int processedFrameCount,
+            int lockedFrameCount,
+            int maxConsecutiveLockedFrames,
             int totalToneOnEvents,
             int totalToneOffEvents,
             CwToneEvent lastEvent
@@ -42,7 +56,14 @@ public final class CwSignalSnapshot {
         this.signalFloorEstimate = signalFloorEstimate;
         this.lastRmsAmplitude = lastRmsAmplitude;
         this.lastToneRmsAmplitude = lastToneRmsAmplitude;
+        this.lastWidebandResidualRmsAmplitude = lastWidebandResidualRmsAmplitude;
         this.toneDominanceRatio = toneDominanceRatio;
+        this.narrowbandIsolationRatio = narrowbandIsolationRatio;
+        this.peakToneRmsAmplitude = peakToneRmsAmplitude;
+        this.peakNarrowbandIsolationRatio = peakNarrowbandIsolationRatio;
+        this.processedFrameCount = processedFrameCount;
+        this.lockedFrameCount = lockedFrameCount;
+        this.maxConsecutiveLockedFrames = maxConsecutiveLockedFrames;
         this.totalToneOnEvents = totalToneOnEvents;
         this.totalToneOffEvents = totalToneOffEvents;
         this.lastEvent = lastEvent;
@@ -88,8 +109,43 @@ public final class CwSignalSnapshot {
         return lastToneRmsAmplitude;
     }
 
+    public double lastWidebandResidualRmsAmplitude() {
+        return lastWidebandResidualRmsAmplitude;
+    }
+
     public double toneDominanceRatio() {
         return toneDominanceRatio;
+    }
+
+    public double narrowbandIsolationRatio() {
+        return narrowbandIsolationRatio;
+    }
+
+    public double peakToneRmsAmplitude() {
+        return peakToneRmsAmplitude;
+    }
+
+    public double peakNarrowbandIsolationRatio() {
+        return peakNarrowbandIsolationRatio;
+    }
+
+    public int processedFrameCount() {
+        return processedFrameCount;
+    }
+
+    public int lockedFrameCount() {
+        return lockedFrameCount;
+    }
+
+    public int maxConsecutiveLockedFrames() {
+        return maxConsecutiveLockedFrames;
+    }
+
+    public double lockedFrameRatio() {
+        if (processedFrameCount <= 0) {
+            return 0.0d;
+        }
+        return Math.max(0.0d, Math.min(1.0d, lockedFrameCount / (double) processedFrameCount));
     }
 
     public int totalToneOnEvents() {

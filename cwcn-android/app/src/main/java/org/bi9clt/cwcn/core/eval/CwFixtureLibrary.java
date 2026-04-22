@@ -61,12 +61,22 @@ public final class CwFixtureLibrary {
                     "noisy_report_exchange",
                     "Noisy Report",
                     "BI9CLT DE BG7YOZ UR 5NN 5NN BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ UR 5NN 5NN BK"),
+                    1800,
                     20,
                     700,
                     17000,
+                    0,
+                    0,
                     1800,
                     0.0d,
                     0,
+                    0.0d,
+                    0.0d,
+                    0.0d,
+                    0,
+                    0,
+                    Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     400,
                     "BI9CLT DE BG7YOZ UR 599 599 BK",
@@ -75,6 +85,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.REPORT_EXCHANGE,
                     null,
                     "599",
+                    "DROP",
                     "Adds deterministic broadband noise to stress signal and timing stages."
             ),
             new CwFixtureScenario(
@@ -184,6 +195,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.REPORT_EXCHANGE,
                     null,
                     "599",
+                    "DROP",
                     "Exercises a two-round human operator flow where a ragged AGN/PSE clarification settles into a usable directed report under QSB, noise, and uneven hand timing."
             ),
             new CwFixtureScenario(
@@ -248,6 +260,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.REPORT_EXCHANGE,
                     null,
                     "599",
+                    "DROP",
                     "Exercises a directed report exchange with a nearby continuous interferer tone outside the preferred tracking window and currently serves as a front-end boundary stress case."
             ),
             new CwFixtureScenario(
@@ -280,6 +293,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.REPORT_EXCHANGE,
                     null,
                     "599",
+                    "DROP",
                     "Exercises a moderate nearby interferer baseline that should remain decodable once the front-end narrows detection around the target tone."
             ),
             new CwFixtureScenario(
@@ -655,6 +669,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.REPORT_EXCHANGE,
                     null,
                     "599",
+                    "DROP",
                     "Exercises a compact report-handoff-tail chain under hand-key style timing drift, stronger jitter, QSB, and background noise."
             ),
             new CwFixtureScenario(
@@ -693,6 +708,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.REPORT_EXCHANGE,
                     null,
                     "599",
+                    "DROP",
                     "Exercises a two-part follow-up where the first cleaner report establishes DE-context callsigns and the second partial callsign round relies on remembered role-aware recovery."
             ),
             new CwFixtureScenario(
@@ -725,6 +741,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.CLOSING,
                     null,
                     null,
+                    "DROP",
                     "Exercises a sticky DE-plus-closing chain with human-style speed drift, stretched handoff pause, fading, and moderate noise."
             ),
             new CwFixtureScenario(
@@ -759,6 +776,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.COMPLETED,
                     "599",
                     null,
+                    "DROP",
                     "Exercises a compact R 5NN TU 73 BK chain under human-style speed drift, light pause wobble, QSB, and moderate noise."
             ),
             new CwFixtureScenario(
@@ -923,6 +941,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.COMPLETED,
                     null,
                     "599",
+                    "DROP",
                     "Exercises a full three-round QSO where the first round is ragged and pause-heavy, the report round drifts, and the final TU 73 closes in a faster tighter rhythm."
             ),
             new CwFixtureScenario(
@@ -1003,6 +1022,81 @@ public final class CwFixtureLibrary {
                     "Exercises a compact acknowledgement-report-closing chain where R, 5NN, TU, 73, and BK arrive as one glued token."
             ),
             new CwFixtureScenario(
+                    "soft_edge_compact_ack_closing_chain",
+                    "Soft-Edge Compact Ack Closing",
+                    "BI9CLT DE BG7YOZ R5NNTU73BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ R5NNTU73BK"),
+                    1800,
+                    19,
+                    670,
+                    17800,
+                    780,
+                    0.12d,
+                    2200,
+                    0.10d,
+                    0.05d,
+                    6,
+                    7,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.08d, 0.10d, 0.05d, 0.02d, 1.02d, 1.06d, 1.25d, 6, 0.5d)
+                    ),
+                    250,
+                    450,
+                    "BI9CLT DE BG7YOZ R 599 THANKS 73 BK",
+                    Arrays.asList("BI9CLT", "BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Report acknowledgement / return report",
+                            "Turn handoff / over",
+                            "Closing / acknowledgement",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    "599",
+                    null,
+                    "DROP",
+                    "Exercises the compact ack/closing chain with soft rise/fall keying edges, moderate jitter, and light QSB so front-end edge estimation is checked against a less idealized waveform."
+            ),
+            new CwFixtureScenario(
+                    "drifting_soft_edge_compact_ack_closing_chain",
+                    "Drifting Soft-Edge Compact Ack Closing",
+                    "BI9CLT DE BG7YOZ R5NNTU73BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ R5NNTU73BK"),
+                    1800,
+                    19,
+                    670,
+                    17800,
+                    820,
+                    0.14d,
+                    2200,
+                    18.0d,
+                    0.12d,
+                    0.06d,
+                    6,
+                    8,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.10d, 0.11d, 0.06d, 0.02d, 1.03d, 1.08d, 1.28d, 6, 0.6d)
+                    ),
+                    250,
+                    450,
+                    "BI9CLT DE BG7YOZ R 599 THANKS 73 BK",
+                    Arrays.asList("BI9CLT", "BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Report acknowledgement / return report",
+                            "Turn handoff / over",
+                            "Closing / acknowledgement",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    "599",
+                    null,
+                    "DROP",
+                    "Exercises the compact ack/closing chain with soft keying edges and a gradual upward tone drift, so preferred-tone tracking and front-end retune behavior are tested against a more radio-like moving target."
+            ),
+            new CwFixtureScenario(
                     "fully_glued_ack_closing_chain",
                     "Fully Glued Ack Closing Chain",
                     "BKBI9CLTDEBG7YOZR5NNTU73BK",
@@ -1027,6 +1121,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.COMPLETED,
                     "599",
                     null,
+                    "DROP",
                     "Exercises the most compact stable closing sample in this family, where BK, station callsign, DE, remote callsign, R 5NN, TU, 73, and BK all arrive in one token."
             ),
             new CwFixtureScenario(
@@ -1052,6 +1147,7 @@ public final class CwFixtureLibrary {
                     QsoPhase.REPORT_EXCHANGE,
                     "599",
                     null,
+                    "DROP",
                     "Exercises a compact acknowledgement-report-handoff chain followed by a repeated addressed callsign."
             )
     ));

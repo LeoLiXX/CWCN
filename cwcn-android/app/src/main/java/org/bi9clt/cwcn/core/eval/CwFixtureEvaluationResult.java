@@ -30,6 +30,11 @@ public final class CwFixtureEvaluationResult {
     private final List<String> missingCallsigns;
     private final List<String> missingHints;
     private final List<String> failureReasons;
+    private final boolean finalToneLocked;
+    private final double peakToneRmsAmplitude;
+    private final double peakNarrowbandIsolationRatio;
+    private final double lockedFrameRatio;
+    private final int maxConsecutiveLockedFrames;
 
     public CwFixtureEvaluationResult(
             String scenarioId,
@@ -58,6 +63,72 @@ public final class CwFixtureEvaluationResult {
             List<String> missingHints,
             List<String> failureReasons
     ) {
+        this(
+                scenarioId,
+                scenarioDisplayName,
+                evaluatedAtEpochMs,
+                completed,
+                passed,
+                exactTextMatch,
+                primaryCallsignScore,
+                textTokenRecall,
+                callsignRecall,
+                hintRecall,
+                qsoSemanticScore,
+                expectedNormalizedText,
+                actualNormalizedText,
+                expectedPhase,
+                actualPhase,
+                expectedRstSent,
+                actualRstSent,
+                expectedRstRcvd,
+                actualRstRcvd,
+                actualCallsigns,
+                actualHints,
+                missingTextTokens,
+                missingCallsigns,
+                missingHints,
+                failureReasons,
+                false,
+                0.0d,
+                0.0d,
+                0.0d,
+                0
+        );
+    }
+
+    public CwFixtureEvaluationResult(
+            String scenarioId,
+            String scenarioDisplayName,
+            long evaluatedAtEpochMs,
+            boolean completed,
+            boolean passed,
+            boolean exactTextMatch,
+            double primaryCallsignScore,
+            double textTokenRecall,
+            double callsignRecall,
+            double hintRecall,
+            double qsoSemanticScore,
+            String expectedNormalizedText,
+            String actualNormalizedText,
+            String expectedPhase,
+            String actualPhase,
+            String expectedRstSent,
+            String actualRstSent,
+            String expectedRstRcvd,
+            String actualRstRcvd,
+            List<String> actualCallsigns,
+            List<String> actualHints,
+            List<String> missingTextTokens,
+            List<String> missingCallsigns,
+            List<String> missingHints,
+            List<String> failureReasons,
+            boolean finalToneLocked,
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames
+    ) {
         this.scenarioId = scenarioId;
         this.scenarioDisplayName = scenarioDisplayName;
         this.evaluatedAtEpochMs = evaluatedAtEpochMs;
@@ -83,6 +154,11 @@ public final class CwFixtureEvaluationResult {
         this.missingCallsigns = new ArrayList<>(missingCallsigns);
         this.missingHints = new ArrayList<>(missingHints);
         this.failureReasons = new ArrayList<>(failureReasons);
+        this.finalToneLocked = finalToneLocked;
+        this.peakToneRmsAmplitude = peakToneRmsAmplitude;
+        this.peakNarrowbandIsolationRatio = peakNarrowbandIsolationRatio;
+        this.lockedFrameRatio = lockedFrameRatio;
+        this.maxConsecutiveLockedFrames = maxConsecutiveLockedFrames;
     }
 
     public String scenarioId() {
@@ -185,6 +261,77 @@ public final class CwFixtureEvaluationResult {
         return new ArrayList<>(failureReasons);
     }
 
+    public boolean finalToneLocked() {
+        return finalToneLocked;
+    }
+
+    public double peakToneRmsAmplitude() {
+        return peakToneRmsAmplitude;
+    }
+
+    public double peakNarrowbandIsolationRatio() {
+        return peakNarrowbandIsolationRatio;
+    }
+
+    public double lockedFrameRatio() {
+        return lockedFrameRatio;
+    }
+
+    public int maxConsecutiveLockedFrames() {
+        return maxConsecutiveLockedFrames;
+    }
+
+    private boolean frontEndHistorySuggestsSignalLoss() {
+        return peakToneRmsAmplitude > 0.0d
+                && peakNarrowbandIsolationRatio < 0.35d
+                && lockedFrameRatio < 0.08d
+                && maxConsecutiveLockedFrames < 2;
+    }
+
+    private boolean frontEndHistorySuggestsEarlierHealthyLock() {
+        return peakNarrowbandIsolationRatio >= 0.55d
+                && lockedFrameRatio >= 0.15d
+                && maxConsecutiveLockedFrames >= 3;
+    }
+
+    public String frontEndQualityCode() {
+        boolean hasFrontEndHistory = peakToneRmsAmplitude > 0.0d
+                || peakNarrowbandIsolationRatio > 0.0d
+                || lockedFrameRatio > 0.0d
+                || maxConsecutiveLockedFrames > 0;
+        if (!hasFrontEndHistory) {
+            return "NA";
+        }
+        if (finalToneLocked
+                && peakNarrowbandIsolationRatio >= 0.55d
+                && lockedFrameRatio >= 0.25d
+                && maxConsecutiveLockedFrames >= 4) {
+            return "GOOD";
+        }
+        if (!finalToneLocked && frontEndHistorySuggestsEarlierHealthyLock()) {
+            return "DROP";
+        }
+        if (frontEndHistorySuggestsSignalLoss()) {
+            return "MISS";
+        }
+        return "WEAK";
+    }
+
+    public String frontEndQualityLabel() {
+        switch (frontEndQualityCode()) {
+            case "GOOD":
+                return "Healthy lock retained";
+            case "DROP":
+                return "Earlier lock, later drop";
+            case "MISS":
+                return "No convincing lock formed";
+            case "WEAK":
+                return "Partial / unstable acquisition";
+            default:
+                return "No front-end history available";
+        }
+    }
+
     public String likelyBottleneckCode() {
         if (passed) {
             return "OK";
@@ -192,11 +339,25 @@ public final class CwFixtureEvaluationResult {
         if (!completed) {
             return "RUN";
         }
+        if (frontEndHistorySuggestsSignalLoss()) {
+            return "SIG";
+        }
         if (textTokenRecall < 0.45d
                 && callsignRecall < 0.5d
                 && qsoSemanticScore < 0.5d
                 && hintRecall < 0.5d) {
             return "SIG";
+        }
+        if (frontEndHistorySuggestsEarlierHealthyLock()) {
+            if (qsoSemanticScore < 1.0d && textTokenRecall >= 0.75d) {
+                return "QSO";
+            }
+            if (primaryCallsignScore < 1.0d || callsignRecall < 1.0d || hintRecall < 1.0d) {
+                return "INT";
+            }
+            if (textTokenRecall < 0.75d) {
+                return "DEC";
+            }
         }
         if (textTokenRecall < 0.75d && qsoSemanticScore < 1.0d) {
             return "DEC";
@@ -240,7 +401,11 @@ public final class CwFixtureEvaluationResult {
         if (!completed) {
             notes.add("Replay ended before a full evaluation window completed.");
         }
-        if (textTokenRecall < 0.45d
+        if (frontEndHistorySuggestsSignalLoss()) {
+            notes.add("Front-end history never formed a convincing narrow-band lock, so this looks more like acquisition loss than late-stage interpretation drift.");
+        } else if (frontEndHistorySuggestsEarlierHealthyLock()) {
+            notes.add("Front-end history shows a usable earlier lock window, so the latest mismatch likely happened after acquisition rather than before it.");
+        } else if (textTokenRecall < 0.45d
                 && callsignRecall < 0.5d
                 && qsoSemanticScore < 0.5d
                 && hintRecall < 0.5d) {
@@ -279,6 +444,8 @@ public final class CwFixtureEvaluationResult {
                 + percent(qsoSemanticScore)
                 + " H:"
                 + percent(hintRecall)
+                + " F:"
+                + frontEndQualityCode()
                 + " D:"
                 + likelyBottleneckCode();
     }
@@ -295,6 +462,14 @@ public final class CwFixtureEvaluationResult {
         builder.append("\nCallsign recall: ").append(percent(callsignRecall));
         builder.append("\nQSO semantics: ").append(percent(qsoSemanticScore));
         builder.append("\nHint recall: ").append(percent(hintRecall));
+        builder.append("\nFront-end quality: ").append(frontEndQualityLabel());
+        if (peakToneRmsAmplitude > 0.0d || peakNarrowbandIsolationRatio > 0.0d || lockedFrameRatio > 0.0d) {
+            builder.append("\nFront-end history: finalLock=").append(finalToneLocked ? "yes" : "no")
+                    .append(", peakToneRms=").append(String.format(Locale.US, "%.0f", peakToneRmsAmplitude))
+                    .append(", peakIsolation=").append(percent(peakNarrowbandIsolationRatio))
+                    .append(", lockCoverage=").append(percent(lockedFrameRatio))
+                    .append(", bestLockRun=").append(maxConsecutiveLockedFrames).append(" frame(s)");
+        }
         builder.append("\nExpected text: ").append(safeText(expectedNormalizedText));
         builder.append("\nActual text: ").append(safeText(actualNormalizedText));
         if (expectedPhase != null || actualPhase != null) {

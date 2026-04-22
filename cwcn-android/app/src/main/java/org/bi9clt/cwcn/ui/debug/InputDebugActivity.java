@@ -277,6 +277,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.frameStatsText.setText(renderFrameStats());
         updateLevelViews(lastPeakAmplitude, lastRmsAmplitude);
         binding.signalStateText.setText(renderSignalState());
+        binding.signalHealthText.setText(renderSignalHealthSummary());
         binding.signalEventStatsText.setText(renderSignalEventStats());
         binding.lastSignalEventText.setText(renderLastSignalEvent());
         binding.timingStateText.setText(renderTimingState());
@@ -383,15 +384,72 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                         .append(scenario.interfererToneAmplitude());
             }
             if (scenario.qsbDepth() > 0.0d) {
-                builder.append(", QSB ").append(Math.round(scenario.qsbDepth() * 100.0d)).append("%");
+                builder.append(", QSB ")
+                        .append(Math.round(scenario.qsbDepth() * 100.0d))
+                        .append("% / ")
+                        .append(scenario.qsbCycleMs())
+                        .append(" ms");
+            }
+            if (Math.abs(scenario.toneDriftHz()) > 0.0d) {
+                builder.append(", drift ")
+                        .append(String.format(Locale.US, "%+.1f", scenario.toneDriftHz()))
+                        .append(" Hz");
+            }
+            if (scenario.riseRampMs() > 0 || scenario.fallRampMs() > 0) {
+                builder.append(", edge ")
+                        .append(scenario.riseRampMs())
+                        .append("/")
+                        .append(scenario.fallRampMs())
+                        .append(" ms");
             }
             builder.append("\nTiming: ").append(scenario.timingProfileSummary());
+            if (scenario.expectedFrontEndQualityCode() != null) {
+                builder.append("\nExpected front-end: ")
+                        .append(scenario.expectedFrontEndQualityCode());
+            }
             builder.append("\nNotes: ").append(scenario.notes());
+        }
+        if (option == InputSourceOption.PHONE_MICROPHONE) {
+            builder.append("\n").append(renderMicrophoneToneWatch());
         }
         builder.append("\nPreferred Tone: ")
                 .append(cwSignalProcessor.snapshot().preferredToneFrequencyHz())
                 .append(" Hz");
         return builder.toString();
+    }
+
+    private String renderMicrophoneToneWatch() {
+        CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
+        int trackingErrorHz = snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz();
+        String offsetLabel;
+        if (Math.abs(trackingErrorHz) <= 15) {
+            offsetLabel = "near target";
+        } else if (trackingErrorHz > 0) {
+            offsetLabel = "above preferred";
+        } else {
+            offsetLabel = "below preferred";
+        }
+        return "Mic Tone Watch: "
+                + (snapshot.targetToneLocked() ? "LOCKED" : "SEARCH")
+                + " | tracked "
+                + snapshot.targetToneFrequencyHz()
+                + " Hz ("
+                + String.format(Locale.US, "%+d", trackingErrorHz)
+                + " Hz, "
+                + offsetLabel
+                + ")"
+                + "\nMic confidence: dominance "
+                + Math.round(snapshot.toneDominanceRatio() * 100.0d)
+                + "%, tone RMS "
+                + String.format(Locale.US, "%.1f", snapshot.lastToneRmsAmplitude())
+                + ", isolation "
+                + Math.round(snapshot.narrowbandIsolationRatio() * 100.0d)
+                + "%"
+                + "\nMic run stats: peak isolation "
+                + Math.round(snapshot.peakNarrowbandIsolationRatio() * 100.0d)
+                + "%, lock coverage "
+                + Math.round(snapshot.lockedFrameRatio() * 100.0d)
+                + "%";
     }
 
     private void restorePreferredToneFrequency() {
@@ -650,17 +708,26 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
     private String renderSignalState() {
         CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
+        int toneErrorHz = snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz();
         return "Tone: " + (snapshot.toneActive() ? getString(R.string.signal_tone_active) : getString(R.string.signal_tone_idle))
                 + "\nTarget Tone Lock: " + (snapshot.targetToneLocked() ? "LOCKED" : "SEARCH")
                 + "\nPreferred Tone: " + snapshot.preferredToneFrequencyHz() + " Hz"
                 + "\nTracked Tone: " + snapshot.targetToneFrequencyHz() + " Hz"
+                + "\nTracking Error: " + String.format(Locale.US, "%+d", toneErrorHz) + " Hz"
                 + "\nAttack Threshold: " + snapshot.currentThreshold()
                 + "\nRelease Threshold: " + snapshot.releaseThreshold()
                 + "\nNoise Floor: " + snapshot.noiseFloorEstimate()
                 + "\nSignal Floor: " + snapshot.signalFloorEstimate()
                 + "\nLast RMS: " + String.format(Locale.US, "%.1f", snapshot.lastRmsAmplitude())
                 + "\nTone RMS: " + String.format(Locale.US, "%.1f", snapshot.lastToneRmsAmplitude())
-                + "\nTone Dominance: " + Math.round(snapshot.toneDominanceRatio() * 100.0d) + "%";
+                + "\nResidual RMS: " + String.format(Locale.US, "%.1f", snapshot.lastWidebandResidualRmsAmplitude())
+                + "\nTone Dominance: " + Math.round(snapshot.toneDominanceRatio() * 100.0d) + "%"
+                + "\nBand Isolation: " + Math.round(snapshot.narrowbandIsolationRatio() * 100.0d) + "%"
+                + "\nPeak Tone RMS: " + String.format(Locale.US, "%.1f", snapshot.peakToneRmsAmplitude())
+                + "\nPeak Isolation: " + Math.round(snapshot.peakNarrowbandIsolationRatio() * 100.0d) + "%"
+                + "\nLock Coverage: " + Math.round(snapshot.lockedFrameRatio() * 100.0d) + "%"
+                + " (" + snapshot.lockedFrameCount() + "/" + snapshot.processedFrameCount() + " frames)"
+                + "\nBest Lock Run: " + snapshot.maxConsecutiveLockedFrames() + " frame(s)";
     }
 
     private String renderSignalEventStats() {
@@ -670,6 +737,54 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 snapshot.totalToneOnEvents(),
                 snapshot.totalToneOffEvents()
         );
+    }
+
+    private String renderSignalHealthSummary() {
+        CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
+        int trackingErrorHz = snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz();
+        int attackHeadroom = snapshot.signalFloorEstimate() - snapshot.currentThreshold();
+        int releaseMargin = snapshot.releaseThreshold() - snapshot.noiseFloorEstimate();
+        double dominancePercent = snapshot.toneDominanceRatio() * 100.0d;
+        double isolationPercent = snapshot.narrowbandIsolationRatio() * 100.0d;
+        double peakIsolationPercent = snapshot.peakNarrowbandIsolationRatio() * 100.0d;
+        double lockCoveragePercent = snapshot.lockedFrameRatio() * 100.0d;
+
+        String label;
+        String reason;
+        if (!snapshot.targetToneLocked() && dominancePercent < 28.0d && snapshot.lastToneRmsAmplitude() < 40.0d) {
+            label = "Searching / no stable target";
+            reason = "No reliable narrow-band tone is standing out yet.";
+        } else if (snapshot.targetToneLocked() && Math.abs(trackingErrorHz) >= 45) {
+            label = "Tracking drift rising";
+            reason = "The tracked tone is moving away from the preferred pitch and should be watched.";
+        } else if (!snapshot.targetToneLocked() && peakIsolationPercent >= 55.0d && lockCoveragePercent >= 20.0d) {
+            label = "Recovered earlier lock";
+            reason = "The front end had a healthy lock earlier in this run, but is not locked on the latest frame.";
+        } else if (!snapshot.targetToneLocked() && isolationPercent < 36.0d) {
+            label = "Tone detected but confidence low";
+            reason = "Some target-like tone energy is present, but it is still mixed with too much residue.";
+        } else if (!snapshot.targetToneLocked()) {
+            label = "Tone detected but confidence low";
+            reason = "A candidate tone is present, but lock confidence is still below the stable range.";
+        } else if (dominancePercent < 45.0d || isolationPercent < 52.0d || attackHeadroom < 8 || releaseMargin < 6) {
+            label = "Weak lock / low dominance";
+            reason = "Lock exists, but tone separation from noise or interference is still not very comfortable.";
+        } else {
+            label = "Healthy lock";
+            reason = "Tone lock, dominance, and threshold margins all look stable.";
+        }
+
+        return "Health: " + label
+                + "\nReason: " + reason
+                + "\nDominance: " + Math.round(dominancePercent) + "%"
+                + " | Isolation: " + Math.round(isolationPercent) + "%"
+                + " | Tone RMS: " + String.format(Locale.US, "%.1f", snapshot.lastToneRmsAmplitude())
+                + "\nResidual RMS: " + String.format(Locale.US, "%.1f", snapshot.lastWidebandResidualRmsAmplitude())
+                + " | Attack headroom: " + String.format(Locale.US, "%+d", attackHeadroom)
+                + " | Release margin: " + String.format(Locale.US, "%+d", releaseMargin)
+                + "\nPeak isolation: " + Math.round(peakIsolationPercent) + "%"
+                + " | Lock coverage: " + Math.round(lockCoveragePercent) + "%"
+                + "\nTrack offset: " + String.format(Locale.US, "%+d", trackingErrorHz) + " Hz";
     }
 
     private String renderLastSignalEvent() {
@@ -1261,6 +1376,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                         lastFixtureScenario,
                         cwInterpreter.snapshot(),
                         qsoStateMachine.snapshot(),
+                        cwSignalProcessor.snapshot(),
                         completed
                 );
                 localLogRepository.saveFixtureEvaluation(lastFixtureEvaluationResult);
@@ -1304,6 +1420,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             binding.frameStatsText.setText(renderFrameStats());
             updateLevelViews(lastPeakAmplitude, lastRmsAmplitude);
             binding.signalStateText.setText(renderSignalState());
+            binding.signalHealthText.setText(renderSignalHealthSummary());
             binding.signalEventStatsText.setText(renderSignalEventStats());
             binding.lastSignalEventText.setText(renderLastSignalEvent());
             binding.timingStateText.setText(renderTimingState());

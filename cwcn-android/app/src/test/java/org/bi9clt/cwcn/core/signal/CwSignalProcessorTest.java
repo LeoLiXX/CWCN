@@ -98,6 +98,55 @@ public final class CwSignalProcessorTest {
     }
 
     @Test
+    public void broadbandNoiseOnlyDoesNotCreateStableTargetLock() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processNoisyFrames(processor, 16, 0.0d, 0.0d, 12000.0d);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(!snapshot.toneActive());
+        assertTrue(!snapshot.targetToneLocked());
+        assertEquals(0, snapshot.totalToneOnEvents());
+        assertTrue(snapshot.narrowbandIsolationRatio() < 0.20d);
+    }
+
+    @Test
+    public void targetToneCanStillActivateUnderDeterministicBroadbandNoise() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processNoisyFrames(processor, 8, 0.0d, 0.0d, 1800.0d);
+        processNoisyFrames(processor, 12, 670.0d, 15000.0d, 4200.0d, 8);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.toneActive());
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue(Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
+        assertTrue(snapshot.narrowbandIsolationRatio() >= 0.45d);
+        assertTrue(snapshot.lastWidebandResidualRmsAmplitude() > 0.0d);
+    }
+
+    @Test
+    public void peakLockStatsRemainAvailableAfterRunFallsBackToSearch() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 10, 670.0d, 16000.0d);
+        processNoisyFrames(processor, 10, 0.0d, 0.0d, 9000.0d, 18);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(!snapshot.targetToneLocked());
+        assertTrue(snapshot.processedFrameCount() >= 28);
+        assertTrue(snapshot.lockedFrameCount() > 0);
+        assertTrue(snapshot.lockedFrameRatio() >= 0.20d);
+        assertTrue(snapshot.peakToneRmsAmplitude() >= snapshot.lastToneRmsAmplitude());
+        assertTrue(snapshot.peakNarrowbandIsolationRatio() >= 0.50d);
+        assertTrue(snapshot.maxConsecutiveLockedFrames() >= 4);
+    }
+
+    @Test
     public void toneOnTimestampCanBePlacedBeforeQualifiedFrameBoundary() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(650);
@@ -128,6 +177,69 @@ public final class CwSignalProcessorTest {
         assertTrue(toneOff.toneDurationMs() < (5 * frameDurationMs()));
     }
 
+    @Test
+    public void frameLocalRisingEdgeCanPlaceToneOnInsideCurrentFrame() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        AudioFrame transitionFrame = buildPartialFrame(
+                8 * frameDurationMs(),
+                8 * FRAME_SIZE,
+                670.0d,
+                18000.0d,
+                FRAME_SIZE / 2,
+                FRAME_SIZE
+        );
+
+        List<CwToneEvent> events = processor.process(transitionFrame);
+
+        assertEquals(1, events.size());
+        assertEquals(CwToneEvent.Type.TONE_ON, events.get(0).type());
+        assertTrue(events.get(0).timestampMs() >= (8 * frameDurationMs()) + 4L);
+        assertTrue(events.get(0).timestampMs() <= (8 * frameDurationMs()) + 11L);
+    }
+
+    @Test
+    public void frameLocalFallingEdgeCanPreserveTailWithinTransitionFrame() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 4, 670.0d, 18000.0d);
+        AudioFrame transitionFrame = buildPartialFrame(
+                12 * frameDurationMs(),
+                12 * FRAME_SIZE,
+                670.0d,
+                18000.0d,
+                0,
+                FRAME_SIZE / 8
+        );
+        List<CwToneEvent> events = new java.util.ArrayList<>(processor.process(transitionFrame));
+
+        events.addAll(processor.process(buildFrame(
+                13 * frameDurationMs(),
+                13 * FRAME_SIZE,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d
+        )));
+        events.addAll(processor.process(buildFrame(
+                14 * frameDurationMs(),
+                14 * FRAME_SIZE,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d
+        )));
+
+        assertEquals(1, events.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, events.get(0).type());
+        assertTrue(events.get(0).timestampMs() >= (12 * frameDurationMs()));
+        assertTrue(events.get(0).timestampMs() <= (13 * frameDurationMs()) + 6L);
+    }
+
     private void processFrames(
             CwSignalProcessor processor,
             int frameCount,
@@ -146,6 +258,40 @@ public final class CwSignalProcessorTest {
             double secondaryAmplitude
     ) {
         processFramesCollecting(processor, frameCount, primaryFrequencyHz, primaryAmplitude, secondaryFrequencyHz, secondaryAmplitude, 0);
+    }
+
+    private void processNoisyFrames(
+            CwSignalProcessor processor,
+            int frameCount,
+            double primaryFrequencyHz,
+            double primaryAmplitude,
+            double noiseAmplitude
+    ) {
+        processNoisyFrames(processor, frameCount, primaryFrequencyHz, primaryAmplitude, noiseAmplitude, 0);
+    }
+
+    private void processNoisyFrames(
+            CwSignalProcessor processor,
+            int frameCount,
+            double primaryFrequencyHz,
+            double primaryAmplitude,
+            double noiseAmplitude,
+            int frameStartIndex
+    ) {
+        for (int frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+            int absoluteFrameIndex = frameStartIndex + frameIndex;
+            AudioFrame frame = buildFrame(
+                    absoluteFrameIndex * frameDurationMs(),
+                    absoluteFrameIndex * FRAME_SIZE,
+                    primaryFrequencyHz,
+                    primaryAmplitude,
+                    0.0d,
+                    0.0d,
+                    noiseAmplitude
+            );
+            List<CwToneEvent> events = processor.process(frame);
+            assertNotNull(events);
+        }
     }
 
     private List<CwToneEvent> processFramesCollecting(
@@ -202,6 +348,26 @@ public final class CwSignalProcessorTest {
             double secondaryFrequencyHz,
             double secondaryAmplitude
     ) {
+        return buildFrame(
+                capturedAtMs,
+                sampleOffset,
+                primaryFrequencyHz,
+                primaryAmplitude,
+                secondaryFrequencyHz,
+                secondaryAmplitude,
+                0.0d
+        );
+    }
+
+    private AudioFrame buildFrame(
+            long capturedAtMs,
+            int sampleOffset,
+            double primaryFrequencyHz,
+            double primaryAmplitude,
+            double secondaryFrequencyHz,
+            double secondaryAmplitude,
+            double noiseAmplitude
+    ) {
         short[] samples = new short[FRAME_SIZE];
         int peak = 0;
         double sumSquares = 0.0d;
@@ -215,6 +381,49 @@ public final class CwSignalProcessorTest {
             if (secondaryFrequencyHz > 0.0d && secondaryAmplitude > 0.0d) {
                 sampleValue += Math.sin((2.0d * Math.PI * absoluteIndex * secondaryFrequencyHz) / SAMPLE_RATE_HZ)
                         * secondaryAmplitude;
+            }
+            if (noiseAmplitude > 0.0d) {
+                sampleValue += deterministicNoise(absoluteIndex) * noiseAmplitude;
+            }
+            short sample = (short) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, Math.round(sampleValue)));
+            samples[index] = sample;
+            int absolute = Math.abs((int) sample);
+            if (absolute > peak) {
+                peak = absolute;
+            }
+            sumSquares += (double) sample * sample;
+        }
+        double rms = Math.sqrt(sumSquares / FRAME_SIZE);
+        return new AudioFrame(samples, SAMPLE_RATE_HZ, 1, peak, rms, capturedAtMs);
+    }
+
+    private double deterministicNoise(int absoluteIndex) {
+        int value = absoluteIndex * 1103515245 + 12345;
+        value ^= (value >>> 13);
+        value *= 1597334677;
+        int bucket = value & 0x7fff;
+        return (bucket / 16383.5d) - 1.0d;
+    }
+
+    private AudioFrame buildPartialFrame(
+            long capturedAtMs,
+            int sampleOffset,
+            double primaryFrequencyHz,
+            double primaryAmplitude,
+            int toneStartSample,
+            int toneEndSample
+    ) {
+        short[] samples = new short[FRAME_SIZE];
+        int clampedToneStart = Math.max(0, Math.min(FRAME_SIZE, toneStartSample));
+        int clampedToneEnd = Math.max(clampedToneStart, Math.min(FRAME_SIZE, toneEndSample));
+        int peak = 0;
+        double sumSquares = 0.0d;
+        for (int index = 0; index < FRAME_SIZE; index++) {
+            int absoluteIndex = sampleOffset + index;
+            double sampleValue = 0.0d;
+            if (index >= clampedToneStart && index < clampedToneEnd) {
+                sampleValue += Math.sin((2.0d * Math.PI * absoluteIndex * primaryFrequencyHz) / SAMPLE_RATE_HZ)
+                        * primaryAmplitude;
             }
             short sample = (short) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, Math.round(sampleValue)));
             samples[index] = sample;

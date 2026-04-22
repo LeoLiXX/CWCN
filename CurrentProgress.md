@@ -242,6 +242,168 @@
 ### Key files
 
 - [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+
+## 2026-04-22 Debug UI Front-End Health Summary
+
+- Added a compact `signal health` summary block to the Debug page so front-end status is easier to judge during live microphone or fixture testing.
+- The new summary converts raw `CwSignalSnapshot` values into a more human-readable heuristic state, including:
+- `Healthy lock`
+- `Weak lock / low dominance`
+- `Tone detected but confidence low`
+- `Searching / no stable target`
+- `Tracking drift rising`
+- The summary also exposes a short reason plus a few practical metrics in one place:
+- tone dominance
+- tone RMS
+- attack headroom over threshold
+- release margin over noise floor
+- track offset from preferred tone
+- When `Phone Microphone` is the selected source, the input-source summary now also shows a short `Mic Tone Watch` line so real-input testing can compare:
+- preferred tone
+- tracked tone
+- frequency offset direction
+- current tone confidence
+- This is intentionally a UI observability layer, not a decoding decision layer, so it improves real-world tuning/debugging without changing the signal pipeline itself.
+
+### Key files
+
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [activity_input_debug.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_input_debug.xml)
+
+## 2026-04-22 Narrowband Isolation Heuristic
+
+- Extended the signal front end with a more explicit `narrowband isolation` measure so we are no longer relying on `tone dominance` alone when deciding whether the tracked CW tone is truly standing apart from residual wideband energy.
+- The processor now derives:
+- tracked tone RMS
+- residual wideband RMS
+- narrowband isolation ratio
+- Lock retention and narrowband qualification now consider both:
+- tone dominance
+- narrowband isolation
+- Practical goal:
+- persistent broadband noise or non-target residue should be less able to lift `attack/release` behavior into a misleadingly strong state
+- while a real target tone under moderate noise should still qualify and key normally
+- The new metric is now exposed in Debug UI and microphone tone-watch text, so real-input testing can compare:
+- dominance
+- isolation
+- residual RMS
+- tracked tone offset
+- Added deterministic broadband-noise unit coverage plus an offline regression check around the noisy directed-report fixture.
+
+### Key files
+
+- [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
+- [CwSignalSnapshot.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalSnapshot.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-22 Signal Run-History Observability
+
+- Extended `CwSignalProcessor` again so Debug UI and offline regression can inspect not only the latest frame, but also the best front-end state reached during the current run.
+- New run-history signal stats now include:
+- `peak tone RMS`
+- `peak narrowband isolation`
+- `locked frame count / ratio`
+- `max consecutive locked frames`
+- This solves a practical blind spot from the previous round:
+- a fixture or live microphone run can decode well in the middle and then fall back to `SEARCH` near the end
+- the app now preserves evidence that the front end did in fact achieve a healthy lock earlier in the run
+- Debug UI now surfaces these history stats in:
+- `Mic Tone Watch`
+- signal state detail
+- signal health summary
+- The health summary can now label a run as `Recovered earlier lock` when the latest frame is weak but the overall run clearly had a usable lock window.
+- Offline regression now uses the new history metrics where appropriate, especially for noisy scenarios where the final frame alone is misleading.
+
+### Key files
+
+- [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
+- [CwSignalSnapshot.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalSnapshot.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-22 Fixture Evaluation Front-End Awareness
+
+- Promoted the new signal run-history metrics from raw debug numbers into the offline fixture evaluation layer.
+- `CwFixtureEvaluator` can now accept a `CwSignalSnapshot` alongside interpreter/QSO snapshots, and `CwFixtureEvaluationResult` stores a compact front-end history summary including:
+- final lock state
+- peak tone RMS
+- peak narrowband isolation
+- lock coverage across the run
+- best consecutive lock run
+- Practical effect:
+- fixture diagnostics can now distinguish between:
+- true front-end acquisition failure
+- cases where the front end had a healthy earlier lock but later drift showed up more in decoder/interpreter/QSO stages
+- `likely bottleneck` and `diagnostic notes` are now more context-aware, especially for noisy or end-of-run drop-lock scenarios.
+- The evaluation summary text also now prints a dedicated `Front-end history` line when these metrics are available.
+- Kept persistence compatibility simple:
+- older stored fixture evaluations still load through the legacy constructor path
+- new in-memory evaluations immediately benefit from the richer diagnostics without forcing a database schema migration
+
+### Key files
+
+- [CwFixtureEvaluator.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluator.java)
+- [CwFixtureEvaluationResult.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResult.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+- [CwFixtureEvaluationResultTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResultTest.java)
+
+## 2026-04-22 Front-End Quality Grade
+
+- Refined `CwFixtureEvaluationResult` one step further by collapsing the detailed front-end history into a short quality grade that is easier to scan in fixture history:
+- `GOOD`
+- `DROP`
+- `WEAK`
+- `MISS`
+- `NA`
+- Practical meaning:
+- `GOOD`: healthy lock retained through the evaluated end state
+- `DROP`: earlier healthy lock existed, but the run ended unlocked
+- `WEAK`: some acquisition happened, but it never looked comfortably stable
+- `MISS`: no convincing narrow-band lock formed
+- `NA`: no front-end history was attached
+- This grade is now included in:
+- compact fixture summaries used by recent-history UI
+- full evaluator summary text
+- Existing bottleneck logic remains, but the new grade makes it much faster to visually separate:
+- true front-end misses
+- late-run dropouts
+- non-front-end semantic/interpreter drift after a usable lock window
+
+### Key files
+
+- [CwFixtureEvaluationResult.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResult.java)
+- [CwFixtureEvaluationResultTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResultTest.java)
+
+## 2026-04-22 Fixture-Declared Front-End Expectations
+
+- Started turning `front-end quality` from a post-hoc diagnostic into an explicit part of selected fixture definitions.
+- `CwFixtureScenario` now supports an optional `expectedFrontEndQualityCode`, normalized like:
+- `GOOD`
+- `DROP`
+- `WEAK`
+- `MISS`
+- The Debug UI fixture description now shows this expected front-end grade when a scenario declares one.
+- The offline regression path now automatically checks declared front-end quality expectations for those scenarios and fails with a readable summary if the actual grade drifts.
+- Current first batch of fixtures with explicit front-end expectations focuses on the most useful signal-side baselines:
+- `noisy_report_exchange`
+- `nearby_interferer_directed_report`
+- `moderate_interferer_directed_report`
+- Practical effect:
+- we are no longer only saying “this fixture should decode”
+- we are also saying “this fixture’s front end should fail / drop / hold lock in this specific way”
+- This makes future signal-processor tuning much less ambiguous.
+
+### Key files
+
+- [CwFixtureScenario.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureScenario.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
 - [activity_input_debug.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_input_debug.xml)
 - [QsoStateMachine.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/qso/QsoStateMachine.java)
 - [QsoDraftSnapshot.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/qso/QsoDraftSnapshot.java)
@@ -1452,3 +1614,172 @@
 - [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
 - [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-22 Frame-Local Edge Refinement
+
+- Extended `CwSignalProcessor` one step beyond cross-frame threshold interpolation.
+- The processor now tries a conservative frame-local edge estimate when the current frame clearly looks like:
+- rising transition:
+- early samples are quiet and later samples are stably active
+- falling transition:
+- early samples are active and later samples are stably quiet
+- Implementation notes:
+- builds a lightweight absolute-amplitude envelope from the current frame
+- derives a local transition threshold from the frame's own envelope span
+- only trusts the frame-local estimate when the within-frame contrast is strong enough
+- otherwise falls back to the already-stable cross-frame interpolation path
+- Practical effect:
+- compact leading edges can now land inside the actual first active frame instead of being smeared backward/forward only by frame-level RMS
+- short trailing tails can preserve a more realistic silence-start point for later timing classification
+- Added focused JVM coverage for:
+- half-frame late onset should place `TONE_ON` inside that frame
+- short early tail should preserve a frame-local `TONE_OFF` edge instead of only collapsing at the next frame boundary
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
+- [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
+
+## 2026-04-22 Soft-Edge Fixture Support
+
+- Extended the offline fixture model so synthetic CW is no longer limited to ideal hard-edged keying.
+- `CwFixtureScenario` can now optionally describe:
+- rise ramp in milliseconds
+- fall ramp in milliseconds
+- `SyntheticFixtureRxAudioSource` now applies a smooth edge envelope to each tone segment when those values are present, which gives us a much closer approximation to:
+- softer audio-shaped edges
+- less idealized radio / audio path keying
+- transition frames that do not look like perfect square-wave on/off boundaries
+- Added a new offline regression baseline:
+- `soft_edge_compact_ack_closing_chain`
+- This keeps the familiar compact `R5NNTU73BK` semantic stress case, but renders it with:
+- soft rise/fall edges
+- light QSB
+- moderate timing irregularity
+- Current locked-in expectation:
+- no `RUN` / `SIG` collapse
+- completed-QSO semantics still survive
+- text/hint recovery stays usable even if exact text is not the goal
+- Added focused JVM coverage for:
+- fixture ramp configuration exposure
+- summary string includes edge-ramp description
+- soft-edge compact closing fixture stays in the non-catastrophic bucket end-to-end
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwFixtureScenario.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureScenario.java)
+- [SyntheticFixtureRxAudioSource.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/audio/SyntheticFixtureRxAudioSource.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+- [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
+
+## 2026-04-22 Tone-Drift Fixture Support
+
+- Extended the offline fixture model again so synthetic CW is no longer limited to a perfectly fixed target pitch.
+- `CwFixtureScenario` now supports:
+- total target-tone drift in Hz across the rendered waveform
+- timing-profile summary now includes that drift when present
+- `SyntheticFixtureRxAudioSource` now renders the target CW tone with a gradual instantaneous-frequency change across the full sample stream while keeping phase continuous.
+- This gives us a practical regression path for:
+- slow pitch drift
+- slight BFO / audio-path mismatch drift
+- a moving preferred-tone target that still stays within the current tracking window
+- Added a new fixture baseline:
+- `drifting_soft_edge_compact_ack_closing_chain`
+- This combines:
+- compact ack/closing traffic
+- soft keying edges
+- light QSB
+- gradual upward tone drift
+- Current locked-in expectation:
+- no `RUN` / `SIG` collapse
+- tracked tone remains near the preferred target region
+- completed-QSO semantics still survive
+- Added focused JVM coverage for:
+- drift configuration exposure in the fixture model
+- timing-profile summary includes tone drift
+- drifting soft-edge compact closing remains in the non-catastrophic offline bucket
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwFixtureScenario.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureScenario.java)
+- [SyntheticFixtureRxAudioSource.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/audio/SyntheticFixtureRxAudioSource.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+- [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
+
+## 2026-04-22 Debug UI Signal Observability Refresh
+
+- Promoted the newer front-end fixture details into the Debug UI so synthetic and later real-input experiments are easier to interpret without reading code or test logs.
+- `InputDebugActivity` now shows richer fixture profile detail for synthetic scenarios, including when present:
+- QSB depth and cycle
+- tone drift in Hz
+- rise/fall edge ramp duration
+- The signal section now also reports live tracking error:
+- `tracked tone - preferred tone`
+- This makes it much faster to tell whether a fixture is intentionally drifting, or whether the front-end is wandering away from the chosen CW pitch on its own.
+- Practical effect:
+- fixture-side realism and front-end tracking behavior are now visible in one screen
+- later microphone/debug work will have a clearer baseline for comparing:
+- synthetic drifting target
+- real audio drift / detune
+- operator-selected preferred tone
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+
+## 2026-04-22 Front-End Expectation Stabilization
+
+- Finished stabilizing the new fixture-declared `expectedFrontEndQualityCode` path after the first integration pass exposed constructor-shape mismatches in `CwFixtureScenario`.
+- Current explicitly asserted front-end baseline batch now includes both signal-stress and humanized timing fixtures that have been individually re-observed after the constructor cleanup:
+- `noisy_report_exchange`
+- `nearby_interferer_directed_report`
+- `moderate_interferer_directed_report`
+- `human_ragged_clarification_report`
+- `human_compact_ack_closing_chain`
+- `human_op_timing_full_qso`
+- `human_compact_de_closing_chain`
+- `human_compact_report_tail_callsign`
+- `human_compact_report_tail_followup`
+- `soft_edge_compact_ack_closing_chain`
+- `drifting_soft_edge_compact_ack_closing_chain`
+- `fully_glued_ack_closing_chain`
+- `compact_ack_report_tail_callsign`
+- Current observed locked-in front-end grade for the newly expanded humanized batch is:
+- `DROP`
+- Meaning:
+- these fixtures do achieve a usable earlier narrow-band lock window
+- but they should currently be expected to end unlocked after the full rendered run
+- Practical decision for now:
+- keep the expectation infrastructure enabled
+- keep Debug UI visibility enabled
+- keep regression assertion enabled
+- but continue avoiding bulk-declaring additional fixture grades until each one is observed and locked individually
+- Also expanded `CwFixtureScenario` constructor coverage for common no-interferer timing profiles, so later adding expectations to:
+- `human_*`
+- `soft_edge_*`
+- `drifting_*`
+- compact single-token closing / tail fixtures using the shortest single-message constructor
+- fixtures will not require another constructor cleanup round first
+- Re-verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest assembleDebug`
+
+### Key files
+
+- [CwFixtureScenario.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureScenario.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+- [CurrentProgress.md](/D:/Workshop/CWCN/CurrentProgress.md)

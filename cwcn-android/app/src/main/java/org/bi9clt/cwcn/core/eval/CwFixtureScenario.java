@@ -22,8 +22,11 @@ public final class CwFixtureScenario {
     private final int noiseAmplitude;
     private final double qsbDepth;
     private final int qsbCycleMs;
+    private final double toneDriftHz;
     private final double timingJitterDepth;
     private final double dotSwingDepth;
+    private final int riseRampMs;
+    private final int fallRampMs;
     private final List<PartTimingProfile> partTimingProfiles;
     private final int leadInMs;
     private final int tailMs;
@@ -33,7 +36,256 @@ public final class CwFixtureScenario {
     private final QsoPhase expectedPhase;
     private final String expectedRstSent;
     private final String expectedRstRcvd;
+    private final String expectedFrontEndQualityCode;
     private final String notes;
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int interfererToneFrequencyHz,
+            int interfererToneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double toneDriftHz,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                interfererToneFrequencyHz,
+                interfererToneAmplitude,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                null,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double toneDriftHz,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                0,
+                0,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int interfererToneFrequencyHz,
+            int interfererToneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                interfererToneFrequencyHz,
+                interfererToneAmplitude,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                0.0d,
+                timingJitterDepth,
+                dotSwingDepth,
+                0,
+                0,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int interfererToneFrequencyHz,
+            int interfererToneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double toneDriftHz,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
+        this.id = id;
+        this.displayName = displayName;
+        this.message = message;
+        this.messageParts = new ArrayList<>(messageParts);
+        this.interMessageGapMs = interMessageGapMs;
+        this.wpm = wpm;
+        this.toneFrequencyHz = toneFrequencyHz;
+        this.toneAmplitude = toneAmplitude;
+        this.interfererToneFrequencyHz = interfererToneFrequencyHz;
+        this.interfererToneAmplitude = interfererToneAmplitude;
+        this.noiseAmplitude = noiseAmplitude;
+        this.qsbDepth = qsbDepth;
+        this.qsbCycleMs = qsbCycleMs;
+        this.toneDriftHz = toneDriftHz;
+        this.timingJitterDepth = timingJitterDepth;
+        this.dotSwingDepth = dotSwingDepth;
+        this.riseRampMs = Math.max(0, riseRampMs);
+        this.fallRampMs = Math.max(0, fallRampMs);
+        this.partTimingProfiles = sanitizePartTimingProfiles(partTimingProfiles);
+        this.leadInMs = leadInMs;
+        this.tailMs = tailMs;
+        this.expectedNormalizedText = expectedNormalizedText;
+        this.expectedCallsigns = new ArrayList<>(expectedCallsigns);
+        this.expectedHints = new ArrayList<>(expectedHints);
+        this.expectedPhase = expectedPhase;
+        this.expectedRstSent = expectedRstSent;
+        this.expectedRstRcvd = expectedRstRcvd;
+        this.expectedFrontEndQualityCode = normalizeFrontEndQualityCode(expectedFrontEndQualityCode);
+        this.notes = notes;
+    }
 
     public CwFixtureScenario(
             String id,
@@ -62,31 +314,95 @@ public final class CwFixtureScenario {
             String expectedRstRcvd,
             String notes
     ) {
-        this.id = id;
-        this.displayName = displayName;
-        this.message = message;
-        this.messageParts = new ArrayList<>(messageParts);
-        this.interMessageGapMs = interMessageGapMs;
-        this.wpm = wpm;
-        this.toneFrequencyHz = toneFrequencyHz;
-        this.toneAmplitude = toneAmplitude;
-        this.interfererToneFrequencyHz = interfererToneFrequencyHz;
-        this.interfererToneAmplitude = interfererToneAmplitude;
-        this.noiseAmplitude = noiseAmplitude;
-        this.qsbDepth = qsbDepth;
-        this.qsbCycleMs = qsbCycleMs;
-        this.timingJitterDepth = timingJitterDepth;
-        this.dotSwingDepth = dotSwingDepth;
-        this.partTimingProfiles = sanitizePartTimingProfiles(partTimingProfiles);
-        this.leadInMs = leadInMs;
-        this.tailMs = tailMs;
-        this.expectedNormalizedText = expectedNormalizedText;
-        this.expectedCallsigns = new ArrayList<>(expectedCallsigns);
-        this.expectedHints = new ArrayList<>(expectedHints);
-        this.expectedPhase = expectedPhase;
-        this.expectedRstSent = expectedRstSent;
-        this.expectedRstRcvd = expectedRstRcvd;
-        this.notes = notes;
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                interfererToneFrequencyHz,
+                interfererToneAmplitude,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                0.0d,
+                timingJitterDepth,
+                dotSwingDepth,
+                0,
+                0,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                0.0d,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
     }
 
     public CwFixtureScenario(
@@ -128,8 +444,186 @@ public final class CwFixtureScenario {
                 noiseAmplitude,
                 qsbDepth,
                 qsbCycleMs,
+                0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
+                0,
+                0,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                timingJitterDepth,
+                dotSwingDepth,
+                0,
+                0,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double toneDriftHz,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                0,
+                0,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                0,
+                0,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                0.0d,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
                 partTimingProfiles,
                 leadInMs,
                 tailMs,
@@ -179,8 +673,11 @@ public final class CwFixtureScenario {
                 noiseAmplitude,
                 qsbDepth,
                 qsbCycleMs,
+                0.0d,
                 timingJitterDepth,
                 dotSwingDepth,
+                0,
+                0,
                 new ArrayList<>(),
                 leadInMs,
                 tailMs,
@@ -230,6 +727,9 @@ public final class CwFixtureScenario {
                 qsbCycleMs,
                 0.0d,
                 0.0d,
+                0.0d,
+                0,
+                0,
                 new ArrayList<>(),
                 leadInMs,
                 tailMs,
@@ -239,6 +739,60 @@ public final class CwFixtureScenario {
                 expectedPhase,
                 expectedRstSent,
                 expectedRstRcvd,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                0.0d,
+                0.0d,
+                0.0d,
+                0,
+                0,
+                new ArrayList<>(),
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
                 notes
         );
     }
@@ -277,6 +831,9 @@ public final class CwFixtureScenario {
                 qsbCycleMs,
                 0.0d,
                 0.0d,
+                0.0d,
+                0,
+                0,
                 new ArrayList<>(),
                 leadInMs,
                 tailMs,
@@ -286,6 +843,58 @@ public final class CwFixtureScenario {
                 expectedPhase,
                 expectedRstSent,
                 expectedRstRcvd,
+                notes
+        );
+    }
+
+    public CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                buildSinglePartMessageList(message),
+                DEFAULT_INTER_MESSAGE_GAP_MS,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                0.0d,
+                0.0d,
+                0.0d,
+                0,
+                0,
+                new ArrayList<>(),
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
                 notes
         );
     }
@@ -342,12 +951,24 @@ public final class CwFixtureScenario {
         return qsbCycleMs;
     }
 
+    public double toneDriftHz() {
+        return toneDriftHz;
+    }
+
     public double timingJitterDepth() {
         return timingJitterDepth;
     }
 
     public double dotSwingDepth() {
         return dotSwingDepth;
+    }
+
+    public int riseRampMs() {
+        return riseRampMs;
+    }
+
+    public int fallRampMs() {
+        return fallRampMs;
     }
 
     public List<PartTimingProfile> partTimingProfiles() {
@@ -393,6 +1014,10 @@ public final class CwFixtureScenario {
         return expectedRstRcvd;
     }
 
+    public String expectedFrontEndQualityCode() {
+        return expectedFrontEndQualityCode;
+    }
+
     public String notes() {
         return notes;
     }
@@ -404,6 +1029,12 @@ public final class CwFixtureScenario {
         }
         if (dotSwingDepth > 0.0d) {
             parts.add("global dot swing " + Math.round(dotSwingDepth * 100.0d) + "%");
+        }
+        if (Math.abs(toneDriftHz) > 0.0d) {
+            parts.add("tone drift " + trimDouble(toneDriftHz) + "Hz");
+        }
+        if (riseRampMs > 0 || fallRampMs > 0) {
+            parts.add("edge ramp " + riseRampMs + "/" + fallRampMs + "ms");
         }
         for (int index = 0; index < partTimingProfiles.size(); index++) {
             PartTimingProfile profile = partTimingProfiles.get(index);
@@ -439,6 +1070,20 @@ public final class CwFixtureScenario {
             sanitized.add(profile == null ? PartTimingProfile.defaultProfile() : profile);
         }
         return sanitized;
+    }
+
+    private static String trimDouble(double value) {
+        return String.format(Locale.US, "%.2f", value)
+                .replaceAll("0+$", "")
+                .replaceAll("\\.$", "");
+    }
+
+    private static String normalizeFrontEndQualityCode(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase(Locale.US);
+        return normalized.isEmpty() ? null : normalized;
     }
 
     public static final class PartTimingProfile {
@@ -595,9 +1240,7 @@ public final class CwFixtureScenario {
         }
 
         private static String trimDouble(double value) {
-            return String.format(Locale.US, "%.2f", value)
-                    .replaceAll("0+$", "")
-                    .replaceAll("\\.$", "");
+            return CwFixtureScenario.trimDouble(value);
         }
     }
 }
