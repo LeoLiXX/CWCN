@@ -2069,6 +2069,7 @@
 - Practical effect:
 - when a nearby interferer is trying to pull the tracker away, the UI can now say that retune pressure is building and show which frequency it is leaning toward
 - when lock is simply stable, the UI says so explicitly instead of making us infer it from coverage percentages alone
+- Added a focused signal regression check so snapshot-level observability now also verifies that a stable run exposes a growing current lock streak.
 - Verified with:
 - `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest --tests org.bi9clt.cwcn.core.eval.CwFrontEndHealthClassifierTest`
 - `.\gradlew.bat testDebugUnitTest assembleDebug`
@@ -2078,4 +2079,5 @@
 - [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
 - [CwSignalSnapshot.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalSnapshot.java)
 - [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
 - [CwFrontEndHealthClassifierTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifierTest.java)

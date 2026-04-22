@@ -216,6 +216,21 @@ public final class CwSignalProcessorTest {
     }
 
     @Test
+    public void snapshotExposesCurrentLockStreakDuringStableRun() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 10, 670.0d, 16000.0d);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue(snapshot.consecutiveLockedFrames() >= 4);
+        assertTrue(snapshot.maxConsecutiveLockedFrames() >= snapshot.consecutiveLockedFrames());
+        assertTrue(Math.abs(snapshot.pendingRetuneCandidateFrequencyHz() - snapshot.targetToneFrequencyHz()) <= 20);
+    }
+
+    @Test
     public void cleanToneRunKeepsToneActiveUnlockedRatioNearZero() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(650);
