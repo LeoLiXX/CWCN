@@ -68,6 +68,19 @@ public final class CwSignalProcessorTest {
     }
 
     @Test
+    public void strongerNearbyInWindowToneStillDoesNotBeatCloserPreferredCandidate() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 12, 670.0d, 15000.0d, 740.0d, 21000.0d);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue(Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
+    }
+
+    @Test
     public void continuousOutOfBandCarrierDoesNotFalseTriggerToneActivity() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(650);
@@ -111,6 +124,46 @@ public final class CwSignalProcessorTest {
         assertTrue(snapshot.targetToneLocked());
         assertTrue(Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
         assertTrue(snapshot.toneActiveUnlockedFrameRatio() <= 0.25d);
+    }
+
+    @Test
+    public void lockedTargetResistsPeriodicRetuneTowardFartherNearbyCarrier() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 4, 670.0d, 15000.0d);
+        processFrames(processor, 12, 670.0d, 15000.0d, 740.0d, 18000.0d);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.toneActive());
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue(Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
+    }
+
+    @Test
+    public void sweepingNearbyCarrierDoesNotImmediatelyHijackAcquisition() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        for (int frameIndex = 0; frameIndex < 12; frameIndex++) {
+            double sweepingFrequencyHz = 820.0d - (frameIndex * 10.0d);
+            AudioFrame frame = buildFrame(
+                    (8 + frameIndex) * frameDurationMs(),
+                    (8 + frameIndex) * FRAME_SIZE,
+                    670.0d,
+                    15000.0d,
+                    sweepingFrequencyHz,
+                    18000.0d
+            );
+            processor.process(frame);
+        }
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.toneActive());
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue(Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
     }
 
     @Test

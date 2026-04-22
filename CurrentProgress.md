@@ -1905,3 +1905,31 @@
 - [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
 - [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+
+## 2026-04-22 Wrong-Tone Acquisition Guardrails
+
+- Tightened `CwSignalProcessor` around a more specific real-world failure mode:
+- front-end lock may remain strong
+- but periodic retune can still get dragged onto a nearby stronger carrier instead of the intended CW tone
+- Two new guardrail layers now exist in the retune path:
+- stronger bias toward the user-selected preferred tone region
+- continuity bias toward the currently tracked tone when a usable lock already exists
+- Added a lightweight `candidate stability` gate:
+- a farther retune candidate does not immediately take over on first sight
+- it must stay stable across multiple retune scans before replacing the current track
+- This is specifically aimed at:
+- sweeping nearby interferers
+- drifting carriers that momentarily cross the local contrast neighborhood
+- short-lived strong wrong-tone candidates during active copy
+- Added focused JVM coverage for:
+- stronger nearby in-window tone still should not beat the closer preferred candidate at acquisition time
+- an already locked target should resist periodic retune drift toward a farther nearby carrier
+- a sweeping nearby carrier should not immediately hijack acquisition while crossing the scan window
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+### Key files
+
+- [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java)
+- [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
