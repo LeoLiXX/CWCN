@@ -389,6 +389,19 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                             .append(" Hz)");
                 }
             }
+            if (!scenario.additionalInterferers().isEmpty()) {
+                for (CwFixtureScenario.ContinuousInterfererProfile interferer : scenario.additionalInterferers()) {
+                    builder.append(", extra ")
+                            .append(interferer.toneFrequencyHz())
+                            .append(" Hz @ ")
+                            .append(interferer.toneAmplitude());
+                    if (Math.abs(interferer.toneDriftHz()) > 0.0d) {
+                        builder.append(" (drift ")
+                                .append(String.format(Locale.US, "%+.1f", interferer.toneDriftHz()))
+                                .append(" Hz)");
+                    }
+                }
+            }
             if (scenario.qsbDepth() > 0.0d) {
                 builder.append(", QSB ")
                         .append(Math.round(scenario.qsbDepth() * 100.0d))

@@ -102,6 +102,36 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
+    public void moderateDualInterfererFixtureStillAvoidsCatastrophicSignalCollapse() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("moderate_dual_interferer_directed_report");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertNotEquals(summary, "WRONG", result.frontEndQualityCode());
+        assertEquals(summary, "GOOD", result.frontEndQualityCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 3000.0d);
+        assertTrue(summary, result.textTokenRecall() >= 0.60d);
+        assertTrue(summary, result.qsoSemanticScore() >= 0.50d);
+    }
+
+    @Test
+    public void dualInterfererBoundaryFixtureCanExposeWrongToneTracking() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("dual_interferer_directed_report");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertEquals(summary, "TRK", result.likelyBottleneckCode());
+        assertEquals(summary, "WRONG", result.frontEndQualityCode());
+        assertTrue(summary, bundle.signalSnapshot.targetToneLocked());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) >= 40);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 8000.0d);
+    }
+
+    @Test
     public void sweepingBoundaryInterfererFixtureExposesWrongToneAcquisitionRisk() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("sweeping_boundary_interferer_directed_report");
         CwFixtureEvaluationResult result = bundle.result;

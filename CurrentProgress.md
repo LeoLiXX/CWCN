@@ -1166,6 +1166,39 @@
 - [CwInterpreter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/interpreter/CwInterpreter.java)
 - [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
 
+## 2026-04-22 Multi-Interferer Fixture Support
+
+- Extended the synthetic fixture model beyond a single continuous interferer so crowded-band stress can now include multiple simultaneous off-target carriers.
+- `CwFixtureScenario` now supports optional `additional interferers` while keeping all older single-interferer constructors intact.
+- `SyntheticFixtureRxAudioSource` now renders:
+- the original primary interferer path
+- plus any additional continuous interferers, each with its own frequency, amplitude, and optional drift
+- Debug UI selected-source summary now also shows those extra interferers, so live fixture replay is easier to interpret without opening code.
+- Added two new offline fixture tiers:
+- `moderate_dual_interferer_directed_report`
+- intentionally softer two-carrier baseline
+- currently lands in a usable `GOOD` front-end state with clean release, while downstream text/hint loss remains the more visible stress point
+- `dual_interferer_directed_report`
+- intentionally stronger crowded-band boundary
+- currently exposes explicit `WRONG / TRK` wrong-tone acquisition risk under two-carrier pressure
+- Practical value:
+- we now have a better synthetic approximation of real crowded CW sub-band conditions
+- and we can separate:
+- a dual-carrier baseline that should still be workable
+- from a dual-carrier boundary that is allowed to demonstrate tracker failure
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwFixtureScenario.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureScenario.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [SyntheticFixtureRxAudioSource.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/audio/SyntheticFixtureRxAudioSource.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
 ## 2026-04-22 Partial Callsign Recovery v2
 
 - Extended interpreter memory from one generic remembered primary callsign into role-aware contextual memory:

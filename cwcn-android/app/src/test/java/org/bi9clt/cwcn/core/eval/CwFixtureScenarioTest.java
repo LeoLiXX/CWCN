@@ -229,6 +229,51 @@ public final class CwFixtureScenarioTest {
     }
 
     @Test
+    public void additionalInterferersAreExposedAndIncludedInSummary() {
+        CwFixtureScenario scenario = new CwFixtureScenario(
+                "test",
+                "Test",
+                "CQ CQ",
+                Arrays.asList("CQ CQ"),
+                1800,
+                18,
+                650,
+                18000,
+                910,
+                9000,
+                500,
+                0.08d,
+                2000,
+                0.0d,
+                -120.0d,
+                0.10d,
+                0.04d,
+                5,
+                7,
+                Collections.singletonList(CwFixtureScenario.PartTimingProfile.defaultProfile()),
+                250,
+                450,
+                "CQ CQ",
+                Collections.singletonList("BI9CLT"),
+                Collections.singletonList("CQ / calling flow"),
+                QsoPhase.CALLING_CQ,
+                null,
+                null,
+                "test"
+        ).withAdditionalInterferers(Arrays.asList(
+                new CwFixtureScenario.ContinuousInterfererProfile(560, 2200),
+                new CwFixtureScenario.ContinuousInterfererProfile(810, 2600, -35.0d)
+        ));
+
+        assertEquals(2, scenario.additionalInterferers().size());
+        assertEquals(560, scenario.additionalInterferers().get(0).toneFrequencyHz());
+        assertEquals(2600, scenario.additionalInterferers().get(1).toneAmplitude());
+        assertEquals(-35.0d, scenario.additionalInterferers().get(1).toneDriftHz(), 0.0001d);
+        assertTrue(scenario.timingProfileSummary().contains("extra interferer 560Hz @ 2200"));
+        assertTrue(scenario.timingProfileSummary().contains("extra interferer 810Hz @ 2600 drift -35Hz"));
+    }
+
+    @Test
     public void expectedFrontEndQualityCodeIsNormalizedAndExposed() {
         CwFixtureScenario scenario = new CwFixtureScenario(
                 "test",

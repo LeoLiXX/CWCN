@@ -3,6 +3,7 @@ package org.bi9clt.cwcn.core.eval;
 import org.bi9clt.cwcn.core.qso.QsoPhase;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -19,6 +20,7 @@ public final class CwFixtureScenario {
     private final int toneAmplitude;
     private final int interfererToneFrequencyHz;
     private final int interfererToneAmplitude;
+    private final List<ContinuousInterfererProfile> additionalInterferers;
     private final int noiseAmplitude;
     private final double qsbDepth;
     private final int qsbCycleMs;
@@ -326,6 +328,74 @@ public final class CwFixtureScenario {
             String expectedFrontEndQualityCode,
             String notes
     ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                interfererToneFrequencyHz,
+                interfererToneAmplitude,
+                Collections.emptyList(),
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                interfererToneDriftHz,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
+    }
+
+    private CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int interfererToneFrequencyHz,
+            int interfererToneAmplitude,
+            List<ContinuousInterfererProfile> additionalInterferers,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double toneDriftHz,
+            double interfererToneDriftHz,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
         this.id = id;
         this.displayName = displayName;
         this.message = message;
@@ -336,6 +406,7 @@ public final class CwFixtureScenario {
         this.toneAmplitude = toneAmplitude;
         this.interfererToneFrequencyHz = interfererToneFrequencyHz;
         this.interfererToneAmplitude = interfererToneAmplitude;
+        this.additionalInterferers = sanitizeAdditionalInterferers(additionalInterferers);
         this.noiseAmplitude = noiseAmplitude;
         this.qsbDepth = qsbDepth;
         this.qsbCycleMs = qsbCycleMs;
@@ -1010,6 +1081,10 @@ public final class CwFixtureScenario {
         return interfererToneAmplitude;
     }
 
+    public List<ContinuousInterfererProfile> additionalInterferers() {
+        return new ArrayList<>(additionalInterferers);
+    }
+
     public int noiseAmplitude() {
         return noiseAmplitude;
     }
@@ -1028,6 +1103,42 @@ public final class CwFixtureScenario {
 
     public double interfererToneDriftHz() {
         return interfererToneDriftHz;
+    }
+
+    public CwFixtureScenario withAdditionalInterferers(List<ContinuousInterfererProfile> interferers) {
+        return new CwFixtureScenario(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                interfererToneFrequencyHz,
+                interfererToneAmplitude,
+                interferers,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                interfererToneDriftHz,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
     }
 
     public double timingJitterDepth() {
@@ -1111,6 +1222,9 @@ public final class CwFixtureScenario {
         if (Math.abs(interfererToneDriftHz) > 0.0d) {
             parts.add("interferer drift " + trimDouble(interfererToneDriftHz) + "Hz");
         }
+        for (ContinuousInterfererProfile interferer : additionalInterferers) {
+            parts.add("extra interferer " + interferer.summaryLabel());
+        }
         if (riseRampMs > 0 || fallRampMs > 0) {
             parts.add("edge ramp " + riseRampMs + "/" + fallRampMs + "ms");
         }
@@ -1150,6 +1264,25 @@ public final class CwFixtureScenario {
         return sanitized;
     }
 
+    private static List<ContinuousInterfererProfile> sanitizeAdditionalInterferers(
+            List<ContinuousInterfererProfile> interferers
+    ) {
+        ArrayList<ContinuousInterfererProfile> sanitized = new ArrayList<>();
+        if (interferers == null) {
+            return sanitized;
+        }
+        for (ContinuousInterfererProfile interferer : interferers) {
+            if (interferer == null) {
+                continue;
+            }
+            if (interferer.toneFrequencyHz() <= 0 || interferer.toneAmplitude() <= 0) {
+                continue;
+            }
+            sanitized.add(interferer);
+        }
+        return sanitized;
+    }
+
     private static String trimDouble(double value) {
         return String.format(Locale.US, "%.2f", value)
                 .replaceAll("0+$", "")
@@ -1162,6 +1295,47 @@ public final class CwFixtureScenario {
         }
         String normalized = value.trim().toUpperCase(Locale.US);
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    public static final class ContinuousInterfererProfile {
+        private final int toneFrequencyHz;
+        private final int toneAmplitude;
+        private final double toneDriftHz;
+
+        public ContinuousInterfererProfile(int toneFrequencyHz, int toneAmplitude) {
+            this(toneFrequencyHz, toneAmplitude, 0.0d);
+        }
+
+        public ContinuousInterfererProfile(int toneFrequencyHz, int toneAmplitude, double toneDriftHz) {
+            this.toneFrequencyHz = toneFrequencyHz;
+            this.toneAmplitude = toneAmplitude;
+            this.toneDriftHz = toneDriftHz;
+        }
+
+        public int toneFrequencyHz() {
+            return toneFrequencyHz;
+        }
+
+        public int toneAmplitude() {
+            return toneAmplitude;
+        }
+
+        public double toneDriftHz() {
+            return toneDriftHz;
+        }
+
+        public String summaryLabel() {
+            StringBuilder builder = new StringBuilder()
+                    .append(toneFrequencyHz)
+                    .append("Hz @ ")
+                    .append(toneAmplitude);
+            if (Math.abs(toneDriftHz) > 0.0d) {
+                builder.append(" drift ")
+                        .append(trimDouble(toneDriftHz))
+                        .append("Hz");
+            }
+            return builder.toString();
+        }
     }
 
     public static final class PartTimingProfile {

@@ -149,6 +149,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
 
     private short[] renderWaveform(CwFixtureScenario scenario) {
         List<Segment> segments = buildSegments(scenario);
+        List<CwFixtureScenario.ContinuousInterfererProfile> interferers = buildContinuousInterferers(scenario);
         int totalSamples = 0;
         for (Segment segment : segments) {
             totalSamples += segment.sampleCount;
@@ -156,7 +157,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         short[] waveform = new short[totalSamples];
         Random random = new Random(scenario.id().hashCode());
         double tonePhase = 0.0d;
-        double interfererPhase = 0.0d;
+        double[] interfererPhases = new double[interferers.size()];
         int absoluteIndex = 0;
         for (Segment segment : segments) {
             for (int i = 0; i < segment.sampleCount; i++) {
@@ -172,18 +173,26 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
                             * qsbScale;
                 }
                 double interfererComponent = 0.0d;
-                double interfererFrequencyHz = instantaneousInterfererFrequencyHz(scenario, absoluteIndex, totalSamples);
-                double interfererPhaseStep = 2.0d * Math.PI * interfererFrequencyHz / SAMPLE_RATE_HZ;
-                if (scenario.interfererToneAmplitude() > 0 && interfererPhaseStep > 0.0d) {
-                    interfererComponent = Math.sin(interfererPhase)
-                            * scenario.interfererToneAmplitude();
+                for (int interfererIndex = 0; interfererIndex < interferers.size(); interfererIndex++) {
+                    CwFixtureScenario.ContinuousInterfererProfile interferer = interferers.get(interfererIndex);
+                    double interfererFrequencyHz = instantaneousInterfererFrequencyHz(
+                            interferer,
+                            absoluteIndex,
+                            totalSamples
+                    );
+                    double interfererPhaseStep = 2.0d * Math.PI * interfererFrequencyHz / SAMPLE_RATE_HZ;
+                    if (interfererPhaseStep <= 0.0d) {
+                        continue;
+                    }
+                    interfererComponent += Math.sin(interfererPhases[interfererIndex])
+                            * interferer.toneAmplitude();
+                    interfererPhases[interfererIndex] += interfererPhaseStep;
                 }
                 double noiseComponent = (random.nextDouble() * 2.0d - 1.0d) * scenario.noiseAmplitude();
                 waveform[absoluteIndex] = (short) clampToPcm16(Math.round(
                         toneComponent + interfererComponent + noiseComponent
                 ));
                 tonePhase += tonePhaseStep;
-                interfererPhase += interfererPhaseStep;
                 absoluteIndex += 1;
             }
         }
@@ -518,11 +527,43 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         if (scenario.interfererToneFrequencyHz() <= 0) {
             return 0.0d;
         }
-        if (Math.abs(scenario.interfererToneDriftHz()) < 0.0001d || totalSamples <= 1) {
-            return scenario.interfererToneFrequencyHz();
+        return instantaneousInterfererFrequencyHz(
+                new CwFixtureScenario.ContinuousInterfererProfile(
+                        scenario.interfererToneFrequencyHz(),
+                        scenario.interfererToneAmplitude(),
+                        scenario.interfererToneDriftHz()
+                ),
+                sampleIndex,
+                totalSamples
+        );
+    }
+
+    private double instantaneousInterfererFrequencyHz(
+            CwFixtureScenario.ContinuousInterfererProfile interferer,
+            int sampleIndex,
+            int totalSamples
+    ) {
+        if (interferer == null || interferer.toneFrequencyHz() <= 0) {
+            return 0.0d;
+        }
+        if (Math.abs(interferer.toneDriftHz()) < 0.0001d || totalSamples <= 1) {
+            return interferer.toneFrequencyHz();
         }
         double progress = Math.max(0.0d, Math.min(1.0d, sampleIndex / (double) (totalSamples - 1)));
-        return Math.max(1.0d, scenario.interfererToneFrequencyHz() + (scenario.interfererToneDriftHz() * progress));
+        return Math.max(1.0d, interferer.toneFrequencyHz() + (interferer.toneDriftHz() * progress));
+    }
+
+    private List<CwFixtureScenario.ContinuousInterfererProfile> buildContinuousInterferers(CwFixtureScenario scenario) {
+        ArrayList<CwFixtureScenario.ContinuousInterfererProfile> interferers = new ArrayList<>();
+        if (scenario.interfererToneAmplitude() > 0 && scenario.interfererToneFrequencyHz() > 0) {
+            interferers.add(new CwFixtureScenario.ContinuousInterfererProfile(
+                    scenario.interfererToneFrequencyHz(),
+                    scenario.interfererToneAmplitude(),
+                    scenario.interfererToneDriftHz()
+            ));
+        }
+        interferers.addAll(scenario.additionalInterferers());
+        return interferers;
     }
 
     private double toneEdgeScale(CwFixtureScenario scenario, int segmentSampleCount, int segmentSampleIndex) {

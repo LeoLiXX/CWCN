@@ -298,6 +298,76 @@ public final class CwFixtureLibrary {
                     "Exercises a moderate nearby interferer baseline that should remain decodable once the front-end narrows detection around the target tone."
             ),
             new CwFixtureScenario(
+                    "moderate_dual_interferer_directed_report",
+                    "Moderate Dual Interferer Report",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ UR 5NN BK"),
+                    1800,
+                    19,
+                    670,
+                    17800,
+                    930,
+                    1800,
+                    140,
+                    0.03d,
+                    2300,
+                    0.0d,
+                    0.0d,
+                    Collections.singletonList(PartTimingProfile.defaultProfile()),
+                    250,
+                    450,
+                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    Collections.singletonList("BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Directed report to called station",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    null,
+                    "599",
+                    "Exercises a softer two-carrier baseline with one nearby interferer plus a weaker drifting off-target carrier."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(470, 500),
+                    new CwFixtureScenario.ContinuousInterfererProfile(810, 700, -10.0d)
+            )),
+            new CwFixtureScenario(
+                    "dual_interferer_directed_report",
+                    "Dual Interferer Boundary Report",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
+                    Arrays.asList("BI9CLT DE BG7YOZ UR 5NN BK"),
+                    1800,
+                    19,
+                    670,
+                    17800,
+                    930,
+                    3200,
+                    180,
+                    0.03d,
+                    2300,
+                    0.0d,
+                    0.0d,
+                    Collections.singletonList(PartTimingProfile.defaultProfile()),
+                    250,
+                    450,
+                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    Collections.singletonList("BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Directed report to called station",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    null,
+                    "599",
+                    "Exercises a stronger two-carrier crowded-band boundary where a nearby interferer plus a drifting secondary carrier can pull the tracker onto the wrong tone."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(560, 2200),
+                    new CwFixtureScenario.ContinuousInterfererProfile(810, 2600, -35.0d)
+            )),
+            new CwFixtureScenario(
                     "drifting_nearby_interferer_directed_report",
                     "Drifting Nearby Interferer Report",
                     "BI9CLT DE BG7YOZ UR 5NN BK",
