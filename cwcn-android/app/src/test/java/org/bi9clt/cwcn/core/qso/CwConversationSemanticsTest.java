@@ -144,6 +144,55 @@ public final class CwConversationSemanticsTest {
     }
 
     @Test
+    public void damagedDirectedReportResidueStillRecoversReceivedReportAndHandoff() {
+        QsoDraftSnapshot snapshot = runConversation("BI9CLT DE BG7YOZ UR?NN B");
+
+        assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI9CLT", snapshot.stationCallsignUsed());
+        assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
+        assertEquals("599", snapshot.rstRcvdCandidate());
+        assertTrue(snapshot.hints().contains("Directed report to called station"));
+        assertTrue(snapshot.hints().contains("Turn handoff / over"));
+    }
+
+    @Test
+    public void damagedCompactReportTailStillRecoversReceivedReportAndHandoff() {
+        QsoDraftSnapshot snapshot = runConversation("BI9CLT DE BG7YOZ UR 5NNEB");
+
+        assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI9CLT", snapshot.stationCallsignUsed());
+        assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
+        assertEquals("599", snapshot.rstRcvdCandidate());
+        assertTrue(snapshot.hints().contains("Directed report to called station"));
+        assertTrue(snapshot.hints().contains("Turn handoff / over"));
+    }
+
+    @Test
+    public void damagedSeparatedReportAndControlResidueStillRecoversReceivedReport() {
+        QsoDraftSnapshot snapshot = runConversation("BI9CLT DE BG7YOZ UR ?NN EB");
+
+        assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI9CLT", snapshot.stationCallsignUsed());
+        assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
+        assertEquals("599", snapshot.rstRcvdCandidate());
+        assertTrue(snapshot.hints().contains("Directed report to called station"));
+        assertTrue(snapshot.hints().contains("Turn handoff / over"));
+    }
+
+    @Test
+    public void damagedAckReportTailStillRecoversSentReportAndHandoff() {
+        QsoDraftSnapshot snapshot = runConversation("BI9CLT DE BG7YOZ R?NNB");
+
+        assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI9CLT", snapshot.stationCallsignUsed());
+        assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
+        assertEquals("599", snapshot.rstSentCandidate());
+        assertNull(snapshot.rstRcvdCandidate());
+        assertTrue(snapshot.hints().contains("Report acknowledgement / return report"));
+        assertTrue(snapshot.hints().contains("Turn handoff / over"));
+    }
+
+    @Test
     public void qrzDeCallsignChainStillCountsAsCallingFlow() {
         QsoDraftSnapshot snapshot = runConversation("QRZDEBG7YOZ K");
 

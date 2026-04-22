@@ -12,6 +12,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 public final class CwInterpreter {
+    private static final List<String> REPORT_TOKEN_VARIANTS = Arrays.asList("5NN", "599", "ENN");
+    private static final List<String> CONTROL_TOKEN_VARIANTS = Arrays.asList("BK", "KN", "K");
     private static final List<String> COMPOUND_KEYWORDS = Arrays.asList(
             "CALLSIGN", "CALL", "QRZ", "CQ", "DE", "5NN", "ENN", "599", "AGN", "PSE", "PLS", "TNX", "TU", "UR", "BK", "KN", "73"
     );
@@ -86,7 +88,7 @@ public final class CwInterpreter {
                     continue;
                 }
 
-                String normalized = normalizeToken(rawPart);
+                String normalized = normalizeToken(rawPart, rawParts, index);
                 CwInterpretedToken.Type type = classifyToken(rawPart, normalized, rawParts, index);
                 parsedTokens.add(new CwInterpretedToken(rawPart, normalized, type));
                 normalizedParts.add(normalized);
@@ -196,6 +198,21 @@ public final class CwInterpreter {
         }
     }
 
+    private String normalizeToken(String rawToken, List<String> rawParts, int index) {
+        String normalizedToken = normalizeToken(rawToken);
+        if (!normalizedToken.equals(rawToken)) {
+            return normalizedToken;
+        }
+        if (isLikelyDamagedReportToken(rawToken) && isReportResidueContext(rawParts, index)) {
+            return "599";
+        }
+        String damagedControlNormalization = normalizeDamagedControlToken(rawToken, rawParts, index);
+        if (damagedControlNormalization != null) {
+            return damagedControlNormalization;
+        }
+        return normalizedToken;
+    }
+
     private CwInterpretedToken.Type classifyToken(
             String rawToken,
             String normalizedToken,
@@ -292,10 +309,93 @@ public final class CwInterpreter {
                 || "73".equals(next);
     }
 
+    private boolean isControlResidueContext(List<String> normalizedParts, int index) {
+        String previousRaw = index > 0 ? normalizedParts.get(index - 1) : "";
+        String nextRaw = index + 1 < normalizedParts.size() ? normalizedParts.get(index + 1) : "";
+        String previous = normalizeToken(previousRaw);
+        String next = normalizeToken(nextRaw);
+        return "599".equals(previous)
+                || "UR".equals(previous)
+                || "R".equals(previous)
+                || isLikelyDamagedReportToken(previousRaw)
+                || "THANKS".equals(previous)
+                || "73".equals(previous)
+                || "THANKS".equals(next)
+                || "73".equals(next)
+                || "BK".equals(next)
+                || "KN".equals(next)
+                || "K".equals(next)
+                || bestEffortControlNormalization(nextRaw) != null;
+    }
+
+    private boolean matchesFuzzyToken(String rawToken, String canonicalToken, int maxMismatches) {
+        if (rawToken == null || canonicalToken == null || rawToken.length() != canonicalToken.length()) {
+            return false;
+        }
+        int mismatches = 0;
+        for (int index = 0; index < rawToken.length(); index++) {
+            char rawChar = rawToken.charAt(index);
+            char canonicalChar = canonicalToken.charAt(index);
+            if (rawChar == canonicalChar || rawChar == '?') {
+                continue;
+            }
+            mismatches += 1;
+            if (mismatches > maxMismatches) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private boolean isLikelyControlResidueToken(String normalizedToken) {
         return matchesControlResidue(normalizedToken, "BK")
                 || matchesControlResidue(normalizedToken, "KN")
                 || matchesControlResidue(normalizedToken, "K");
+    }
+
+    private String normalizeDamagedControlToken(String rawToken, List<String> rawParts, int index) {
+        if (rawToken == null || rawToken.isEmpty() || !isControlResidueContext(rawParts, index)) {
+            return null;
+        }
+        return bestEffortControlNormalization(rawToken);
+    }
+
+    private boolean isLikelyDamagedReportToken(String token) {
+        if (token == null || token.length() != 3 || !token.matches("[59EN?]{3}")) {
+            return false;
+        }
+        for (String canonicalToken : REPORT_TOKEN_VARIANTS) {
+            if (matchesFuzzyToken(token, canonicalToken, 1)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String bestEffortControlNormalization(String token) {
+        if (!isPotentialControlResidueToken(token)) {
+            return null;
+        }
+        if ("B".equals(token) || "?".equals(token)) {
+            return "BK";
+        }
+        if (token.length() == 2 && token.endsWith("B")) {
+            return "BK";
+        }
+        for (String canonicalToken : CONTROL_TOKEN_VARIANTS) {
+            int allowedMismatches = canonicalToken.length() == 1 ? 0 : 1;
+            if (matchesFuzzyToken(token, canonicalToken, allowedMismatches)) {
+                return canonicalToken;
+            }
+        }
+        return null;
+    }
+
+    private boolean isPotentialControlResidueToken(String token) {
+        return token != null
+                && !token.isEmpty()
+                && token.length() <= 2
+                && token.matches("[BKEN?]+");
     }
 
     private boolean matchesControlResidue(String token, String controlToken) {
@@ -1331,6 +1431,10 @@ public final class CwInterpreter {
         if (ackChainSplit != null) {
             return ackChainSplit;
         }
+        List<String> fuzzyShortChainSplit = splitFuzzyShortChainToken(token);
+        if (fuzzyShortChainSplit != null) {
+            return fuzzyShortChainSplit;
+        }
         if (isRepeatedKeywordRun(token, "CQ")) {
             ArrayList<String> repeated = new ArrayList<>();
             appendRepeatedToken(repeated, "CQ", token.length() / 2);
@@ -1343,6 +1447,70 @@ public final class CwInterpreter {
         }
 
         return splitKeywordBridgedToken(token);
+    }
+
+    private List<String> splitFuzzyShortChainToken(String token) {
+        if (token == null || token.length() < 3) {
+            return null;
+        }
+        if (token.startsWith("UR") && token.length() > 2) {
+            List<String> tailParts = splitFuzzyReportControlTail(token.substring(2));
+            if (tailParts != null && !tailParts.isEmpty()) {
+                ArrayList<String> result = new ArrayList<>();
+                result.add("UR");
+                result.addAll(tailParts);
+                return result;
+            }
+        }
+        if (token.startsWith("R") && token.length() > 1) {
+            List<String> tailParts = splitFuzzyReportControlTail(token.substring(1));
+            if (tailParts != null && !tailParts.isEmpty()) {
+                ArrayList<String> result = new ArrayList<>();
+                result.add("R");
+                result.addAll(tailParts);
+                return result;
+            }
+        }
+        List<String> tailParts = splitFuzzyReportControlTail(token);
+        if (tailParts != null && tailParts.size() >= 2) {
+            return tailParts;
+        }
+        return null;
+    }
+
+    private List<String> splitFuzzyReportControlTail(String token) {
+        if (token == null || token.isEmpty()) {
+            return null;
+        }
+        ArrayList<String> result = new ArrayList<>();
+        int index = 0;
+        while (index < token.length()) {
+            int remaining = token.length() - index;
+            if (remaining >= 3) {
+                String reportCandidate = token.substring(index, index + 3);
+                if (isLikelyDamagedReportToken(reportCandidate) || REPORT_TOKEN_VARIANTS.contains(reportCandidate)) {
+                    result.add(reportCandidate);
+                    index += 3;
+                    continue;
+                }
+            }
+            if (remaining >= 2) {
+                String controlCandidate = token.substring(index, index + 2);
+                if (bestEffortControlNormalization(controlCandidate) != null) {
+                    result.add(controlCandidate);
+                    index += 2;
+                    continue;
+                }
+            }
+            String controlCandidate = token.substring(index, index + 1);
+            if (bestEffortControlNormalization(controlCandidate) != null) {
+                result.add(controlCandidate);
+                index += 1;
+                continue;
+            }
+            return null;
+        }
+        return result.isEmpty() ? null : result;
     }
 
     private List<String> splitAckCompoundToken(String token) {

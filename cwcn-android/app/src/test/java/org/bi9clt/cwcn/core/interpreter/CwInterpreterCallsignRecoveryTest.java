@@ -210,6 +210,45 @@ public final class CwInterpreterCallsignRecoveryTest {
     }
 
     @Test
+    public void damagedDirectedReportResidueStillNormalizesIntoReportAndHandoffHints() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR?NN B");
+
+        assertTrue(snapshot.normalizedText().contains("UR 599 BK"));
+        assertTrue(snapshot.phraseHints().contains("Report exchange"));
+        assertTrue(snapshot.phraseHints().contains("Directed report to called station"));
+        assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
+    }
+
+    @Test
+    public void damagedCompactReportTailStillNormalizesIntoReportAndHandoffHints() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR 5NNEB");
+
+        assertTrue(snapshot.normalizedText().contains("UR 599 BK"));
+        assertTrue(snapshot.phraseHints().contains("Report exchange"));
+        assertTrue(snapshot.phraseHints().contains("Directed report to called station"));
+        assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
+    }
+
+    @Test
+    public void damagedSeparatedReportAndControlResidueStillNormalizeInContext() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR ?NN EB");
+
+        assertTrue(snapshot.normalizedText().contains("UR 599 BK"));
+        assertTrue(snapshot.phraseHints().contains("Report exchange"));
+        assertTrue(snapshot.phraseHints().contains("Directed report to called station"));
+        assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
+    }
+
+    @Test
+    public void damagedAckReportTailStillNormalizesIntoSentReportAndHandoffHints() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ R?NNB");
+
+        assertTrue(snapshot.normalizedText().contains("R 599 BK"));
+        assertTrue(snapshot.phraseHints().contains("Report acknowledgement / return report"));
+        assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
+    }
+
+    @Test
     public void unknownLeadingEdgeBeforeDeStillRestoresStationIdentificationContext() {
         CwInterpreterSnapshot snapshot = runSequence(CwDecoder.UNKNOWN_CHARACTER + "DE BG7YOZ R5NNTU73B");
 

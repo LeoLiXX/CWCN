@@ -302,6 +302,37 @@
 
 - Extended `CwSignalProcessor` again so Debug UI and offline regression can inspect not only the latest frame, but also the best front-end state reached during the current run.
 - New run-history signal stats now include:
+
+## 2026-04-23 Damaged Short Report / Control Recovery
+
+- Hardened `CwInterpreter` so short damaged CW report/control chains can still normalize correctly without polluting partial callsign handling.
+- The normalization and split logic now share the same conservative control-residue recovery path, instead of using looser fuzzy matching in one place and stricter context logic in another.
+- This specifically improves compact or slightly broken report exchanges such as:
+- `UR?NN B`
+- `UR 5NNEB`
+- `UR ?NN EB`
+- `R?NNB`
+- Practical effect:
+- `?NN / 5NN / ENN`-style damaged report residues can still converge to `599` in report context
+- short control residues like `B / ? / EB` can still converge to `BK` in control context
+- existing uncertain partial callsign flows like `H??Z AGN PSE K` remain preserved and are no longer mis-split as control tokens
+- Added targeted interpreter + QSO semantics regression coverage for the new damaged short-chain cases.
+- Wider verification also stayed green:
+- targeted interpreter / QSO tests
+- `CwFixturePipelineRegressionTest`
+- full `testDebugUnitTest assembleDebug`
+
+### Key files
+
+- [CwInterpreter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/interpreter/CwInterpreter.java)
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+- [CwConversationSemanticsTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/qso/CwConversationSemanticsTest.java)
+
+### Suggested next steps
+
+1. Continue extending polluted-report fixtures toward more realistic hand-key/QSB timing irregularity rather than only token-level corruption.
+2. Add a few more medium-frequency damaged exchange cases around `AGN / PSE / CALLSIGN AGAIN` mixed with uncertain callsigns.
+3. Start exposing some of this recovery confidence in UI so operator review can distinguish exact copy from best-effort normalization.
 - `peak tone RMS`
 - `peak narrowband isolation`
 - `locked frame count / ratio`
