@@ -259,6 +259,50 @@ public final class CwFixturePipelineRegressionTest {
         assertTrue(summary, result.textTokenRecall() >= 0.50d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertNotEquals(summary, "NONE", result.recoveryPressureCode());
+        assertTrue(summary, result.normalizedTokenPairs().contains("5NN->599"));
+    }
+
+    @Test
+    public void humanDamagedReportResidueFixtureStillRecoversCoreDirectedReportSemantics() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_damaged_report_residue_exchange");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 1.0d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertEquals(summary, "HIGH", result.recoveryPressureCode());
+        assertEquals(summary, "OK", result.likelyBottleneckCode());
+        assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+        assertTrue(summary, result.normalizedTokenPairs().contains("?NN->599"));
+        assertTrue(summary, result.normalizedTokenPairs().contains("B->BK"));
+    }
+
+    @Test
+    public void humanDamagedAckReportFixtureStillRecoversCoreSentReportSemantics() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_damaged_ack_report_exchange");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 1.0d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertEquals(summary, "HIGH", result.recoveryPressureCode());
+        assertEquals(summary, "OK", result.likelyBottleneckCode());
+        assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+        assertTrue(summary, result.normalizedTokenPairs().contains("?NN->599"));
+        assertTrue(summary, result.normalizedTokenPairs().contains("B->BK"));
     }
 
     @Test
@@ -396,7 +440,9 @@ public final class CwFixturePipelineRegressionTest {
         QsoStateMachine qsoStateMachine = new QsoStateMachine();
 
         List<AudioFrame> frames = source.renderFramesForTesting(scenario);
+        AudioFrame lastFrame = null;
         for (AudioFrame frame : frames) {
+            lastFrame = frame;
             List<CwToneEvent> toneEvents = signalProcessor.process(frame);
             for (CwToneEvent toneEvent : toneEvents) {
                 List<CwTimingEvent> timingEvents = timingModel.process(toneEvent);
@@ -406,6 +452,21 @@ public final class CwFixturePipelineRegressionTest {
                         interpreter.process(decodeEvent);
                         qsoStateMachine.process(interpreter.snapshot(), decodeEvent.timestampMs());
                     }
+                }
+            }
+        }
+        if (lastFrame != null) {
+            long frameDurationMs = Math.max(
+                    1L,
+                    Math.round(lastFrame.sampleCount() * 1000.0d / lastFrame.sampleRateHz())
+            );
+            long flushTimestampMs = lastFrame.capturedAtMs() + frameDurationMs;
+            List<CwTimingEvent> timingEvents = timingModel.flushPendingGap(flushTimestampMs);
+            for (CwTimingEvent timingEvent : timingEvents) {
+                List<CwDecodeEvent> decodeEvents = decoder.process(timingEvent);
+                for (CwDecodeEvent decodeEvent : decodeEvents) {
+                    interpreter.process(decodeEvent);
+                    qsoStateMachine.process(interpreter.snapshot(), decodeEvent.timestampMs());
                 }
             }
         }

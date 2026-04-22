@@ -4,6 +4,8 @@ import org.bi9clt.cwcn.core.decoder.CwDecodeEvent;
 import org.bi9clt.cwcn.core.decoder.CwDecoder;
 import org.junit.Test;
 
+import java.util.List;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -246,6 +248,52 @@ public final class CwInterpreterCallsignRecoveryTest {
         assertTrue(snapshot.normalizedText().contains("R 599 BK"));
         assertTrue(snapshot.phraseHints().contains("Report acknowledgement / return report"));
         assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
+    }
+
+    @Test
+    public void deTailContaminationDoesNotReplaceCleanAddressedCallsignCandidate() {
+        CwInterpreter interpreter = new CwInterpreter();
+
+        interpreter.process(decode("BI9CLTD DE BG7YOZ UR?NN B", 1000L));
+
+        CwInterpreterSnapshot snapshot = interpreter.snapshot();
+        assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
+        assertTrue(snapshot.callsignCandidates().contains("BG7YOZ"));
+        assertFalse(snapshot.callsignCandidates().contains("BI9CLTD"));
+        assertFalse(snapshot.callsignCandidates().contains("I9CL"));
+        assertFalse(snapshot.callsignCandidates().contains("G7YO"));
+    }
+
+    @Test
+    public void deTailContaminationAlsoFallsBackToCleanAddressedCallsignInAckReport() {
+        CwInterpreter interpreter = new CwInterpreter();
+
+        interpreter.process(decode("BI9CLTD DE BG7YOZ R?NNB", 1000L));
+
+        CwInterpreterSnapshot snapshot = interpreter.snapshot();
+        assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
+        assertTrue(snapshot.callsignCandidates().contains("BG7YOZ"));
+        assertFalse(snapshot.callsignCandidates().contains("BI9CLTD"));
+    }
+
+    @Test
+    public void damagedShortResiduesAreExplicitlyMarkedAsNormalizedFromRaw() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR?NN B");
+        List<CwInterpretedToken> tokens = snapshot.tokens();
+
+        boolean sawRecoveredReport = false;
+        boolean sawRecoveredControl = false;
+        for (CwInterpretedToken token : tokens) {
+            if ("599".equals(token.normalizedText()) && token.normalizedFromRaw()) {
+                sawRecoveredReport = true;
+            }
+            if ("BK".equals(token.normalizedText()) && token.normalizedFromRaw()) {
+                sawRecoveredControl = true;
+            }
+        }
+
+        assertTrue(sawRecoveredReport);
+        assertTrue(sawRecoveredControl);
     }
 
     @Test

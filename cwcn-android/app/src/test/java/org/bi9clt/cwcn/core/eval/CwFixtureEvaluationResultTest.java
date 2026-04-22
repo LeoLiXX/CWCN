@@ -282,4 +282,53 @@ public final class CwFixtureEvaluationResultTest {
         assertTrue(result.renderSummary().contains("wrongTone=yes"));
         assertTrue(result.renderSummary().contains("Wrong-tone acquisition / tracking"));
     }
+
+    @Test
+    public void recoveryPressureDistinguishesHeavyBestEffortNormalization() {
+        CwFixtureEvaluationResult result = new CwFixtureEvaluationResult(
+                "fixture",
+                "Fixture",
+                1L,
+                true,
+                false,
+                false,
+                1.0d,
+                0.70d,
+                1.0d,
+                1.0d,
+                1.0d,
+                "BI9CLT DE BG7YOZ UR 599 BK",
+                "BI9CLT DE BG7YOZ UR 599 BK",
+                "REPORT_EXCHANGE",
+                "REPORT_EXCHANGE",
+                "",
+                "",
+                "599",
+                "599",
+                Collections.singletonList("BG7YOZ"),
+                Collections.singletonList("Directed report to called station"),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                4,
+                9,
+                java.util.Arrays.asList("?NN->599", "EB->BK"),
+                false,
+                false,
+                8200.0d,
+                0.74d,
+                0.40d,
+                8,
+                0.08d,
+                1,
+                650,
+                650
+        );
+
+        assertEquals("HIGH", result.recoveryPressureCode());
+        assertTrue(result.renderCompactSummary().contains("R:HIGH"));
+        assertTrue(result.renderSummary().contains("Recovery pressure: Heavy best-effort normalization"));
+        assertTrue(result.renderSummary().contains("?NN->599"));
+    }
 }

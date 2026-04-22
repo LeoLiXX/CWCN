@@ -994,6 +994,72 @@ public final class CwFixtureLibrary {
                     "Exercises a compact report-handoff-tail chain under hand-key style timing drift, stronger jitter, QSB, and background noise."
             ),
             new CwFixtureScenario(
+                    "human_damaged_report_residue_exchange",
+                    "Human Damaged Report Residue",
+                    "BI9CLT DE BG7YOZ UR?NN B",
+                    Arrays.asList("BI9CLT DE BG7YOZ UR?NN B"),
+                    1800,
+                    18,
+                    670,
+                    17800,
+                    880,
+                    0.17d,
+                    2100,
+                    0.10d,
+                    0.06d,
+                    Collections.singletonList(
+                            new PartTimingProfile(0.97d, 1.09d, 0.16d, 0.09d, 0.04d, 1.03d, 1.08d, 1.42d, 8, 0.9d)
+                    ),
+                    250,
+                    850,
+                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    Arrays.asList("BI9CLT", "BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Directed report to called station",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    null,
+                    "599",
+                    "GOOD",
+                    "Exercises a hand-key/QSB style directed report where the copied report/control tail is damaged as UR?NN B and must be recovered downstream."
+            ),
+            new CwFixtureScenario(
+                    "human_damaged_ack_report_exchange",
+                    "Human Damaged Ack Report Tail",
+                    "BI9CLT DE BG7YOZ R?NNB",
+                    Arrays.asList("BI9CLT DE BG7YOZ R?NNB"),
+                    1800,
+                    18,
+                    670,
+                    17800,
+                    880,
+                    0.16d,
+                    2050,
+                    0.09d,
+                    0.06d,
+                    Collections.singletonList(
+                            new PartTimingProfile(0.98d, 1.08d, 0.15d, 0.08d, 0.03d, 1.02d, 1.07d, 1.40d, 7, 0.8d)
+                    ),
+                    250,
+                    850,
+                    "BI9CLT DE BG7YOZ R 599 BK",
+                    Arrays.asList("BI9CLT", "BG7YOZ"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Report acknowledgement / return report",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    "599",
+                    null,
+                    "GOOD",
+                    "Exercises a hand-key/QSB style acknowledgement-return-report token where R?NNB should still normalize into R 599 BK."
+            ),
+            new CwFixtureScenario(
                     "human_compact_report_tail_followup",
                     "Human Compact Tail Follow-up",
                     "BI9CLT DE BG7YOZ UR 5NN BK / BI9CL DE ?YOZ UR5NNBK",

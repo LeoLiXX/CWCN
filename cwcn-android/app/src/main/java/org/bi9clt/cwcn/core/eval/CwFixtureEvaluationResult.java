@@ -1,6 +1,7 @@
 package org.bi9clt.cwcn.core.eval;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -30,6 +31,9 @@ public final class CwFixtureEvaluationResult {
     private final List<String> missingCallsigns;
     private final List<String> missingHints;
     private final List<String> failureReasons;
+    private final int normalizedTokenCount;
+    private final int totalTokenCount;
+    private final List<String> normalizedTokenPairs;
     private final boolean finalToneLocked;
     private final boolean endedOnToneOffEvent;
     private final double peakToneRmsAmplitude;
@@ -94,6 +98,9 @@ public final class CwFixtureEvaluationResult {
                 missingCallsigns,
                 missingHints,
                 failureReasons,
+                0,
+                0,
+                Collections.emptyList(),
                 false,
                 false,
                 0.0d,
@@ -144,6 +151,88 @@ public final class CwFixtureEvaluationResult {
             int preferredToneFrequencyHz,
             int trackedToneFrequencyHz
     ) {
+        this(
+                scenarioId,
+                scenarioDisplayName,
+                evaluatedAtEpochMs,
+                completed,
+                passed,
+                exactTextMatch,
+                primaryCallsignScore,
+                textTokenRecall,
+                callsignRecall,
+                hintRecall,
+                qsoSemanticScore,
+                expectedNormalizedText,
+                actualNormalizedText,
+                expectedPhase,
+                actualPhase,
+                expectedRstSent,
+                actualRstSent,
+                expectedRstRcvd,
+                actualRstRcvd,
+                actualCallsigns,
+                actualHints,
+                missingTextTokens,
+                missingCallsigns,
+                missingHints,
+                failureReasons,
+                0,
+                0,
+                Collections.emptyList(),
+                finalToneLocked,
+                endedOnToneOffEvent,
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames,
+                toneActiveUnlockedFrameRatio,
+                maxConsecutiveToneActiveUnlockedFrames,
+                preferredToneFrequencyHz,
+                trackedToneFrequencyHz
+        );
+    }
+
+    public CwFixtureEvaluationResult(
+            String scenarioId,
+            String scenarioDisplayName,
+            long evaluatedAtEpochMs,
+            boolean completed,
+            boolean passed,
+            boolean exactTextMatch,
+            double primaryCallsignScore,
+            double textTokenRecall,
+            double callsignRecall,
+            double hintRecall,
+            double qsoSemanticScore,
+            String expectedNormalizedText,
+            String actualNormalizedText,
+            String expectedPhase,
+            String actualPhase,
+            String expectedRstSent,
+            String actualRstSent,
+            String expectedRstRcvd,
+            String actualRstRcvd,
+            List<String> actualCallsigns,
+            List<String> actualHints,
+            List<String> missingTextTokens,
+            List<String> missingCallsigns,
+            List<String> missingHints,
+            List<String> failureReasons,
+            int normalizedTokenCount,
+            int totalTokenCount,
+            List<String> normalizedTokenPairs,
+            boolean finalToneLocked,
+            boolean endedOnToneOffEvent,
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames,
+            double toneActiveUnlockedFrameRatio,
+            int maxConsecutiveToneActiveUnlockedFrames,
+            int preferredToneFrequencyHz,
+            int trackedToneFrequencyHz
+    ) {
         this.scenarioId = scenarioId;
         this.scenarioDisplayName = scenarioDisplayName;
         this.evaluatedAtEpochMs = evaluatedAtEpochMs;
@@ -169,6 +258,9 @@ public final class CwFixtureEvaluationResult {
         this.missingCallsigns = new ArrayList<>(missingCallsigns);
         this.missingHints = new ArrayList<>(missingHints);
         this.failureReasons = new ArrayList<>(failureReasons);
+        this.normalizedTokenCount = normalizedTokenCount;
+        this.totalTokenCount = totalTokenCount;
+        this.normalizedTokenPairs = new ArrayList<>(normalizedTokenPairs);
         this.finalToneLocked = finalToneLocked;
         this.endedOnToneOffEvent = endedOnToneOffEvent;
         this.peakToneRmsAmplitude = peakToneRmsAmplitude;
@@ -279,6 +371,25 @@ public final class CwFixtureEvaluationResult {
 
     public List<String> failureReasons() {
         return new ArrayList<>(failureReasons);
+    }
+
+    public int normalizedTokenCount() {
+        return normalizedTokenCount;
+    }
+
+    public int totalTokenCount() {
+        return totalTokenCount;
+    }
+
+    public double normalizedTokenRatio() {
+        if (totalTokenCount <= 0) {
+            return 0.0d;
+        }
+        return normalizedTokenCount / (double) totalTokenCount;
+    }
+
+    public List<String> normalizedTokenPairs() {
+        return new ArrayList<>(normalizedTokenPairs);
     }
 
     public boolean finalToneLocked() {
@@ -454,6 +565,33 @@ public final class CwFixtureEvaluationResult {
         }
     }
 
+    public String recoveryPressureCode() {
+        double ratio = normalizedTokenRatio();
+        if (normalizedTokenCount <= 0 || totalTokenCount <= 0) {
+            return "NONE";
+        }
+        if (normalizedTokenCount >= 4 || ratio >= 0.30d) {
+            return "HIGH";
+        }
+        if (normalizedTokenCount >= 2 || ratio >= 0.15d) {
+            return "MED";
+        }
+        return "LOW";
+    }
+
+    public String recoveryPressureLabel() {
+        switch (recoveryPressureCode()) {
+            case "HIGH":
+                return "Heavy best-effort normalization";
+            case "MED":
+                return "Moderate best-effort normalization";
+            case "LOW":
+                return "Light best-effort normalization";
+            default:
+                return "No explicit token recovery";
+        }
+    }
+
     public List<String> diagnosticNotes() {
         ArrayList<String> notes = new ArrayList<>();
         if (!completed) {
@@ -484,6 +622,11 @@ public final class CwFixtureEvaluationResult {
         if (qsoSemanticScore < 1.0d && textTokenRecall >= 0.75d) {
             notes.add("Decoded content was mostly present, but QSO phase/report mapping drifted.");
         }
+        if ("HIGH".equals(recoveryPressureCode()) && frontEndHistorySuggestsEarlierHealthyLock()) {
+            notes.add("Downstream output depended heavily on best-effort token normalization despite a usable earlier front-end lock window.");
+        } else if (!"NONE".equals(recoveryPressureCode()) && qsoSemanticScore >= 1.0d) {
+            notes.add("Semantic/QSO outcome survived with visible best-effort token normalization pressure.");
+        }
         if (notes.isEmpty()) {
             notes.add("Scores suggest a mixed but non-catastrophic mismatch.");
         }
@@ -506,6 +649,8 @@ public final class CwFixtureEvaluationResult {
                 + percent(qsoSemanticScore)
                 + " H:"
                 + percent(hintRecall)
+                + " R:"
+                + recoveryPressureCode()
                 + " F:"
                 + frontEndQualityCode()
                 + " D:"
@@ -524,6 +669,16 @@ public final class CwFixtureEvaluationResult {
         builder.append("\nCallsign recall: ").append(percent(callsignRecall));
         builder.append("\nQSO semantics: ").append(percent(qsoSemanticScore));
         builder.append("\nHint recall: ").append(percent(hintRecall));
+        builder.append("\nRecovery pressure: ").append(recoveryPressureLabel())
+                .append(" (")
+                .append(normalizedTokenCount)
+                .append("/")
+                .append(totalTokenCount)
+                .append(" token(s)");
+        if (!normalizedTokenPairs.isEmpty()) {
+            builder.append("; ").append(renderList(normalizedTokenPairs));
+        }
+        builder.append(")");
         builder.append("\nFront-end quality: ").append(frontEndQualityLabel());
         if (peakToneRmsAmplitude > 0.0d || peakNarrowbandIsolationRatio > 0.0d || lockedFrameRatio > 0.0d) {
             builder.append("\nFront-end history: finalLock=").append(finalToneLocked ? "yes" : "no")

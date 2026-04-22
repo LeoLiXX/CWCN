@@ -9,12 +9,14 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.Editable;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextWatcher;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.StyleSpan;
+import android.text.style.UnderlineSpan;
 import android.graphics.Typeface;
 import android.view.View;
 import android.widget.AdapterView;
@@ -69,6 +71,7 @@ import org.bi9clt.cwcn.ui.qso.QsoEditorActivity;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.io.File;
@@ -767,6 +770,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
     private void stopCapture() {
         stopAllSources();
+        flushPendingDecodeAt(SystemClock.elapsedRealtime());
         if (fixtureReplayInProgress) {
             fixtureEvaluationStatusMessage = "Fixture replay stopped before completion.";
         }
@@ -1069,13 +1073,26 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private String renderInterpreterHints(CwInterpreterSnapshot snapshot) {
-        if (snapshot.phraseHints().isEmpty()) {
+        String normalizedSummary = buildNormalizationSummary(snapshot);
+        if (snapshot.phraseHints().isEmpty() && normalizedSummary.isEmpty()) {
             return getString(R.string.interpreter_hints_empty);
         }
-        return getString(
-                R.string.interpreter_hints_value,
-                String.join(" / ", snapshot.phraseHints())
-        );
+        StringBuilder builder = new StringBuilder();
+        if (!snapshot.phraseHints().isEmpty()) {
+            builder.append(
+                    getString(
+                            R.string.interpreter_hints_value,
+                            String.join(" / ", snapshot.phraseHints())
+                    )
+            );
+        }
+        if (!normalizedSummary.isEmpty()) {
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            builder.append("Recovered/normalized: ").append(normalizedSummary);
+        }
+        return builder.toString();
     }
 
     private String renderLastInterpreterEvent() {
@@ -1109,7 +1126,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             }
             CwInterpretedToken token = tokens.get(i);
             String displayText = useNormalizedText ? token.normalizedText() : token.rawText();
-            appendHighlightedToken(builder, displayText, token.type());
+            appendHighlightedToken(builder, displayText, token, useNormalizedText);
         }
         return builder;
     }
@@ -1117,8 +1134,10 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private void appendHighlightedToken(
             SpannableStringBuilder builder,
             String displayText,
-            CwInterpretedToken.Type type
+            CwInterpretedToken token,
+            boolean useNormalizedText
     ) {
+        CwInterpretedToken.Type type = token.type();
         int start = builder.length();
         builder.append(displayText);
         int end = builder.length();
@@ -1143,6 +1162,24 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
             );
         }
+        if (useNormalizedText && token.normalizedFromRaw()) {
+            builder.setSpan(
+                    new UnderlineSpan(),
+                    start,
+                    end,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            );
+        }
+    }
+
+    private String buildNormalizationSummary(CwInterpreterSnapshot snapshot) {
+        LinkedHashSet<String> normalizedPairs = new LinkedHashSet<>();
+        for (CwInterpretedToken token : snapshot.tokens()) {
+            if (token.normalizedFromRaw()) {
+                normalizedPairs.add(token.rawText() + "->" + token.normalizedText());
+            }
+        }
+        return normalizedPairs.isEmpty() ? "" : String.join(" / ", normalizedPairs);
     }
 
     private String renderQsoPhase(QsoDraftSnapshot snapshot) {
@@ -1534,6 +1571,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                     && state == RxAudioSource.State.IDLE
                     && lastFixtureScenario != null) {
                 boolean completed = detail != null && detail.toLowerCase(Locale.US).contains("completed");
+                flushPendingDecodeAt(SystemClock.elapsedRealtime());
                 lastFixtureEvaluationResult = CwFixtureEvaluator.evaluate(
                         lastFixtureScenario,
                         cwInterpreter.snapshot(),
@@ -1557,6 +1595,17 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             }
             refreshUiSnapshot();
         });
+    }
+
+    private void flushPendingDecodeAt(long timestampMs) {
+        List<CwTimingEvent> timingEvents = cwTimingModel.flushPendingGap(timestampMs);
+        for (CwTimingEvent timingEvent : timingEvents) {
+            List<CwDecodeEvent> decodeEvents = cwDecoder.process(timingEvent);
+            for (CwDecodeEvent decodeEvent : decodeEvents) {
+                cwInterpreter.process(decodeEvent);
+                qsoStateMachine.process(cwInterpreter.snapshot(), decodeEvent.timestampMs());
+            }
+        }
     }
 
     @Override

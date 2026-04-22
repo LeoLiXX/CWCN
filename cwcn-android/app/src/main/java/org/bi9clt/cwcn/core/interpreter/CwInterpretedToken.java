@@ -33,6 +33,10 @@ public final class CwInterpretedToken {
         return normalizedText;
     }
 
+    public boolean normalizedFromRaw() {
+        return rawText != null && normalizedText != null && !rawText.equals(normalizedText);
+    }
+
     public Type type() {
         return type;
     }

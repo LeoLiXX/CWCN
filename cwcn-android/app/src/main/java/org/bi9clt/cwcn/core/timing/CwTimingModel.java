@@ -60,6 +60,33 @@ public final class CwTimingModel {
         return timingEvents;
     }
 
+    public synchronized List<CwTimingEvent> flushPendingGap(long timestampMs) {
+        ArrayList<CwTimingEvent> timingEvents = new ArrayList<>(1);
+        if (lastToneOffTimestampMs <= 0L || timestampMs <= lastToneOffTimestampMs) {
+            return timingEvents;
+        }
+
+        long gapDurationMs = Math.max(0L, timestampMs - lastToneOffTimestampMs);
+        CwTimingEvent.Classification gapClassification = classifyGap(gapDurationMs);
+        if (gapClassification == CwTimingEvent.Classification.INTRA_SYMBOL_GAP) {
+            return timingEvents;
+        }
+
+        updateGapEstimates(gapDurationMs, gapClassification);
+        CwTimingEvent gapEvent = new CwTimingEvent(
+                CwTimingEvent.Kind.GAP,
+                gapClassification,
+                timestampMs,
+                gapDurationMs,
+                dotEstimateRounded()
+        );
+        totalGapEvents += 1;
+        lastTimingEvent = gapEvent;
+        lastToneOffTimestampMs = -1L;
+        timingEvents.add(gapEvent);
+        return timingEvents;
+    }
+
     public synchronized void reset() {
         initialized = false;
         dotEstimateMs = DEFAULT_DOT_MS;

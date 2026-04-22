@@ -836,7 +836,7 @@ public final class CwInterpreter {
         }
         char contamination = token.charAt(0);
         return !Character.isDigit(contamination)
-                && "EHSTUIMN".indexOf(contamination) >= 0;
+                && "DEHKBSTUIMNR".indexOf(contamination) >= 0;
     }
 
     private String choosePrimaryCallsignCandidate(
@@ -937,8 +937,14 @@ public final class CwInterpreter {
             boolean mergedIntoExisting = false;
             for (int existingIndex = 0; existingIndex < merged.size(); existingIndex++) {
                 RankedCallsign existing = merged.get(existingIndex);
-                if (shouldKeepRecoveredCleanCandidate(existing.callsign, candidate)) {
-                    continue;
+                String preferredCleanCandidate = choosePreferredRecoveredCleanCandidate(existing.callsign, candidate);
+                if (preferredCleanCandidate != null) {
+                    merged.set(existingIndex, new RankedCallsign(
+                            preferredCleanCandidate,
+                            Math.max(existing.lastSeenOrder, index)
+                    ));
+                    mergedIntoExisting = true;
+                    break;
                 }
                 String mergedCandidate = mergeCompatibleCallsigns(existing.callsign, candidate);
                 if (mergedCandidate != null) {
@@ -972,19 +978,50 @@ public final class CwInterpreter {
         for (RankedCallsign candidate : merged) {
             rankedCandidates.add(candidate.callsign);
         }
-        return rankedCandidates;
+        return suppressContainedCleanFragmentCandidates(rankedCandidates);
     }
 
-    private boolean shouldKeepRecoveredCleanCandidate(String left, String right) {
+    private List<String> suppressContainedCleanFragmentCandidates(List<String> rankedCandidates) {
+        ArrayList<String> filtered = new ArrayList<>();
+        for (String candidate : rankedCandidates) {
+            if (candidate == null || candidate.contains("?")) {
+                filtered.add(candidate);
+                continue;
+            }
+            boolean suppressed = false;
+            for (String otherCandidate : rankedCandidates) {
+                if (otherCandidate == null || otherCandidate.equals(candidate)) {
+                    continue;
+                }
+                if (!isTrustedCleanCallsign(otherCandidate) || otherCandidate.length() <= candidate.length()) {
+                    continue;
+                }
+                int lengthDelta = otherCandidate.length() - candidate.length();
+                if (lengthDelta > 2) {
+                    continue;
+                }
+                if (otherCandidate.contains(candidate)) {
+                    suppressed = true;
+                    break;
+                }
+            }
+            if (!suppressed) {
+                filtered.add(candidate);
+            }
+        }
+        return filtered;
+    }
+
+    private String choosePreferredRecoveredCleanCandidate(String left, String right) {
         if (left == null || right == null || left.equals(right)) {
-            return false;
+            return null;
         }
         String shorter = left.length() <= right.length() ? left : right;
         String longer = shorter == left ? right : left;
         if (!isTrustedCleanCallsign(shorter) || shorter.length() < 6) {
-            return false;
+            return null;
         }
-        return isSingleEdgeRememberedContaminationWrap(shorter, longer);
+        return isSingleEdgeRememberedContaminationWrap(shorter, longer) ? shorter : null;
     }
 
     private boolean isSingleEdgeRememberedContaminationWrap(String rememberedCandidate, String rawCandidate) {

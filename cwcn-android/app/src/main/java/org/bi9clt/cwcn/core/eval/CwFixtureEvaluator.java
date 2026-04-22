@@ -1,5 +1,6 @@
 package org.bi9clt.cwcn.core.eval;
 
+import org.bi9clt.cwcn.core.interpreter.CwInterpretedToken;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreterSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoPhase;
@@ -93,6 +94,9 @@ public final class CwFixtureEvaluator {
                 scenario.expectedRstRcvd(),
                 actualRstRcvd
         );
+        int totalTokenCount = interpreterSnapshot.tokens().size();
+        int normalizedTokenCount = countNormalizedTokens(interpreterSnapshot);
+        List<String> normalizedTokenPairs = collectNormalizedTokenPairs(interpreterSnapshot);
 
         boolean passed = completed
                 && primaryCallsignScore >= 1.0d
@@ -127,6 +131,9 @@ public final class CwFixtureEvaluator {
                 missingCallsigns,
                 missingHints,
                 failureReasons,
+                normalizedTokenCount,
+                totalTokenCount,
+                normalizedTokenPairs,
                 signalSnapshot != null && signalSnapshot.targetToneLocked(),
                 signalSnapshot != null
                         && signalSnapshot.lastEvent() != null
@@ -140,6 +147,26 @@ public final class CwFixtureEvaluator {
                 signalSnapshot == null ? 0 : signalSnapshot.preferredToneFrequencyHz(),
                 signalSnapshot == null ? 0 : signalSnapshot.targetToneFrequencyHz()
         );
+    }
+
+    private static int countNormalizedTokens(CwInterpreterSnapshot snapshot) {
+        int count = 0;
+        for (CwInterpretedToken token : snapshot.tokens()) {
+            if (token.normalizedFromRaw()) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    private static List<String> collectNormalizedTokenPairs(CwInterpreterSnapshot snapshot) {
+        LinkedHashSet<String> pairs = new LinkedHashSet<>();
+        for (CwInterpretedToken token : snapshot.tokens()) {
+            if (token.normalizedFromRaw()) {
+                pairs.add(token.rawText() + "->" + token.normalizedText());
+            }
+        }
+        return new ArrayList<>(pairs);
     }
 
     private static double computeTokenRecall(String expectedText, String actualText) {

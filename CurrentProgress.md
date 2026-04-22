@@ -303,6 +303,40 @@
 - Extended `CwSignalProcessor` again so Debug UI and offline regression can inspect not only the latest frame, but also the best front-end state reached during the current run.
 - New run-history signal stats now include:
 
+## 2026-04-23 Damaged Residue Recovery + Stream-End Flush
+
+- Added explicit token-normalization observability across interpreter, debug UI, and offline fixture evaluation.
+- `CwInterpretedToken` now records whether a normalized token was recovered from raw damaged text.
+- Debug UI now underlines normalized tokens in the normalized-text line and shows a `Recovered/normalized` summary such as `?NN->599` and `B->BK`.
+- `CwFixtureEvaluationResult` now reports:
+- normalized token count / ratio
+- normalized token pairs
+- `recoveryPressureCode()` and `recoveryPressureLabel()`
+- Damaged short-report residue recovery was extended for common human/QSB-style cases including:
+- `UR?NN B`
+- `UR 5NNEB`
+- `UR ?NN EB`
+- `R?NNB`
+- Added offline fixture coverage for damaged directed-report and ack-report exchanges.
+- Added `CwTimingModel.flushPendingGap(...)` so the final trailing gap at end-of-stream is no longer silently lost when replay or live capture stops after a short closing token.
+- Wired the stream-end flush into:
+- offline fixture evaluation
+- debug UI stop / fixture completion path
+- Result: damaged residue fixtures that previously stalled at partial recovery now reach full pass with:
+- exact text recall `100%`
+- callsign recall `100%`
+- QSO semantics `100%`
+- hint recall `100%`
+- likely bottleneck `OK`
+- recovery pressure `HIGH`
+- Callsign cleanup was narrowed so we now suppress obvious clean trim artifacts like `I9CL` / `G7YO` without re-breaking contextual partial callsign handling.
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest --tests org.bi9clt.cwcn.core.eval.CwFixtureEvaluationResultTest`
+- `.\gradlew.bat assembleDebug`
+
 ## 2026-04-23 Damaged Short Report / Control Recovery
 
 - Hardened `CwInterpreter` so short damaged CW report/control chains can still normalize correctly without polluting partial callsign handling.
@@ -333,6 +367,97 @@
 1. Continue extending polluted-report fixtures toward more realistic hand-key/QSB timing irregularity rather than only token-level corruption.
 2. Add a few more medium-frequency damaged exchange cases around `AGN / PSE / CALLSIGN AGAIN` mixed with uncertain callsigns.
 3. Start exposing some of this recovery confidence in UI so operator review can distinguish exact copy from best-effort normalization.
+
+## 2026-04-23 Interpreter Normalization Observability
+
+- Added an explicit token-level `normalizedFromRaw()` marker so interpreter output can distinguish exact-copy tokens from tokens that were normalized or recovered from raw CW text.
+- This does not change decoding semantics. It is purely an observability layer on top of the existing `rawText -> normalizedText` model.
+- Debug UI now makes these recovered/normalized tokens easier to spot in two ways:
+- normalized tokens that differ from raw input are underlined in the `Normalized Text` line
+- the interpreter hint block now includes a compact `Recovered/normalized:` summary such as `?NN->599 / EB->BK`
+- Added unit coverage to ensure damaged short report/control residues are explicitly marked as normalized-from-raw.
+
+### Key files
+
+- [CwInterpretedToken.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/interpreter/CwInterpretedToken.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+
+## 2026-04-23 Offline Fixture Recovery Pressure Diagnostics
+
+- Extended offline fixture evaluation so it now tracks how much the downstream result depended on explicit token normalization rather than raw exact-copy text alone.
+- `CwFixtureEvaluationResult` now carries:
+- normalized token count
+- total token count
+- `raw->normalized` token pair list
+- a derived `recovery pressure` grade:
+- `NONE`
+- `LOW`
+- `MED`
+- `HIGH`
+- This is intentionally separate from existing front-end quality and bottleneck codes:
+- front-end quality still answers whether acquisition/locking looked healthy
+- bottleneck code still answers where the likely failure lives
+- recovery pressure now answers whether the result was mostly direct decode, or whether it survived by leaning on best-effort normalization
+- The compact and full fixture summaries now expose this extra dimension, so boundary fixtures can say things like:
+- front end stayed `GOOD`
+- bottleneck is not `SIG`
+- but recovery pressure is `MED/HIGH`
+- Added regression coverage to verify that a human-style compact report-tail fixture exposes observable normalization pairs such as `5NN->599`.
+
+### Key files
+
+- [CwFixtureEvaluator.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluator.java)
+- [CwFixtureEvaluationResult.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResult.java)
+- [CwFixtureEvaluationResultTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureEvaluationResultTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-23 Hand-Key Damaged Report Residue Fixtures
+
+- Added two new human-style offline fixtures that push damaged short report residues through the full synthetic audio pipeline instead of only token-level unit tests:
+- `human_damaged_report_residue_exchange`
+- `human_damaged_ack_report_exchange`
+- These cases simulate hand-key/QSB/noise style timing irregularity around:
+- `UR?NN B`
+- `R?NNB`
+- Current observed behavior is now explicitly locked in by regression:
+- front-end quality stays healthy and does not collapse into `SIG`
+- core QSO semantics still recover correctly
+- `?NN->599` normalization is visible in fixture diagnostics
+- recovery pressure is `MED`
+- the remaining weak point is the trailing handoff/control tail and some callsign extraction detail, so these scenarios currently land in an interpreter-side boundary rather than a front-end failure bucket
+- This is useful because it separates:
+- “front-end lost the signal”
+- from
+- “front-end held, report semantics recovered, but late-stage token/handoff detail still drifted”
+
+### Key files
+
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-23 Stream-End Gap Flush
+
+- Identified and fixed a structural pipeline issue: before this change, the final pending character at end-of-stream could remain undecoded if no later `TONE_ON` arrived to force the final gap classification.
+- Root cause:
+- `CwTimingModel` originally only emitted gap events when the next tone-on arrived
+- so fixture replay or manual stop could lose the last short tail token even when enough trailing silence already existed in the waveform
+- Added `flushPendingGap(...)` to [CwTimingModel.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/timing/CwTimingModel.java)
+- Wired that flush into:
+- offline synthetic fixture evaluation
+- Debug UI capture stop / fixture completion path
+- Practical effect:
+- trailing short control tails like final `B/BK` are no longer systematically dropped just because the stream ended
+- the two human damaged-report fixtures now upgraded from partial semantic recovery to full text/hint recovery:
+- `?NN->599`
+- `B->BK`
+- they still remain useful interpreter-boundary cases because callsign extraction detail is not yet perfect, but they are no longer missing the final control token due to pipeline shutdown behavior
+
+### Key files
+
+- [CwTimingModel.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/timing/CwTimingModel.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
 - `peak tone RMS`
 - `peak narrowband isolation`
 - `locked frame count / ratio`
