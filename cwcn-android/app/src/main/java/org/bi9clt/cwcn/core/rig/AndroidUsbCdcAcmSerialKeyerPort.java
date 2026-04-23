@@ -75,6 +75,11 @@ final class AndroidUsbCdcAcmSerialKeyerPort implements SerialKeyerPort {
         connection.close();
     }
 
+    @Override
+    public String diagnosticCode() {
+        return "usb-serial-ready";
+    }
+
     private boolean applyControlLineState() {
         if (closed) {
             return false;

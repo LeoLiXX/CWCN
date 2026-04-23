@@ -44,4 +44,14 @@ public final class DisconnectedSerialKeyerPort implements SerialKeyerPort {
     @Override
     public void close() {
     }
+
+    @Override
+    public boolean retainsDiagnosticDetails() {
+        return true;
+    }
+
+    @Override
+    public String diagnosticCode() {
+        return id;
+    }
 }

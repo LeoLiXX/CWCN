@@ -113,6 +113,37 @@ public final class UsbSerialKeyerRigControlAdapterTest {
         assertTrue(port.closed);
     }
 
+    @Test
+    public void diagnosticStageUsesDisconnectedPortCodeAfterOpenFailure() {
+        UsbSerialKeyerRigControlAdapter adapter = new UsbSerialKeyerRigControlAdapter(
+                new FixedSerialKeyerPortFactory(new DisconnectedSerialKeyerPort(
+                        "usb-serial-open-failed",
+                        "USB Serial Keyer Port",
+                        "USB device permission exists, but opening the device failed."
+                )),
+                SerialKeyerTxOutput.KeyLine.RTS,
+                20,
+                650
+        );
+
+        assertFalse(adapter.sendText("E"));
+        assertEquals("usb-serial-open-failed", adapter.diagnosticStageCode());
+        assertEquals("Open failed", adapter.diagnosticStageLabel());
+    }
+
+    @Test
+    public void diagnosticStageUsesFactoryAvailabilityWhenNoPortHasBeenOpened() {
+        UsbSerialKeyerRigControlAdapter adapter = new UsbSerialKeyerRigControlAdapter(
+                new DiagnosticOnlyPortFactory("usb-serial-no-permission"),
+                SerialKeyerTxOutput.KeyLine.RTS,
+                20,
+                650
+        );
+
+        assertEquals("usb-serial-no-permission", adapter.diagnosticStageCode());
+        assertEquals("Permission missing", adapter.diagnosticStageLabel());
+    }
+
     private static final class RecordingSerialKeyerPort implements SerialKeyerPort {
         private final boolean open;
         private final List<String> events = new ArrayList<>();
@@ -187,6 +218,11 @@ public final class UsbSerialKeyerRigControlAdapterTest {
         public SerialKeyerPort openPort() {
             return port;
         }
+
+        @Override
+        public String diagnosticStageCode() {
+            return port.isOpen() ? "usb-serial-ready" : "usb-serial-unavailable";
+        }
     }
 
     private static final class SelectableRecordingPortFactory implements SelectableSerialKeyerPortFactory {
@@ -229,6 +265,38 @@ public final class UsbSerialKeyerRigControlAdapterTest {
         @Override
         public SerialKeyerPort openPort() {
             return port;
+        }
+    }
+
+    private static final class DiagnosticOnlyPortFactory implements SerialKeyerPortFactory {
+        private final String diagnosticCode;
+
+        private DiagnosticOnlyPortFactory(String diagnosticCode) {
+            this.diagnosticCode = diagnosticCode;
+        }
+
+        @Override
+        public String describeAvailability() {
+            return diagnosticCode;
+        }
+
+        @Override
+        public boolean canOpenPort() {
+            return false;
+        }
+
+        @Override
+        public SerialKeyerPort openPort() {
+            return new DisconnectedSerialKeyerPort(
+                    diagnosticCode,
+                    "USB Serial Keyer Port",
+                    diagnosticCode
+            );
+        }
+
+        @Override
+        public String diagnosticStageCode() {
+            return diagnosticCode;
         }
     }
 }

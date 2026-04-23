@@ -3017,3 +3017,76 @@
 - richer device profile handling
 - broader non-CDC USB-serial support
 - or TX-side safety controls such as explicit test macros / stuck-line recovery UX
+
+## 2026-04-23 TX Hardware Route Follow-Up 5: Bench Macros + Actionable Recovery Hints
+
+- Continued the TX bench-testing UX without widening the core hardware scope yet.
+- Added dedicated short USB bench presets:
+- `BENCH_DIT`
+- `BENCH_PATTERN`
+- `TxActivity` now exposes direct USB-route shortcuts for them:
+- `Load DIT Test`
+- `Load VVV Test`
+- Practical effect:
+- the first on-bench timing and wiring check no longer needs manual text entry
+- the operator can load a very short macro, use conservative `WPM`, and validate wiring or timing behavior with less over-the-air risk
+- Extended the USB route checklist with an explicit stuck-line recovery reminder:
+- `Release Key Line`
+- then `Refresh USB Devices`
+- Tightened TX status UX again so the page now provides more direct `Next:` guidance when a backend is not ready or rejects a start request.
+- For the USB serial keyer route, recovery hints are now state-aware:
+- locked target missing
+- no candidate device attached
+- target unresolved
+- permission still missing
+- ready for a short bench macro
+- The same recovery idea is now also reflected inside the USB route summary block as a live `Next action`, so the operator does not have to mentally translate low-level availability text into the next click.
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- continue from UI safety into actual bench diagnostics:
+- capture and surface the specific open / claim / permission failure stage for the selected USB route
+- then start validating against real USB keyer hardware and decide whether CDC-only support is enough
+
+## 2026-04-23 TX Hardware Route Follow-Up 6: Explicit USB Failure Stage Diagnostics
+
+- Continued the same USB TX route toward actual bench diagnostics instead of only higher-level UX.
+- Added a small shared diagnostic contract for serial-keyer ports and factories:
+- disconnected ports can now retain a stable diagnostic code
+- factories can now report a diagnostic stage even before a port open attempt succeeds
+- `UsbSerialKeyerRigControlAdapter` now exposes explicit diagnostic-stage information for the current USB route, including cases such as:
+- `usb-serial-ready`
+- `usb-serial-target-missing`
+- `usb-serial-no-device`
+- `usb-serial-no-cdc`
+- `usb-serial-no-permission`
+- `usb-serial-open-failed`
+- `usb-serial-claim-failed`
+- `usb-serial-no-control-interface`
+- `TxActivity` now surfaces that directly inside the USB route summary:
+- diagnostic stage label
+- diagnostic stage code
+- state-aware next action
+- Recovery guidance is now more specific for real bench work:
+- missing locked target
+- no USB device attached
+- attached non-CDC device
+- permission missing
+- open failure
+- interface-claim failure
+- Practical outcome:
+- when USB keying fails, the app now tells us not just “not ready” but which stage of the route failed and what to try next
+- this should make first real-hardware bring-up much faster and reduce guesswork during OTG / cable / permission / interface problems
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- start real USB keyer bench validation and compare the observed failure stages against actual hardware behavior
+- if CDC `SET_CONTROL_LINE_STATE` proves insufficient on target devices, the next layer should be a richer USB-serial/profile compatibility path rather than more generic UI work

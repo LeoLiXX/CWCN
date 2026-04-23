@@ -14,4 +14,12 @@ public interface SerialKeyerPort {
     boolean setDtr(boolean enabled);
 
     void close();
+
+    default boolean retainsDiagnosticDetails() {
+        return false;
+    }
+
+    default String diagnosticCode() {
+        return isOpen() ? "usb-serial-ready" : "usb-serial-unavailable";
+    }
 }

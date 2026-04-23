@@ -269,7 +269,11 @@ public final class TxActivity extends AppCompatActivity {
             return;
         }
         if (!backend.isReady()) {
-            Toast.makeText(this, backend.describeAvailability(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(
+                    this,
+                    backend.describeAvailability() + "\nNext: " + renderBackendRecoveryHint(backend),
+                    Toast.LENGTH_LONG
+            ).show();
             binding.txStatusText.setText(renderIdleStatus(backend));
             refreshButtons();
             return;
@@ -281,7 +285,11 @@ public final class TxActivity extends AppCompatActivity {
         boolean started = backend.start(currentPlan, snapshot ->
                 runOnUiThread(() -> applyPlaybackSnapshot(snapshot)));
         if (!started) {
-            Toast.makeText(this, "Unable to start TX.", Toast.LENGTH_SHORT).show();
+            String recoveryHint = renderBackendRecoveryHint(backend);
+            binding.txStatusText.setText(
+                    "TX start failed.\nReason: backend rejected the request.\nNext: " + recoveryHint
+            );
+            Toast.makeText(this, "Unable to start TX.\nNext: " + recoveryHint, Toast.LENGTH_LONG).show();
         }
         refreshButtons();
     }
@@ -385,7 +393,10 @@ public final class TxActivity extends AppCompatActivity {
         if (backend.isReady()) {
             return "TX idle. Build a plan and press Start TX.";
         }
-        return "TX idle.\nSelected backend is not ready yet.\nReason: " + backend.describeAvailability();
+        return "TX idle.\nSelected backend is not ready yet.\nReason: "
+                + backend.describeAvailability()
+                + "\nNext: "
+                + renderBackendRecoveryHint(backend);
     }
 
     private void refreshRouteControls(CwTxBackend backend) {
@@ -464,8 +475,14 @@ public final class TxActivity extends AppCompatActivity {
             builder.append("Auto / first available");
         }
         builder.append("\nTarget state: ").append(renderUsbTargetState(adapter));
+        builder.append("\nDiagnostic stage: ")
+                .append(adapter.diagnosticStageLabel())
+                .append(" (")
+                .append(adapter.diagnosticStageCode())
+                .append(")");
         builder.append("\nActive target: ").append(adapter.describeMatchedDevice());
         builder.append("\nAvailability: ").append(adapter.describeAvailability());
+        builder.append("\nNext action: ").append(renderUsbRecoveryHint(adapter));
         return builder.toString();
     }
 
@@ -495,6 +512,52 @@ public final class TxActivity extends AppCompatActivity {
             return "Target Device Missing";
         }
         return "USB Permission Ready";
+    }
+
+    private String renderBackendRecoveryHint(CwTxBackend backend) {
+        if (backend == null) {
+            return "Select a TX backend first.";
+        }
+        if ("local-sidetone".equals(backend.id())) {
+            return "Press Start TX for a dry run, and reduce phone volume or use headphones if needed.";
+        }
+        if ("rig-text:audio-vox-text".equals(backend.id())) {
+            return "Connect the audio path, enable VOX, then start with a short preset at conservative volume.";
+        }
+        UsbSerialKeyerRigControlAdapter usbAdapter = selectedUsbSerialAdapter();
+        if ("rig-text:usb-serial-keyer".equals(backend.id()) && usbAdapter != null) {
+            return renderUsbRecoveryHint(usbAdapter);
+        }
+        return "Review the route checklist and current availability before retrying.";
+    }
+
+    private String renderUsbRecoveryHint(UsbSerialKeyerRigControlAdapter adapter) {
+        String diagnosticCode = adapter.diagnosticStageCode();
+        if ("usb-serial-target-missing".equals(diagnosticCode) || adapter.isPreferredDeviceMissing()) {
+            return "Reconnect the locked USB keyer or switch the device selector back to Auto, then press Refresh USB Devices.";
+        }
+        if ("usb-serial-no-device".equals(diagnosticCode) || !adapter.hasAnyCandidateDevice()) {
+            return "Attach a CDC/ACM USB device, then press Refresh USB Devices.";
+        }
+        if ("usb-serial-no-cdc".equals(diagnosticCode)) {
+            return "Attach a CDC/ACM-compatible USB serial/keyer device, then refresh the route.";
+        }
+        if ("usb-serial-no-control-interface".equals(diagnosticCode)) {
+            return "This USB device does not expose the expected CDC control interface. Try another keyer profile or device.";
+        }
+        if ("usb-serial-open-failed".equals(diagnosticCode)) {
+            return "Refresh USB Devices, re-seat the cable or OTG adapter, then retry the short DIT test.";
+        }
+        if ("usb-serial-claim-failed".equals(diagnosticCode)) {
+            return "Release Key Line, refresh the USB route, and make sure no other app is holding the interface.";
+        }
+        if (!adapter.hasTargetDevice()) {
+            return "Choose an attached target device or switch back to Auto selection.";
+        }
+        if ("usb-serial-no-permission".equals(diagnosticCode) || !adapter.isReady()) {
+            return "Press Request USB Permission. If the line may be stuck, use Release Key Line after permission is granted.";
+        }
+        return "Load DIT Test or VVV Test, verify the key line wiring, then press Start TX.";
     }
 
     private void syncUsbKeyLineSelection(UsbSerialKeyerRigControlAdapter adapter) {

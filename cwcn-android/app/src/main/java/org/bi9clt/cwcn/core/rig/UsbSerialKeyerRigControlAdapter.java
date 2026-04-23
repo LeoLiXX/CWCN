@@ -58,8 +58,11 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
         if (port != null && port.isOpen()) {
             return port.describeAvailability();
         }
-        if (port != null && !port.isOpen()) {
+        if (port != null && !port.isOpen() && !port.retainsDiagnosticDetails()) {
             openPort = null;
+        }
+        if (port != null && port.retainsDiagnosticDetails()) {
+            return port.describeAvailability();
         }
         return portFactory.describeAvailability();
     }
@@ -243,6 +246,55 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
             port.close();
         }
         openPort = null;
+    }
+
+    public String diagnosticStageCode() {
+        SerialKeyerPort port = openPort;
+        if (port != null && port.isOpen()) {
+            return port.diagnosticCode();
+        }
+        if (port != null && port.retainsDiagnosticDetails()) {
+            return port.diagnosticCode();
+        }
+        return portFactory.diagnosticStageCode();
+    }
+
+    public String diagnosticStageLabel() {
+        return diagnosticStageLabel(diagnosticStageCode());
+    }
+
+    public static String diagnosticStageLabel(String diagnosticCode) {
+        if ("usb-serial-ready".equals(diagnosticCode)) {
+            return "Ready";
+        }
+        if ("usb-serial-target-missing".equals(diagnosticCode)) {
+            return "Locked target missing";
+        }
+        if ("usb-serial-no-device".equals(diagnosticCode)) {
+            return "No USB device";
+        }
+        if ("usb-serial-no-cdc".equals(diagnosticCode)) {
+            return "No CDC/ACM keyer";
+        }
+        if ("usb-serial-no-permission".equals(diagnosticCode)) {
+            return "Permission missing";
+        }
+        if ("usb-serial-open-failed".equals(diagnosticCode)) {
+            return "Open failed";
+        }
+        if ("usb-serial-claim-failed".equals(diagnosticCode)) {
+            return "Interface claim failed";
+        }
+        if ("usb-serial-no-control-interface".equals(diagnosticCode)) {
+            return "Control interface missing";
+        }
+        if ("usb-serial-no-context".equals(diagnosticCode)) {
+            return "No Android context";
+        }
+        if ("usb-serial-no-manager".equals(diagnosticCode)) {
+            return "USB manager unavailable";
+        }
+        return "Unavailable";
     }
 
     private SerialKeyerPort ensureOpenPort() {

@@ -210,6 +210,31 @@ public final class AndroidUsbSerialKeyerPortFactory implements SelectableSerialK
                 && matchedDevice(usbManager.getDeviceList()) == null;
     }
 
+    @Override
+    public String diagnosticStageCode() {
+        if (appContext == null) {
+            return "usb-serial-no-context";
+        }
+        UsbManager usbManager = usbManager();
+        if (usbManager == null) {
+            return "usb-serial-no-manager";
+        }
+        HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
+        if (deviceList.isEmpty()) {
+            return "usb-serial-no-device";
+        }
+        UsbDevice matchedDevice = matchedDevice(deviceList);
+        if (matchedDevice == null) {
+            return hasPreferredDeviceSelection()
+                    ? "usb-serial-target-missing"
+                    : "usb-serial-no-cdc";
+        }
+        if (!usbManager.hasPermission(matchedDevice)) {
+            return "usb-serial-no-permission";
+        }
+        return "usb-serial-ready";
+    }
+
     private UsbManager usbManager() {
         return appContext == null
                 ? null

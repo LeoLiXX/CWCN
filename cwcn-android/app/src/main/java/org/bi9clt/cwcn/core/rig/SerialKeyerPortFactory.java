@@ -6,4 +6,8 @@ public interface SerialKeyerPortFactory {
     boolean canOpenPort();
 
     SerialKeyerPort openPort();
+
+    default String diagnosticStageCode() {
+        return canOpenPort() ? "usb-serial-ready" : "usb-serial-unavailable";
+    }
 }
