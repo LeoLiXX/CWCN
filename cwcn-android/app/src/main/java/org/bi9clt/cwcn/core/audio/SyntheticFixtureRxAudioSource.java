@@ -429,10 +429,19 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
     }
 
     private boolean shouldInsertExtraPause(PartTimingProfile partTimingProfile, int emittedCharacterCount) {
-        return partTimingProfile.extraPauseEveryCharacters() > 0
-                && partTimingProfile.extraPauseDotUnits() > 0.0d
-                && emittedCharacterCount > 0
-                && (emittedCharacterCount % partTimingProfile.extraPauseEveryCharacters()) == 0;
+        if (partTimingProfile.extraPauseDotUnits() <= 0.0d || emittedCharacterCount <= 0) {
+            return false;
+        }
+        if (partTimingProfile.extraPauseEveryCharacters() > 0
+                && (emittedCharacterCount % partTimingProfile.extraPauseEveryCharacters()) == 0) {
+            return true;
+        }
+        for (Integer pauseOffset : partTimingProfile.extraPauseCharacterOffsets()) {
+            if (pauseOffset != null && pauseOffset == emittedCharacterCount) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void appendGap(List<Segment> segments, int sampleCount) {

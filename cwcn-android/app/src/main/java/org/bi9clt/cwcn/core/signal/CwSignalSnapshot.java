@@ -229,6 +229,54 @@ public final class CwSignalSnapshot {
         return Math.max(0.0d, Math.min(1.0d, toneActiveUnlockedFrameCount / (double) toneActiveFrameCount));
     }
 
+    public int recentLockedFrameCount() {
+        return countRecentStateCodes('L', 'l');
+    }
+
+    public int recentActiveLockedFrameCount() {
+        return countRecentStateCodes('L');
+    }
+
+    public int recentQuietLockedFrameCount() {
+        return countRecentStateCodes('l');
+    }
+
+    public int recentActiveUnlockedFrameCount() {
+        return countRecentStateCodes('u');
+    }
+
+    public int recentSearchFrameCount() {
+        return countRecentStateCodes('.');
+    }
+
+    public double recentLockedFrameRatio() {
+        return ratioWithinRecentHistory(recentLockedFrameCount());
+    }
+
+    public double recentActiveUnlockedFrameRatio() {
+        return ratioWithinRecentHistory(recentActiveUnlockedFrameCount());
+    }
+
+    public double recentSearchFrameRatio() {
+        return ratioWithinRecentHistory(recentSearchFrameCount());
+    }
+
+    public int recentNearTargetLockedFrameCount() {
+        return countRecentLockedFramesWithinOffset(15, true);
+    }
+
+    public int recentFarOffTargetLockedFrameCount() {
+        return countRecentLockedFramesWithinOffset(45, false);
+    }
+
+    public double recentNearTargetLockedFrameRatio() {
+        return ratioWithinRecentLockedFrames(recentNearTargetLockedFrameCount());
+    }
+
+    public double recentFarOffTargetLockedFrameRatio() {
+        return ratioWithinRecentLockedFrames(recentFarOffTargetLockedFrameCount());
+    }
+
     public int totalToneOnEvents() {
         return totalToneOnEvents;
     }
@@ -239,5 +287,56 @@ public final class CwSignalSnapshot {
 
     public CwToneEvent lastEvent() {
         return lastEvent;
+    }
+
+    private int countRecentStateCodes(char... acceptedCodes) {
+        if (acceptedCodes == null || acceptedCodes.length == 0 || recentHistoryFrameCount <= 0) {
+            return 0;
+        }
+        int count = 0;
+        int limit = Math.min(recentHistoryFrameCount, recentFrontEndStateHistory.length);
+        for (int index = 0; index < limit; index++) {
+            char stateCode = recentFrontEndStateHistory[index];
+            for (char acceptedCode : acceptedCodes) {
+                if (stateCode == acceptedCode) {
+                    count += 1;
+                    break;
+                }
+            }
+        }
+        return count;
+    }
+
+    private int countRecentLockedFramesWithinOffset(int thresholdHz, boolean withinThreshold) {
+        if (recentHistoryFrameCount <= 0 || thresholdHz < 0) {
+            return 0;
+        }
+        int count = 0;
+        for (int index = 0; index < recentHistoryFrameCount; index++) {
+            char stateCode = recentFrontEndStateHistory[index];
+            if (stateCode != 'L' && stateCode != 'l') {
+                continue;
+            }
+            int absoluteOffsetHz = Math.abs(recentTrackingOffsetHistoryHz[index]);
+            if (withinThreshold ? absoluteOffsetHz <= thresholdHz : absoluteOffsetHz >= thresholdHz) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    private double ratioWithinRecentHistory(int count) {
+        if (recentHistoryFrameCount <= 0) {
+            return 0.0d;
+        }
+        return Math.max(0.0d, Math.min(1.0d, count / (double) recentHistoryFrameCount));
+    }
+
+    private double ratioWithinRecentLockedFrames(int count) {
+        int recentLockedFrameCount = recentLockedFrameCount();
+        if (recentLockedFrameCount <= 0) {
+            return 0.0d;
+        }
+        return Math.max(0.0d, Math.min(1.0d, count / (double) recentLockedFrameCount));
     }
 }

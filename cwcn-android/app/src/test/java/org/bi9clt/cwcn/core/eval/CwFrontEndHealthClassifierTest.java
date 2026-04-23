@@ -131,6 +131,61 @@ public final class CwFrontEndHealthClassifierTest {
         assertEquals("No front-end history available", CwFrontEndHealthClassifier.qualityLabel(snapshot));
     }
 
+    @Test
+    public void recentTrendHighlightsOffTargetLockPressure() {
+        CwSignalSnapshot snapshot = snapshotWithRecentHistory(
+                true,
+                true,
+                650,
+                700,
+                new char[]{'L', 'L', 'u', '.', 'l', '.'},
+                new int[]{55, 50, 30, 0, 60, 0}
+        );
+
+        assertEquals(
+                "Recent window is spending meaningful lock time off target",
+                CwFrontEndHealthClassifier.recentTrendLabel(snapshot)
+        );
+        assertTrue(CwFrontEndHealthClassifier.liveCheckHint(snapshot).contains("wrong-tone")
+                || CwFrontEndHealthClassifier.liveCheckHint(snapshot).contains("preferred tone"));
+    }
+
+    @Test
+    public void liveCheckHintHighlightsSearchHeavyWindow() {
+        CwSignalSnapshot snapshot = snapshotWithRecentHistory(
+                false,
+                false,
+                650,
+                650,
+                new char[]{'.', '.', '.', '.', 'u', '.'},
+                new int[]{0, 0, 0, 0, 10, 0}
+        );
+
+        assertEquals(
+                "Recent window is mostly idle/search",
+                CwFrontEndHealthClassifier.recentTrendLabel(snapshot)
+        );
+        assertTrue(CwFrontEndHealthClassifier.liveCheckHint(snapshot).contains("searching"));
+    }
+
+    @Test
+    public void liveCheckHintCanPromoteDownstreamInspectionOnceRecentLockIsStable() {
+        CwSignalSnapshot snapshot = snapshotWithRecentHistory(
+                true,
+                true,
+                650,
+                655,
+                new char[]{'L', 'L', 'L', 'l', 'L', '.'},
+                new int[]{5, 0, -5, 10, 5, 0}
+        );
+
+        assertEquals(
+                "Recent window is mostly locked near target",
+                CwFrontEndHealthClassifier.recentTrendLabel(snapshot)
+        );
+        assertTrue(CwFrontEndHealthClassifier.liveCheckHint(snapshot).contains("timing/decoder/interpreter"));
+    }
+
     private static CwSignalSnapshot snapshot(
             boolean toneActive,
             boolean targetToneLocked,
@@ -178,6 +233,66 @@ public final class CwFrontEndHealthClassifierTest {
                 3,
                 3,
                 lastEvent
+        );
+    }
+
+    private static CwSignalSnapshot snapshotWithRecentHistory(
+            boolean toneActive,
+            boolean targetToneLocked,
+            int preferredToneFrequencyHz,
+            int targetToneFrequencyHz,
+            char[] recentFrontEndStateHistory,
+            int[] recentTrackingOffsetHistoryHz
+    ) {
+        int recentHistoryFrameCount = Math.min(
+                recentFrontEndStateHistory.length,
+                recentTrackingOffsetHistoryHz.length
+        );
+        int recentLockedFrameCount = 0;
+        int recentActiveUnlockedFrameCount = 0;
+        for (int index = 0; index < recentHistoryFrameCount; index++) {
+            char stateCode = recentFrontEndStateHistory[index];
+            if (stateCode == 'L' || stateCode == 'l') {
+                recentLockedFrameCount += 1;
+            } else if (stateCode == 'u') {
+                recentActiveUnlockedFrameCount += 1;
+            }
+        }
+
+        return new CwSignalSnapshot(
+                recentHistoryFrameCount,
+                recentFrontEndStateHistory,
+                recentTrackingOffsetHistoryHz,
+                toneActive,
+                targetToneLocked,
+                preferredToneFrequencyHz,
+                targetToneFrequencyHz,
+                1200,
+                800,
+                600,
+                1800,
+                7800.0d,
+                6200.0d,
+                1100.0d,
+                0.55d,
+                0.60d,
+                7800.0d,
+                0.70d,
+                100,
+                Math.max(0, recentLockedFrameCount * 10),
+                100,
+                Math.max(0, recentActiveUnlockedFrameCount * 10),
+                Math.max(0, recentLockedFrameCount - 1),
+                Math.max(4, recentLockedFrameCount),
+                Math.max(0, recentActiveUnlockedFrameCount - 1),
+                Math.max(0, recentActiveUnlockedFrameCount),
+                targetToneFrequencyHz,
+                0,
+                3,
+                3,
+                targetToneLocked
+                        ? new CwToneEvent(CwToneEvent.Type.TONE_ON, 100L, 80, 4100.0d, 100L)
+                        : null
         );
     }
 }

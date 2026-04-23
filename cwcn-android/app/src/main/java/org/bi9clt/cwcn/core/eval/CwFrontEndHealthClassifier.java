@@ -177,6 +177,55 @@ public final class CwFrontEndHealthClassifier {
         return "A candidate tone is present, but lock confidence is still below the stable range.";
     }
 
+    public static String recentTrendLabel(CwSignalSnapshot snapshot) {
+        if (snapshot == null || snapshot.recentHistoryFrameCount() <= 0) {
+            return "No recent window yet";
+        }
+        if (suggestsWrongToneLock(snapshot)
+                || snapshot.recentFarOffTargetLockedFrameRatio() >= 0.35d) {
+            return "Recent window is spending meaningful lock time off target";
+        }
+        if (snapshot.recentActiveUnlockedFrameRatio() >= 0.25d) {
+            return "Recent window is showing repeated active unlock pressure";
+        }
+        if (snapshot.recentLockedFrameRatio() >= 0.60d
+                && snapshot.recentNearTargetLockedFrameRatio() >= 0.70d) {
+            return "Recent window is mostly locked near target";
+        }
+        if (snapshot.recentSearchFrameRatio() >= 0.60d) {
+            return "Recent window is mostly idle/search";
+        }
+        if (snapshot.recentLockedFrameRatio() >= snapshot.recentSearchFrameRatio()) {
+            return "Recent window is mixed but lock still outweighs search";
+        }
+        return "Recent window is mixed with limited stable lock";
+    }
+
+    public static String liveCheckHint(CwSignalSnapshot snapshot) {
+        if (!hasFrontEndHistory(snapshot)) {
+            return "Start input and compare tracked tone against the preferred target before judging downstream decode quality.";
+        }
+        if (suggestsWrongToneLock(snapshot)) {
+            return "Verify preferred tone versus actual monitor pitch first; wrong-tone acquisition is the main risk right now.";
+        }
+        if (snapshot.recentFarOffTargetLockedFrameRatio() >= 0.35d) {
+            return "Watch offset history closely; recent lock is drifting far enough from target to question frequency alignment before decoder behavior.";
+        }
+        if (snapshot.recentActiveUnlockedFrameRatio() >= 0.25d) {
+            return "Watch active unlock bursts before tuning decoder/interpreter rules; the front end is still losing lock during live tone windows.";
+        }
+        if (snapshot.recentSearchFrameRatio() >= 0.60d) {
+            return "The front end is spending most recent frames searching, so tone strength/noise conditions are still the first thing to improve.";
+        }
+        if (suggestsCleanRelease(snapshot)) {
+            return "The latest state looks like a clean tone-off tail, so compare the next active segment rather than overreacting to the final unlocked frame.";
+        }
+        if (snapshot.recentLockedFrameRatio() >= 0.60d) {
+            return "Recent lock looks stable enough that timing/decoder/interpreter behavior is now worth inspecting.";
+        }
+        return "Keep comparing recent lock, search, and offset behavior together; the front end is not failing outright, but it is not comfortably stable yet.";
+    }
+
     public static boolean suggestsWrongToneLock(CwSignalSnapshot snapshot) {
         return snapshot != null
                 && suggestsWrongToneLock(

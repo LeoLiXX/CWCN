@@ -53,6 +53,26 @@ public final class CwFixtureScenarioTest {
     }
 
     @Test
+    public void timingProfileSummaryIncludesTargetedPauseOffsets() {
+        CwFixtureScenario.PartTimingProfile profile = new CwFixtureScenario.PartTimingProfile(
+                1.0d,
+                1.0d,
+                null,
+                null,
+                0.0d,
+                1.0d,
+                1.0d,
+                1.0d,
+                0,
+                5.8d,
+                Arrays.asList(17, 20)
+        );
+
+        assertEquals(Arrays.asList(17, 20), profile.extraPauseCharacterOffsets());
+        assertTrue(profile.summaryLabel().contains("pause @17,20 +5.8 dot"));
+    }
+
+    @Test
     public void missingPartProfileFallsBackToDefault() {
         CwFixtureScenario scenario = new CwFixtureScenario(
                 "test",

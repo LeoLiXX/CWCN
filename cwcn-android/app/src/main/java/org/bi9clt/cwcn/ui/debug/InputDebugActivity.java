@@ -458,7 +458,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         }
         builder.append("\nPreferred Tone: ")
                 .append(cwSignalProcessor.snapshot().preferredToneFrequencyHz())
-                .append(" Hz");
+                .append(" Hz")
+                .append("\n")
+                .append(renderSourceHealthCoach(option, scenario));
         return builder.toString();
     }
 
@@ -524,6 +526,20 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "%, lock coverage "
                 + Math.round(snapshot.lockedFrameRatio() * 100.0d)
                 + "%"
+                + "\nMic recent window: lock "
+                + Math.round(snapshot.recentLockedFrameRatio() * 100.0d)
+                + "%, search "
+                + Math.round(snapshot.recentSearchFrameRatio() * 100.0d)
+                + "%, active unlock "
+                + Math.round(snapshot.recentActiveUnlockedFrameRatio() * 100.0d)
+                + "%"
+                + "\nMic recent alignment: near-target lock "
+                + Math.round(snapshot.recentNearTargetLockedFrameRatio() * 100.0d)
+                + "%, off-target lock "
+                + Math.round(snapshot.recentFarOffTargetLockedFrameRatio() * 100.0d)
+                + "%"
+                + "\nMic recent trend: "
+                + CwFrontEndHealthClassifier.recentTrendLabel(snapshot)
                 + "\nMic history: "
                 + renderRecentFrontEndHistory(snapshot)
                 + "\nMic release view: active unlock "
@@ -531,6 +547,76 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "%, worst gap "
                 + snapshot.maxConsecutiveToneActiveUnlockedFrames()
                 + " frame(s)";
+    }
+
+    private String renderSourceHealthCoach(
+            InputSourceOption option,
+            @Nullable CwFixtureScenario scenario
+    ) {
+        CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
+        StringBuilder builder = new StringBuilder();
+        builder.append("Focus: ");
+        if (option == InputSourceOption.PHONE_MICROPHONE) {
+            builder.append(renderMicrophoneHealthCoach(snapshot));
+        } else if (option == InputSourceOption.SYNTHETIC_FIXTURE && scenario != null) {
+            builder.append(renderFixtureHealthCoach(snapshot, scenario));
+        } else {
+            builder.append("Select a live source to start front-end observation.");
+        }
+        return builder.toString();
+    }
+
+    private String renderMicrophoneHealthCoach(CwSignalSnapshot snapshot) {
+        if (!CwFrontEndHealthClassifier.hasFrontEndHistory(snapshot)) {
+            return "Start the mic source, key a steady tone near the preferred pitch, and watch for the history row to leave idle/search.";
+        }
+        return "Live mic check: " + CwFrontEndHealthClassifier.liveCheckHint(snapshot);
+    }
+
+    private String renderFixtureHealthCoach(
+            CwSignalSnapshot snapshot,
+            CwFixtureScenario scenario
+    ) {
+        int preferredToneHz = snapshot.preferredToneFrequencyHz();
+        int fixtureToneHz = scenario.toneFrequencyHz();
+        int fixtureAlignmentErrorHz = snapshot.targetToneFrequencyHz() - fixtureToneHz;
+        String preferredAlignment = describeToneAlignment(preferredToneHz - fixtureToneHz);
+        if (!CwFrontEndHealthClassifier.hasFrontEndHistory(snapshot)) {
+            return "Fixture check: replay the scenario and compare the tracked tone against the fixture tone "
+                    + fixtureToneHz
+                    + " Hz before judging downstream decode quality.";
+        }
+        if (CwFrontEndHealthClassifier.suggestsWrongToneLock(snapshot)) {
+            return "Fixture check: the tracker likely chose the wrong carrier. Preferred tone is "
+                    + preferredToneHz
+                    + " Hz, fixture tone is "
+                    + fixtureToneHz
+                    + " Hz (preferred is "
+                    + preferredAlignment
+                    + ").";
+        }
+        return "Fixture check: tracked tone is "
+                + describeToneAlignment(fixtureAlignmentErrorHz)
+                + " relative to the fixture target "
+                + fixtureToneHz
+                + " Hz, while preferred tone is "
+                + preferredAlignment
+                + " relative to that same fixture target. "
+                + CwFrontEndHealthClassifier.liveCheckHint(snapshot);
+    }
+
+    private String describeToneAlignment(int offsetHz) {
+        int absoluteOffsetHz = Math.abs(offsetHz);
+        if (absoluteOffsetHz <= 10) {
+            return "well aligned";
+        }
+        if (absoluteOffsetHz <= 20) {
+            return offsetHz > 0 ? "slightly above target" : "slightly below target";
+        }
+        if (absoluteOffsetHz <= 45) {
+            return offsetHz > 0 ? "noticeably above target" : "noticeably below target";
+        }
+        return offsetHz > 0 ? "far above target" : "far below target";
     }
 
     private String renderMicrophoneTrend(CwSignalSnapshot snapshot) {
@@ -940,6 +1026,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + " / " + CwFrontEndHealthClassifier.bottleneckCode(snapshot) + "]"
                 + "\nReason: " + CwFrontEndHealthClassifier.reason(snapshot)
                 + "\nDiagnosis: " + CwFrontEndHealthClassifier.bottleneckLabel(snapshot)
+                + "\nRecent Trend: " + CwFrontEndHealthClassifier.recentTrendLabel(snapshot)
+                + "\nNext Check: " + CwFrontEndHealthClassifier.liveCheckHint(snapshot)
                 + "\nDominance: " + Math.round(dominancePercent) + "%"
                 + " | Isolation: " + Math.round(isolationPercent) + "%"
                 + " | Tone RMS: " + String.format(Locale.US, "%.1f", snapshot.lastToneRmsAmplitude())
@@ -948,6 +1036,11 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + " | Release margin: " + String.format(Locale.US, "%+d", releaseMargin)
                 + "\nPeak isolation: " + Math.round(peakIsolationPercent) + "%"
                 + " | Lock coverage: " + Math.round(lockCoveragePercent) + "%"
+                + "\nRecent window: lock " + Math.round(snapshot.recentLockedFrameRatio() * 100.0d) + "%"
+                + " | search " + Math.round(snapshot.recentSearchFrameRatio() * 100.0d) + "%"
+                + " | active unlock " + Math.round(snapshot.recentActiveUnlockedFrameRatio() * 100.0d) + "%"
+                + "\nRecent alignment: near-target " + Math.round(snapshot.recentNearTargetLockedFrameRatio() * 100.0d) + "%"
+                + " | off-target " + Math.round(snapshot.recentFarOffTargetLockedFrameRatio() * 100.0d) + "%"
                 + "\nTone-active unlock: " + Math.round(toneActiveUnlockPercent) + "%"
                 + " | Worst active gap: " + snapshot.maxConsecutiveToneActiveUnlockedFrames() + " frame(s)"
                 + "\nTrack offset: " + String.format(Locale.US, "%+d", trackingErrorHz) + " Hz";

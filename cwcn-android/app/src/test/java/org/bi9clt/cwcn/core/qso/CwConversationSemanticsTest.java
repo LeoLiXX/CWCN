@@ -108,6 +108,28 @@ public final class CwConversationSemanticsTest {
     }
 
     @Test
+    public void splitReportAndControlWordsStillRecoverDirectedExchange() {
+        QsoDraftSnapshot snapshot = runConversation("BI9CLT DE BG7YOZ UR 5 NN B K");
+
+        assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI9CLT", snapshot.stationCallsignUsed());
+        assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
+        assertEquals("599", snapshot.rstRcvdCandidate());
+        assertTrue(snapshot.hints().contains("Directed report to called station"));
+        assertTrue(snapshot.hints().contains("Turn handoff / over"));
+    }
+
+    @Test
+    public void splitAgainKeywordStillStaysInClarificationFlow() {
+        QsoDraftSnapshot snapshot = runConversation("BI9??Z AG N PSE K");
+
+        assertEquals(QsoPhase.REPLY_DETECTED, snapshot.phase());
+        assertEquals("BI9??Z", snapshot.remoteCallsignCandidate());
+        assertTrue(snapshot.needManualReview());
+        assertTrue(snapshot.hints().contains("Repeat / clarification request"));
+    }
+
+    @Test
     public void gluedDeBetweenTwoCallsignsSplitsIntoDirectedExchange() {
         QsoDraftSnapshot snapshot = runConversation("BI9CLTDEBG7YOZ UR 5NN BK");
 

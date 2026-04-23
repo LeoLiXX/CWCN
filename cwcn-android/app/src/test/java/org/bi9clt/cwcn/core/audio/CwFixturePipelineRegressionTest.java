@@ -306,6 +306,160 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
+    public void humanSplitShortTokensFixtureStillRecoversDirectedReportSemantics() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_split_short_tokens_report_exchange");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 1.0d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertNotEquals(summary, "NONE", result.recoveryPressureCode());
+        assertTrue(summary, result.normalizedTokenPairs().contains("5NN->599"));
+    }
+
+    @Test
+    public void humanHesitationGapFixtureStillRecoversDirectedReportSemantics() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_hesitation_gap_report_exchange");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 0.70d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+    }
+
+    @Test
+    public void humanHesitationCallsignFixtureStillRecoversCallsignsAndDirectedReport() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_hesitation_callsign_report_exchange");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 0.60d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+    }
+
+    @Test
+    public void humanHesitationDeCallsignFixtureStillRecoversStationIdentification() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_hesitation_de_callsign_exchange");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 0.55d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+    }
+
+    @Test
+    public void humanHesitationAddressedDigitSplitFixtureStillRecoversBothCallsigns() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_hesitation_addressed_digit_split_exchange");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 0.55d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+    }
+
+    @Test
+    public void humanHesitationSpeakerPrefixSplitFixtureStillRecoversBothCallsigns() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_hesitation_speaker_prefix_split_exchange");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 0.55d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+    }
+
+    @Test
+    public void humanHesitationClarificationFixtureStillRecoversRepeatFlow() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_hesitation_clarification_flow");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 0.65d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+    }
+
+    @Test
+    public void humanRememberedUncertainPrefixClosingFixtureKeepsUncertainTextButRecoversCleanCallsign() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_remembered_uncertain_prefix_closing");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 0.80d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertTrue(summary, result.actualNormalizedText().contains("?G7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+    }
+
+    @Test
+    public void humanRememberedUncertainAddressedMiddleClosingFixtureKeepsUncertainTextButRecoversCleanCallsign() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("human_remembered_uncertain_addressed_middle_closing");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, result.textTokenRecall() >= 0.80d);
+        assertTrue(summary, result.callsignRecall() >= 1.0d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertTrue(summary, result.actualNormalizedText().contains("BI?CLT"));
+        assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
+        assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
+    }
+
+    @Test
     public void humanCompactDeClosingFixtureStillRecoversClosingFlow() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("human_compact_de_closing_chain");
         CwFixtureEvaluationResult result = bundle.result;

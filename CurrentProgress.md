@@ -1,6 +1,6 @@
 # CWCN Current Progress
 
-最后更新：2026-04-21
+最后更新：2026-04-23
 
 这份文档用于保存当前阶段的关键上下文，避免后续讨论过长时丢失已经确认的设计与工程进展。
 
@@ -336,6 +336,86 @@
 - `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
 - `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest --tests org.bi9clt.cwcn.core.eval.CwFixtureEvaluationResultTest`
 - `.\gradlew.bat assembleDebug`
+
+## 2026-04-23 Split Token Recovery For False Intra-Word Spaces
+
+- Added a conservative interpreter-side recovery path for a low-priority but practical real-operator case:
+- an OP occasionally inserts an accidental extra pause inside one short CW token
+- the decoder then surfaces that as a visible split such as:
+- `5 NN`
+- `B K`
+- `AG N`
+- Instead of trying to globally merge arbitrary split words, the interpreter now only rejoins a narrow set of high-value compact tokens:
+- `BK`
+- `KN`
+- `TU`
+- `TNX`
+- `AGN`
+- `PSE`
+- `PLS`
+- `5NN`
+- `ENN`
+- `599`
+- This keeps the change low-risk:
+- ordinary free text is still left alone
+- callsign handling still follows its existing dedicated fragment-merge path
+- `R` and `K` are not aggressively merged away from their standalone meanings
+- Added regression coverage for:
+- `UR 5 NN B K`
+- `AG N PSE K`
+- Added a lightweight offline fixture:
+- `human_split_short_tokens_report_exchange`
+- These cases now recover the intended clarification/report semantics without needing any timing-layer rewrite yet.
+
+### Key files
+
+- [CwInterpreter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/interpreter/CwInterpreter.java)
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+- [CwConversationSemanticsTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/qso/CwConversationSemanticsTest.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest --tests org.bi9clt.cwcn.core.qso.CwConversationSemanticsTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+## 2026-04-23 Targeted Hesitation-Gap Fixture Support
+
+- Extended synthetic timing profiles so a fixture can now inject an extra pause at exact character boundaries instead of only:
+- every N characters
+- globally stretched letter gaps
+- globally stretched word gaps
+- This lets us model a more realistic operator hesitation case where the transmitted text is still normal:
+- `UR 5NN BK`
+- but timing temporarily behaves more like:
+- `UR 5 NN B K`
+- without rewriting the source text itself
+- `CwFixtureScenario.PartTimingProfile` now supports:
+- `extraPauseCharacterOffsets`
+- The timing summary text exposes these pauses as:
+- `pause @17,20 +5.8 dot`
+- Added a new offline fixture:
+- `human_hesitation_gap_report_exchange`
+- Added another hesitation-focused fixture:
+- `human_hesitation_callsign_report_exchange`
+- It uses normal text plus targeted pauses after the `5` and `B` positions, so the full synthetic pipeline now covers a genuine timing-layer “false word-space” pattern instead of only string-layer split text.
+- The follow-up callsign fixture does the same thing inside the two callsigns, so we now also cover:
+- normal text
+- split-like timing
+- callsign-fragment recovery
+- directed-report semantics
+
+### Key files
+
+- [CwFixtureScenario.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureScenario.java)
+- [SyntheticFixtureRxAudioSource.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/audio/SyntheticFixtureRxAudioSource.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixtureScenarioTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFixtureScenarioTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
 
 ## 2026-04-23 Damaged Short Report / Control Recovery
 
@@ -2421,3 +2501,235 @@
 - [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
 - [CurrentProgress.md](/D:/Workshop/CWCN/CurrentProgress.md)
+
+## 2026-04-23 Incremental Callsign Regression Fix
+
+- Added two new interpreter regression cases that simulate realistic cumulative decode growth rather than one-shot final strings:
+- `BI9CLT DE BG7YOZ UR 5 NN B K`
+- `BI9CLT D E BG 7YOZ UR 5NN BK`
+- These tests reproduced the exact pipeline failure where final normalized text was correct, but the addressed callsign regressed from `BI9CLT` to remembered partial `BI9CL`.
+- Root cause:
+- the remembered-callsign contamination rule was treating a trailing single-letter `T` as removable edge noise
+- which caused a valid full callsign like `BI9CLT` to be downgraded back to `BI9CL` during incremental recovery
+- Fixed by narrowing the single-letter contamination set so `T` is no longer stripped as generic remembered-edge contamination.
+- Important effect:
+- we still keep the existing keyword-residue cleanup path for `TU/TNX`-style tails
+- but we no longer eat legitimate callsign suffixes ending in `T`
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureScenarioTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+### Key files
+
+- [CwInterpreter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/interpreter/CwInterpreter.java)
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-23 Additional Hesitation False-Space Baselines
+
+- Added two more low-priority human-operator hesitation fixtures aimed at `false intra-word spaces` inside callsigns:
+- addressed callsign leaning toward `BI 9CLT`
+- speaker callsign leaning toward `B G7YOZ`
+- Both are modeled as normal source text plus targeted hesitation pauses, rather than literally pre-splitting the message text.
+- Practical outcome:
+- these now extend the existing `human_split_short_tokens_*` and `human_hesitation_*` family with more realistic callsign-specific spacing errors
+- while still remaining stable enough to serve as passing offline baselines
+- The stronger single-letter speaker-prefix split variant (`B G7YOZ`) is now promoted into a passing baseline after interpreter-side contextual callsign-edge recovery was added.
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest.humanHesitationAddressedDigitSplitFixtureStillRecoversBothCallsigns --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest.humanHesitationSpeakerPrefixSplitFixtureStillRecoversBothCallsigns`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+### Key files
+
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+- [CurrentProgress.md](/D:/Workshop/CWCN/CurrentProgress.md)
+
+## 2026-04-23 Contextual Single-Letter Callsign Edge Recovery
+
+- Extended interpreter-side adjacent-fragment recovery so a single isolated letter can now merge back into a neighboring callsign body when all of the following are true:
+- merged result is a valid callsign
+- the single-letter fragment sits on the edge of the merged callsign
+- surrounding tokens indicate a likely callsign slot such as `DE ... UR`
+- This specifically upgrades realistic copies like:
+- `BI9CLT DE B G7YOZ UR 5NN BK`
+- `BI9CLT DE BG7YO Z UR 5NN BK`
+- Important guardrail:
+- the rule stays contextual, so it does not broadly disable the existing residue protections that keep `B K`, `K BI9CLT`, and similar control/report fragments from being over-merged.
+- Added interpreter regression coverage for:
+- one-shot recovery of single-letter prefix/suffix callsign splits
+- incremental decode growth of the `B G7YOZ` case
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+### Key files
+
+- [CwInterpreter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/interpreter/CwInterpreter.java)
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+
+## 2026-04-23 Contextual Uncertain Single-Character Callsign Edges
+
+- Extended the same edge-recovery idea one step further so contextual single-character callsign edges can now also carry `?` uncertainty instead of being forced into a clean trimmed callsign.
+- Newly pinned interpreter cases now include:
+- `BI9CLT DE ? G7YOZ UR 5NN BK`
+- `BI9CLT DE BG7YO ? UR 5NN BK`
+- plus incremental decode growth of the `? G7YOZ` prefix case
+- Practical effect:
+- the interpreter now preserves partial candidates like `?G7YOZ` and `BG7YO?`
+- instead of aggressively trimming them down into clean inner fragments such as `G7YOZ` when the unknown edge could still be a real callsign character
+- Important guardrail:
+- trimmed repair variants from uncertain raw candidates are now prevented from silently dropping all `?` uncertainty by default
+- so a clean full callsign should come from remembered/contextual upgrade logic, not from blindly cropping an uncertain edge away
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+### Key files
+
+- [CwInterpreter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/interpreter/CwInterpreter.java)
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+- [CurrentProgress.md](/D:/Workshop/CWCN/CurrentProgress.md)
+
+## 2026-04-23 Remembered Upgrade Over Uncertain Single-Character Prefix
+
+- Added explicit regression coverage for the case where the interpreter first sees a clean speaker callsign and later only receives an uncertain split edge such as `? G7YOZ`.
+- The remembered speaker callsign is now pinned as the authoritative clean recovery path for this scenario:
+- text remains uncertain (`?G7YOZ`)
+- callsign candidate list still converges back to clean `BG7YOZ`
+- partial-copy hint is preserved
+- Added a new two-part offline fixture:
+- `human_remembered_uncertain_prefix_closing`
+- It models a realistic full-session flow:
+- first part establishes `BG7YOZ` cleanly during report exchange
+- second part copies a closing message as `? G7YOZ TU 73 BK`
+- Important calibration result:
+- this is now a stable passing pipeline baseline, and the full-session expectation is aligned to `COMPLETED` rather than just `CLOSING`
+- because the offline evaluator sees the earlier report exchange and later closing as one completed QSO flow
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest.humanRememberedUncertainPrefixClosingFixtureKeepsUncertainTextButRecoversCleanCallsign`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+### Key files
+
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-23 Ambiguous Callsign Conflict Guard And Residue Recovery Stabilization
+
+- Added new interpreter coverage for conflict-style callsign ambiguity where an uncertain speaker fragment such as `BG7Y?Z` can match more than one clean callsign candidate.
+- Current intended behavior is now explicit:
+- do not force an arbitrary clean upgrade when multiple plausible clean matches exist
+- keep the uncertain current copy visible
+- keep earlier clean remembered context intact so a later clearer copy can still recover correctly
+- Hardened remembered-callsign updates so they no longer downgrade a previously clean remembered callsign into a shorter anchored fragment such as `BI9CL`.
+- Narrowed callsign-run / keyword interaction so `AGN?`-style clarification tokens no longer merge into callsign runs.
+- Extended repeated-callsign run handling so human-style glued repetitions with a truncated final repeat can still collapse back to the base callsign.
+- Added a small safety fix in repeated-run parsing to avoid substring crashes on shorter compact decode events seen in fixture playback.
+- Regression outcome after this round:
+- clarification flows such as `BI9??Z AGN? CALLSIGN PSE KN` again keep `BI9??Z` as the remote callsign candidate
+- glued repeated calling flows such as `CQCQCQ DE BI9CLTBI9CLTBI 9CL T` again recover `BI9CLT`
+- remembered addressed/speaker recovery still works for short fragments and uncertain middle splits
+- compact `AG` / `TU` residue no longer pulls callsigns back to polluted forms like `BI9CLTAG` or `BG7YOZT`
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.qso.CwConversationSemanticsTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest.humanHesitationClarificationFixtureStillRecoversRepeatFlow --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest.humanRememberedUncertainAddressedMiddleClosingFixtureKeepsUncertainTextButRecoversCleanCallsign`
+- `.\gradlew.bat testDebugUnitTest`
+
+### Key files
+
+- [CwInterpreter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/interpreter/CwInterpreter.java)
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+- [CwConversationSemanticsTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/qso/CwConversationSemanticsTest.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-23 Current Priority Reset
+
+- Re-aligned the near-term roadmap around overall product value instead of continuing to let callsign recovery dominate the main line by default.
+- Current priority order is now:
+- `P0` real-input RX stability
+- `P0` signal / timing robustness under real microphone conditions, QSB, drift, and interference
+- `P1` front-end observability and manual correction UX
+- `P1` TX v1 minimum loop (`text -> Morse -> sidetone -> stop/progress`)
+- `P1` QSO draft to confirmed log to ADIF workflow polish
+- `P2` callsign intelligence as continuous enhancement, driven by real samples and fixture gaps
+- `P2` rig / keyer transmission integration after TX v1 is stable
+- `P3` third-party sync and broader log ecosystem work
+- Current milestone framing is now:
+- `M1` stabilize the receive chain under real input and improve debug observability
+- `M2` make the current RX/QSO path comfortably operable even when recognition is imperfect
+- `M3` add the first usable TX loop without blocking on external rig integration
+- Practical interpretation:
+- callsign recovery remains important, but it is now treated as an ongoing polish lane rather than the only main battlefield
+- the immediate next coding work should prefer microphone/debug/signal-side observability and robustness improvements
+
+### Key files
+
+- [CurrentProgress.md](/D:/Workshop/CWCN/CurrentProgress.md)
+- [CodingPlan.md](/D:/Workshop/CWCN/CodingPlan.md)
+
+## 2026-04-23 M1 Recent-Window Front-End Observability
+
+- Continued `M1` by pushing debug observability beyond simple cumulative lock percentages.
+- `CwSignalSnapshot` now exposes recent-window counters/ratios derived from the rolling front-end history buffer:
+- recent locked frames
+- recent active-unlocked frames
+- recent search frames
+- recent near-target lock ratio
+- recent far-off-target lock ratio
+- `CwFrontEndHealthClassifier` now also provides:
+- `recentTrendLabel(...)`
+- `liveCheckHint(...)`
+- The Debug UI now surfaces those directly in the receive path:
+- microphone tone watch includes recent lock/search/unlock percentages and recent alignment quality
+- the shared signal health summary now includes a recent trend line and a more actionable “next check” suggestion
+- fixture mode also now reuses the same hinting layer, so comparing preferred tone vs fixture tone vs tracked tone is easier without mentally decoding raw metrics each time
+- Practical outcome:
+- when testing with live microphone input, it is now easier to tell whether the latest unlocked state is just a clean tail or whether the recent window has actually been unstable
+- when testing with fixtures, it is easier to see whether the problem is wrong-tone pressure, search-heavy acquisition, or a downstream decoder/interpreter issue
+- Regression coverage added:
+- `CwSignalSnapshotTest` pins recent-window ratios and alignment statistics
+- `CwFrontEndHealthClassifierTest` now pins recent trend and live-check hint behavior for off-target lock, search-heavy windows, and stable near-target lock
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalSnapshotTest --tests org.bi9clt.cwcn.core.eval.CwFrontEndHealthClassifierTest`
+- `.\gradlew.bat testDebugUnitTest`
+
+### Key files
+
+- [CwSignalSnapshot.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalSnapshot.java)
+- [CwFrontEndHealthClassifier.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifier.java)
+- [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java)
+- [CwSignalSnapshotTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalSnapshotTest.java)
+- [CwFrontEndHealthClassifierTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifierTest.java)
+
+## 2026-04-23 Remembered Upgrade Over Uncertain Addressed Callsign Middle Split
+
+- Added addressed-side remembered recovery coverage for cases where the called station later appears with an uncertain middle split such as `BI ?CLT`.
+- Newly pinned interpreter cases now include:
+- direct remembered upgrade from `BI ?CLT` to clean `BI9CLT`
+- realistic two-stage incremental growth where a clean earlier addressed callsign is remembered before the uncertain split version arrives
+- Added a new two-part offline fixture:
+- `human_remembered_uncertain_addressed_middle_closing`
+- It models:
+- a clean earlier report exchange that establishes the addressed callsign
+- followed by a later closing copy containing `BI ?CLT DE BG7YOZ TU 73 BK`
+- Practical outcome:
+- the end-to-end pipeline now treats this as a stable completed-QSO baseline
+- text can remain visibly uncertain (`BI?CLT`)
+- while callsign recovery still converges to the clean remembered `BI9CLT`
+- Calibration note:
+- current end-to-end behavior does not surface `Partial callsign resolved` hints for this addressed-side case, so the fixture expectation was aligned to the actual stable semantics rather than forcing a more ambitious hint contract prematurely
+- Verified with:
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest.humanRememberedUncertainAddressedMiddleClosingFixtureKeepsUncertainTextButRecoversCleanCallsign`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+
+### Key files
+
+- [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
+- [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
+- [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
