@@ -17,18 +17,16 @@ public final class RigRegistry {
     private RigRegistry() {
     }
 
-    public static List<RigTransport> defaultTransports() {
-        return Arrays.asList(
-                new UsbHostTransport(),
-                new BluetoothSerialTransport(),
-                new NetworkCatTransport(),
-                new VoxTransport()
-        );
-    }
-
-    public static List<RigControlAdapter> defaultAdapters() {
+    public static List<RigControlAdapter> defaultAdapters(Context context) {
+        Context appContext = context == null ? null : context.getApplicationContext();
         return Arrays.asList(
                 new AudioVoxRigControlAdapter(),
+                new UsbSerialKeyerRigControlAdapter(
+                        new AndroidUsbSerialKeyerPortFactory(appContext),
+                        SerialKeyerTxOutput.KeyLine.RTS,
+                        18,
+                        650
+                ),
                 new PlaceholderAdapter(
                         "generic-cat",
                         "Generic CAT / PTT Adapter",
@@ -44,6 +42,19 @@ public final class RigRegistry {
                         true
                 )
         );
+    }
+
+    public static List<RigTransport> defaultTransports() {
+        return Arrays.asList(
+                new UsbHostTransport(),
+                new BluetoothSerialTransport(),
+                new NetworkCatTransport(),
+                new VoxTransport()
+        );
+    }
+
+    public static List<RigControlAdapter> defaultAdapters() {
+        return defaultAdapters(null);
     }
 
     private static final class UsbHostTransport implements RigTransport {

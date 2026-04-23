@@ -958,10 +958,12 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         }
 
         builder.append(getString(R.string.adapter_registry_title_inline)).append("\n");
-        for (RigControlAdapter adapter : RigRegistry.defaultAdapters()) {
+        for (RigControlAdapter adapter : RigRegistry.defaultAdapters(this)) {
             builder.append(adapter.displayName())
                     .append("\n")
                     .append(adapter.describeCapabilities())
+                    .append("\n")
+                    .append(adapter.describeAvailability())
                     .append("\n")
                     .append(getString(
                             R.string.adapter_capability_template,

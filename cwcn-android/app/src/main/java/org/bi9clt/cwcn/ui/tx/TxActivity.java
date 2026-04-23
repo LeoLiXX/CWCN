@@ -1,5 +1,10 @@
 package org.bi9clt.cwcn.ui.tx;
 
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -10,16 +15,20 @@ import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.rig.RigControlAdapter;
 import org.bi9clt.cwcn.core.rig.RigRegistry;
+import org.bi9clt.cwcn.core.rig.SerialKeyerTxOutput;
+import org.bi9clt.cwcn.core.rig.UsbSerialKeyerRigControlAdapter;
 import org.bi9clt.cwcn.core.tx.CwTxBackend;
 import org.bi9clt.cwcn.core.tx.CwTxEngine;
 import org.bi9clt.cwcn.core.tx.CwTxPlan;
 import org.bi9clt.cwcn.core.tx.CwTxPlaybackSnapshot;
 import org.bi9clt.cwcn.core.tx.CwTxPreset;
+import org.bi9clt.cwcn.core.tx.CwTxRouteAdvisor;
 import org.bi9clt.cwcn.core.tx.CwTxState;
 import org.bi9clt.cwcn.core.tx.LocalSidetoneTxBackend;
 import org.bi9clt.cwcn.core.tx.RigTextTxBackend;
@@ -29,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 public final class TxActivity extends AppCompatActivity {
+    private static final String ACTION_USB_PERMISSION = "org.bi9clt.cwcn.action.USB_PERMISSION";
     private static final String DEFAULT_TX_TEXT = "CQ CQ DE BI9CLT";
     private static final int DEFAULT_WPM = 18;
     private static final int DEFAULT_TONE_FREQUENCY_HZ = 650;
@@ -42,6 +52,8 @@ public final class TxActivity extends AppCompatActivity {
     private CwTxPlan currentPlan;
     private CwTxPlaybackSnapshot lastPlaybackSnapshot;
     private boolean syncingFields;
+    private boolean syncingUsbKeyLineSelection;
+    private BroadcastReceiver usbPermissionReceiver;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -52,8 +64,10 @@ public final class TxActivity extends AppCompatActivity {
         localLogRepository = new LocalLogRepository(this);
         txAudioOutput = new AudioTrackTxAudioOutput();
         backendOptions = buildBackendOptions();
+        registerUsbPermissionReceiver();
         setupBackendSelector();
         setupPresetSelector();
+        setupUsbRouteControls();
         setupDefaults();
         setupActions();
         rebuildPlanPreview();
@@ -62,6 +76,10 @@ public final class TxActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         stopAllBackends();
+        if (usbPermissionReceiver != null) {
+            unregisterReceiver(usbPermissionReceiver);
+            usbPermissionReceiver = null;
+        }
         txAudioOutput.stop();
         super.onDestroy();
     }
@@ -95,6 +113,7 @@ public final class TxActivity extends AppCompatActivity {
         binding.applyPresetButton.setOnClickListener(view -> applySelectedPreset());
         binding.startTxButton.setOnClickListener(view -> startTx());
         binding.stopTxButton.setOnClickListener(view -> stopTx());
+        binding.requestUsbPermissionButton.setOnClickListener(view -> requestUsbPermissionForSelectedBackend());
     }
 
     private void setupBackendSelector() {
@@ -132,6 +151,40 @@ public final class TxActivity extends AppCompatActivity {
         binding.presetSpinner.setSelection(0);
     }
 
+    private void setupUsbRouteControls() {
+        ArrayAdapter<SerialKeyerTxOutput.KeyLine> keyLineAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                SerialKeyerTxOutput.KeyLine.values()
+        );
+        keyLineAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.usbKeyLineSpinner.setAdapter(keyLineAdapter);
+        binding.usbKeyLineSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (syncingUsbKeyLineSelection) {
+                    return;
+                }
+                UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
+                Object item = parent.getItemAtPosition(position);
+                if (adapter == null || !(item instanceof SerialKeyerTxOutput.KeyLine)) {
+                    return;
+                }
+                if (adapter.setKeyLine((SerialKeyerTxOutput.KeyLine) item)) {
+                    lastPlaybackSnapshot = null;
+                    rebuildPlanPreview();
+                } else {
+                    Toast.makeText(TxActivity.this, "Unable to change USB key line while TX is active.", Toast.LENGTH_SHORT).show();
+                    syncUsbKeyLineSelection(adapter);
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+    }
+
     private void rebuildPlanPreview() {
         CwTxBackend backend = selectedBackend();
         currentPlan = txEngine.buildPlan(
@@ -147,7 +200,8 @@ public final class TxActivity extends AppCompatActivity {
                 : currentPlan.morsePreview());
         binding.planSummaryText.setText(renderPlanSummary(currentPlan));
         binding.backendSummaryText.setText(renderBackendSummary(backend));
-        binding.routeChecklistText.setText(renderRouteChecklist(backend, currentPlan));
+        binding.routeChecklistText.setText(CwTxRouteAdvisor.buildChecklist(backend, currentPlan));
+        refreshRouteControls(backend);
         if (lastPlaybackSnapshot == null || !backend.isRunning()) {
             binding.txStatusText.setText(renderIdleStatus(backend));
             binding.txProgressText.setText("Progress: 0%");
@@ -225,29 +279,6 @@ public final class TxActivity extends AppCompatActivity {
                 + "\nProgress snapshots: " + yesNo(backend.supportsProgressSnapshots());
     }
 
-    private String renderRouteChecklist(CwTxBackend backend, CwTxPlan plan) {
-        StringBuilder builder = new StringBuilder();
-        if ("local-sidetone".equals(backend.id())) {
-            builder.append("Local checklist: use this route for dry-run verification, headphones are preferred, and current WPM/tone are applied directly.");
-        } else if ("rig-text:audio-vox-text".equals(backend.id())) {
-            builder.append("Audio VOX checklist: connect phone audio to the rig/keyer audio path, enable VOX on the target device, and start with conservative phone volume.");
-            if (plan != null) {
-                if (plan.toneFrequencyHz() < 500 || plan.toneFrequencyHz() > 900) {
-                    builder.append("\nTone warning: VOX testing is usually easier around 500-900 Hz.");
-                }
-                if (plan.wpm() < 10 || plan.wpm() > 28) {
-                    builder.append("\nWPM warning: initial VOX validation is usually easier around 10-28 WPM.");
-                }
-                if (plan.totalDurationMs() > 30000) {
-                    builder.append("\nLength warning: very long over-the-air VOX tests are harder to calibrate; start with a shorter macro.");
-                }
-            }
-        } else {
-            builder.append("Rig route checklist: confirm backend readiness first, then verify how this adapter expects keying/PTT/audio to reach the target device.");
-        }
-        return builder.toString();
-    }
-
     private String renderTxStatus(CwTxPlaybackSnapshot snapshot) {
         if (snapshot == null) {
             return renderIdleStatus(selectedBackend());
@@ -306,12 +337,105 @@ public final class TxActivity extends AppCompatActivity {
         return "TX idle.\nSelected backend is not ready yet.\nReason: " + backend.describeAvailability();
     }
 
-    private CwTxBackend selectedBackend() {
+    private void refreshRouteControls(CwTxBackend backend) {
+        UsbSerialKeyerRigControlAdapter usbAdapter = selectedUsbSerialAdapter();
+        boolean usbVisible = backend != null && usbAdapter != null;
+        binding.usbRoutePanel.setVisibility(usbVisible ? View.VISIBLE : View.GONE);
+        if (!usbVisible) {
+            return;
+        }
+        binding.usbDeviceText.setText(
+                "Device: " + usbAdapter.describeMatchedDevice()
+                        + "\nAvailability: " + usbAdapter.describeAvailability()
+        );
+        syncUsbKeyLineSelection(usbAdapter);
+        boolean needsPermission = !usbAdapter.isReady();
+        binding.requestUsbPermissionButton.setEnabled(needsPermission);
+        binding.requestUsbPermissionButton.setText(needsPermission
+                ? "Request USB Permission"
+                : "USB Permission Ready");
+    }
+
+    private void syncUsbKeyLineSelection(UsbSerialKeyerRigControlAdapter adapter) {
+        syncingUsbKeyLineSelection = true;
+        binding.usbKeyLineSpinner.setSelection(adapter.keyLine().ordinal(), false);
+        syncingUsbKeyLineSelection = false;
+    }
+
+    private void requestUsbPermissionForSelectedBackend() {
+        UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
+        if (adapter == null) {
+            Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (adapter.isReady()) {
+            Toast.makeText(this, "USB backend already has permission and is ready.", Toast.LENGTH_SHORT).show();
+            rebuildPlanPreview();
+            return;
+        }
+        PendingIntent permissionIntent = PendingIntent.getBroadcast(
+                this,
+                0,
+                new Intent(ACTION_USB_PERMISSION).setPackage(getPackageName()),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        boolean requested = adapter.requestUsbPermission(permissionIntent);
+        if (!requested) {
+            Toast.makeText(this, adapter.describeAvailability(), Toast.LENGTH_SHORT).show();
+            rebuildPlanPreview();
+            return;
+        }
+        Toast.makeText(this, "USB permission request sent. Approve it on the device if prompted.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void registerUsbPermissionReceiver() {
+        usbPermissionReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(android.content.Context context, Intent intent) {
+                if (!ACTION_USB_PERMISSION.equals(intent.getAction())) {
+                    return;
+                }
+                boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                Toast.makeText(
+                        TxActivity.this,
+                        granted
+                                ? "USB permission granted. Rechecking backend readiness."
+                                : "USB permission was denied.",
+                        Toast.LENGTH_SHORT
+                ).show();
+                lastPlaybackSnapshot = null;
+                rebuildPlanPreview();
+            }
+        };
+        ContextCompat.registerReceiver(
+                this,
+                usbPermissionReceiver,
+                new IntentFilter(ACTION_USB_PERMISSION),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+        );
+    }
+
+    private TxBackendOption selectedBackendOption() {
         Object selectedItem = binding.backendSpinner.getSelectedItem();
         if (selectedItem instanceof TxBackendOption) {
-            return ((TxBackendOption) selectedItem).backend();
+            return (TxBackendOption) selectedItem;
         }
-        return backendOptions.get(0).backend();
+        return backendOptions.get(0);
+    }
+
+    private CwTxBackend selectedBackend() {
+        return selectedBackendOption().backend();
+    }
+
+    private UsbSerialKeyerRigControlAdapter selectedUsbSerialAdapter() {
+        CwTxBackend backend = selectedBackendOption().backend();
+        if (backend instanceof RigTextTxBackend) {
+            RigControlAdapter adapter = ((RigTextTxBackend) backend).rigAdapter();
+            if (adapter instanceof UsbSerialKeyerRigControlAdapter) {
+                return (UsbSerialKeyerRigControlAdapter) adapter;
+            }
+        }
+        return null;
     }
 
     private void applySelectedPreset() {
@@ -349,7 +473,7 @@ public final class TxActivity extends AppCompatActivity {
     private ArrayList<TxBackendOption> buildBackendOptions() {
         ArrayList<TxBackendOption> options = new ArrayList<>();
         options.add(new TxBackendOption(new LocalSidetoneTxBackend(txAudioOutput)));
-        for (RigControlAdapter adapter : RigRegistry.defaultAdapters()) {
+        for (RigControlAdapter adapter : RigRegistry.defaultAdapters(this)) {
             if (adapter.supportsTextToCw()) {
                 options.add(new TxBackendOption(new RigTextTxBackend(adapter)));
             }

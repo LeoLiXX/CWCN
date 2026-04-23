@@ -2859,6 +2859,25 @@
 - Supporting refactor:
 - the reusable `AudioTrackTxAudioOutput` implementation was moved into `core.tx`
 - so both `TxActivity` and future rig adapters can share the same audio-output primitive without UI-layer coupling
+- Added a route-advice layer:
+- `CwTxRouteAdvisor`
+- The TX page now renders backend-specific checklists instead of hard-coded UI-only wording, including:
+- local sidetone dry-run guidance
+- Audio VOX calibration / warning guidance
+- USB RTS/DTR hardware-keying guidance
+- Added the second real adapter prototype:
+- `UsbSerialKeyerRigControlAdapter`
+- plus supporting abstractions:
+- `SerialKeyerPort`
+- `SerialKeyerTxOutput`
+- `DisconnectedSerialKeyerPort`
+- Practical meaning:
+- the project now has two real transmission-path prototypes under the same rig adapter contract:
+- `Audio VOX`
+- `USB serial RTS/DTR keying`
+- The current USB keyer route is still backed by a disconnected port in the default registry,
+- but unlike a pure placeholder, the adapter now already contains real keying/timing logic and is covered by tests,
+- so the remaining work is mainly to replace the disconnected port with an actual USB serial session implementation.
 
 ### Verification
 
@@ -2869,3 +2888,33 @@
 - keep `1` moving by comparing the new microphone input health summary against real on-device recordings
 - then calibrate the new TX sidetone page on real devices and decide whether to attach station presets / canned messages next
 - after that, start separating `local sidetone TX` from future `external rig/keyer TX backend` responsibilities
+
+## 2026-04-23 TX Hardware Route Follow-Up: USB Permission + Key-Line Controls
+
+- Continued the TX hardware route after the first `Audio VOX` and `USB serial keyer` prototypes.
+- The `USB serial keyer` backend is no longer just discoverable in the UI; `TxActivity` now has a route-specific control block for:
+- matched USB CDC/ACM device summary
+- current backend availability
+- active `RTS` / `DTR` key-line selection
+- explicit `Request USB Permission` action
+- Added an Android USB permission request flow for the selected USB keyer backend:
+- `TxActivity` sends a permission request with a dedicated broadcast action
+- permission grant / deny now feeds back into the TX page immediately
+- backend summary and start-button readiness now refresh after the permission result
+- `UsbSerialKeyerRigControlAdapter` was generalized slightly so it now behaves more like a real route:
+- backend id is now `usb-serial-keyer`
+- readiness reflects whether the port factory can actually open a hardware path, not only whether a port was already opened once
+- the active key line can be switched between `RTS` and `DTR` from UI
+- `RigTextTxBackend` now exposes its underlying rig adapter to allow route-specific TX UI controls without hard-coding UI logic into the core backend contract
+- `SerialKeyerTxOutput.KeyLine` is now public so UI and tests can share the same control-line enum
+- Practical outcome:
+- the TX page is now much closer to a real bench-testing tool for a simple USB serial keyer
+- the remaining gap is no longer “basic app wiring”, but mainly richer hardware UX such as explicit device selection and broader USB-serial chipset support
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- keep moving on the same branch by replacing the current “first matched CDC/ACM device” logic with explicit USB device selection and persisted route preferences

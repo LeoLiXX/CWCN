@@ -11,6 +11,10 @@ public final class RigTextTxBackend implements CwTxBackend {
         this.adapter = adapter;
     }
 
+    public RigControlAdapter rigAdapter() {
+        return adapter;
+    }
+
     @Override
     public String id() {
         return "rig-text:" + adapter.id();
