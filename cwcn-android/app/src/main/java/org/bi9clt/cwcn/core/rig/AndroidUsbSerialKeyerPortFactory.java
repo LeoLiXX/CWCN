@@ -10,13 +10,16 @@ import android.hardware.usb.UsbManager;
 
 import androidx.core.content.ContextCompat;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
-public final class AndroidUsbSerialKeyerPortFactory implements SerialKeyerPortFactory {
+public final class AndroidUsbSerialKeyerPortFactory implements SelectableSerialKeyerPortFactory {
     private static final int USB_CLASS_COMM = 2;
     private static final int USB_CDC_SUBCLASS_ACM = 2;
 
     private final Context appContext;
+    private volatile String preferredDeviceName;
 
     public AndroidUsbSerialKeyerPortFactory(Context context) {
         this.appContext = context == null ? null : context.getApplicationContext();
@@ -35,8 +38,11 @@ public final class AndroidUsbSerialKeyerPortFactory implements SerialKeyerPortFa
         if (deviceList.isEmpty()) {
             return "No USB device is attached.";
         }
-        UsbDevice matchedDevice = firstCdcAcmDevice(deviceList);
+        UsbDevice matchedDevice = matchedDevice(deviceList);
         if (matchedDevice == null) {
+            if (preferredDeviceName != null && !preferredDeviceName.isEmpty()) {
+                return "Preferred USB CDC/ACM device is not attached right now: " + preferredDeviceName;
+            }
             return "USB device detected, but no CDC/ACM serial interface was found for RTS/DTR keying.";
         }
         if (!usbManager.hasPermission(matchedDevice)) {
@@ -51,7 +57,7 @@ public final class AndroidUsbSerialKeyerPortFactory implements SerialKeyerPortFa
         if (usbManager == null) {
             return false;
         }
-        UsbDevice matchedDevice = firstCdcAcmDevice(usbManager.getDeviceList());
+        UsbDevice matchedDevice = matchedDevice(usbManager.getDeviceList());
         return matchedDevice != null && usbManager.hasPermission(matchedDevice);
     }
 
@@ -73,12 +79,14 @@ public final class AndroidUsbSerialKeyerPortFactory implements SerialKeyerPortFa
             );
         }
 
-        UsbDevice device = firstCdcAcmDevice(usbManager.getDeviceList());
+        UsbDevice device = matchedDevice(usbManager.getDeviceList());
         if (device == null) {
             return new DisconnectedSerialKeyerPort(
                     "usb-serial-no-cdc",
                     "USB Serial Keyer Port",
-                    "No CDC/ACM serial device is attached."
+                    preferredDeviceName != null && !preferredDeviceName.isEmpty()
+                            ? "Preferred USB CDC/ACM device is not attached: " + preferredDeviceName
+                            : "No CDC/ACM serial device is attached."
             );
         }
         if (!usbManager.hasPermission(device)) {
@@ -122,8 +130,11 @@ public final class AndroidUsbSerialKeyerPortFactory implements SerialKeyerPortFa
         if (usbManager == null) {
             return "No USB manager";
         }
-        UsbDevice matchedDevice = firstCdcAcmDevice(usbManager.getDeviceList());
+        UsbDevice matchedDevice = matchedDevice(usbManager.getDeviceList());
         if (matchedDevice == null) {
+            if (preferredDeviceName != null && !preferredDeviceName.isEmpty()) {
+                return "Preferred device missing: " + preferredDeviceName;
+            }
             return "No CDC/ACM serial device";
         }
         return matchedDevice.getDeviceName()
@@ -137,7 +148,7 @@ public final class AndroidUsbSerialKeyerPortFactory implements SerialKeyerPortFa
         if (usbManager == null || pendingIntent == null) {
             return false;
         }
-        UsbDevice matchedDevice = firstCdcAcmDevice(usbManager.getDeviceList());
+        UsbDevice matchedDevice = matchedDevice(usbManager.getDeviceList());
         if (matchedDevice == null) {
             return false;
         }
@@ -148,19 +159,66 @@ public final class AndroidUsbSerialKeyerPortFactory implements SerialKeyerPortFa
         return true;
     }
 
+    @Override
+    public List<UsbSerialDeviceOption> availableDevices() {
+        UsbManager usbManager = usbManager();
+        List<UsbSerialDeviceOption> options = new ArrayList<>();
+        if (usbManager == null) {
+            return options;
+        }
+        for (UsbDevice device : candidateDevices(usbManager.getDeviceList())) {
+            options.add(new UsbSerialDeviceOption(
+                    device.getDeviceName(),
+                    device.getVendorId(),
+                    device.getProductId()
+            ));
+        }
+        return options;
+    }
+
+    @Override
+    public String preferredDeviceName() {
+        return preferredDeviceName;
+    }
+
+    @Override
+    public boolean selectDevice(String deviceName) {
+        preferredDeviceName = deviceName == null || deviceName.trim().isEmpty()
+                ? null
+                : deviceName.trim();
+        return true;
+    }
+
     private UsbManager usbManager() {
         return appContext == null
                 ? null
                 : ContextCompat.getSystemService(appContext, UsbManager.class);
     }
 
-    private UsbDevice firstCdcAcmDevice(HashMap<String, UsbDevice> deviceList) {
+    private UsbDevice matchedDevice(HashMap<String, UsbDevice> deviceList) {
+        List<UsbDevice> candidates = candidateDevices(deviceList);
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        if (preferredDeviceName != null && !preferredDeviceName.isEmpty()) {
+            for (UsbDevice device : candidates) {
+                if (preferredDeviceName.equals(device.getDeviceName())) {
+                    return device;
+                }
+            }
+            return null;
+        }
+        return candidates.get(0);
+    }
+
+    private List<UsbDevice> candidateDevices(HashMap<String, UsbDevice> deviceList) {
+        List<UsbDevice> devices = new ArrayList<>();
         for (UsbDevice device : deviceList.values()) {
             if (findCdcControlInterface(device) != null) {
-                return device;
+                devices.add(device);
             }
         }
-        return null;
+        return devices;
     }
 
     private UsbInterface findCdcControlInterface(UsbDevice device) {

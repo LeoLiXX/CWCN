@@ -88,6 +88,29 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
+                    android:text="USB device"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="12sp" />
+
+                <Spinner
+                    android:id="@+id/usbDeviceSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <Button
+                    android:id="@+id/refreshUsbDevicesButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Refresh USB Devices" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
                     android:text="Control line"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="12sp" />

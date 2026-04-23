@@ -2918,3 +2918,62 @@
 ### Suggested next step
 
 - keep moving on the same branch by replacing the current “first matched CDC/ACM device” logic with explicit USB device selection and persisted route preferences
+
+## 2026-04-23 TX Hardware Route Follow-Up 2: Device Selection + Persisted USB Preferences
+
+- Continued the same TX hardware route branch one step further after the USB permission flow landed.
+- `TxActivity` now exposes an explicit USB device selector for the USB serial keyer backend instead of leaving the route fully tied to “whichever CDC/ACM device appears first”.
+- Added a new reusable `UsbSerialDeviceOption` model so the TX UI can show attached CDC/ACM candidates with:
+- device name
+- vendor id
+- product id
+- `AndroidUsbSerialKeyerPortFactory` now tracks a preferred USB device name and uses it as the first match target when available.
+- If the preferred device is not present, the route still falls back to the first available CDC/ACM candidate for this prototype stage.
+- `TxActivity` now persists USB route preferences in local activity preferences:
+- preferred USB device name
+- selected key line (`RTS` / `DTR`)
+- Those preferences are restored on next launch before the TX page is rebuilt.
+- Practical outcome:
+- bench testing is now much less fragile when multiple USB serial devices or repeated reconnects are involved
+- the TX route has moved from “single-device prototype wiring” toward a real operator-facing route configuration surface
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- add stricter device-target semantics and explicit device-refresh UX, then start validating the USB path against a real hardware keyer instead of only CDC/ACM control-line assumptions
+
+## 2026-04-23 TX Hardware Route Follow-Up 3: Strict Device Targeting + Manual Refresh
+
+- Continued the same USB keyer route toward a safer real-hardware workflow.
+- The USB device selector now distinguishes:
+- `Auto / first available`
+- explicit locked target device
+- `AndroidUsbSerialKeyerPortFactory` no longer silently falls through to another attached CDC/ACM device when a preferred device name was explicitly selected but is currently missing.
+- Practical effect:
+- once an operator chooses a specific USB keyer, the route now fails loudly and descriptively if that exact device disappears
+- instead of accidentally keying a different attached CDC/ACM device
+- `TxActivity` now includes a `Refresh USB Devices` action for the selected USB route.
+- Refresh behavior currently:
+- closes any open USB keyer port
+- drops stale route state
+- rebuilds the visible device inventory
+- re-evaluates availability / permission / readiness text
+- Added a small reusable selection contract:
+- `SelectableSerialKeyerPortFactory`
+- This removes the earlier UI dependence on the concrete Android factory type and makes USB device selection behavior more testable.
+- `UsbSerialKeyerRigControlAdapter` now exposes route refresh semantics and works through the selection contract instead of hard-coding only one concrete factory class.
+- Added adapter-side regression coverage for:
+- selecting a locked target device closes the currently open port
+- switching back to auto mode clears the preferred-device binding
+- manual refresh closes the current port and resets route state
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- bring this route onto real bench hardware and verify whether plain CDC `SET_CONTROL_LINE_STATE` is sufficient for the intended USB keyer devices, then decide whether we need broader USB-serial chipset support or a dedicated hardware profile layer

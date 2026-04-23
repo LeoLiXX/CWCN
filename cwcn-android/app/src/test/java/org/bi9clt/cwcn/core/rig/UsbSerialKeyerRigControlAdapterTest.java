@@ -1,6 +1,8 @@
 package org.bi9clt.cwcn.core.rig;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -60,9 +62,61 @@ public final class UsbSerialKeyerRigControlAdapterTest {
         assertTrue(port.events.contains("DTR:false"));
     }
 
+    @Test
+    public void selectDeviceDelegatesToSelectableFactoryAndClosesCurrentPort() {
+        RecordingSerialKeyerPort port = new RecordingSerialKeyerPort(true);
+        SelectableRecordingPortFactory factory = new SelectableRecordingPortFactory(port);
+        UsbSerialKeyerRigControlAdapter adapter = new UsbSerialKeyerRigControlAdapter(
+                factory,
+                SerialKeyerTxOutput.KeyLine.RTS,
+                20,
+                650
+        );
+
+        assertTrue(adapter.keyDown());
+        assertTrue(adapter.selectDevice("usb-keyer-2"));
+
+        assertEquals("usb-keyer-2", factory.preferredDeviceName());
+        assertTrue(port.closed);
+    }
+
+    @Test
+    public void selectDeviceSupportsAutoModeByPassingNull() {
+        RecordingSerialKeyerPort port = new RecordingSerialKeyerPort(true);
+        SelectableRecordingPortFactory factory = new SelectableRecordingPortFactory(port);
+        UsbSerialKeyerRigControlAdapter adapter = new UsbSerialKeyerRigControlAdapter(
+                factory,
+                SerialKeyerTxOutput.KeyLine.RTS,
+                20,
+                650
+        );
+
+        assertTrue(adapter.selectDevice(null));
+
+        assertNull(factory.preferredDeviceName());
+    }
+
+    @Test
+    public void refreshRouteStateClosesOpenPort() {
+        RecordingSerialKeyerPort port = new RecordingSerialKeyerPort(true);
+        SelectableRecordingPortFactory factory = new SelectableRecordingPortFactory(port);
+        UsbSerialKeyerRigControlAdapter adapter = new UsbSerialKeyerRigControlAdapter(
+                factory,
+                SerialKeyerTxOutput.KeyLine.RTS,
+                20,
+                650
+        );
+
+        assertTrue(adapter.keyDown());
+        adapter.refreshRouteState();
+
+        assertTrue(port.closed);
+    }
+
     private static final class RecordingSerialKeyerPort implements SerialKeyerPort {
         private final boolean open;
         private final List<String> events = new ArrayList<>();
+        private boolean closed;
 
         private RecordingSerialKeyerPort(boolean open) {
             this.open = open;
@@ -80,7 +134,7 @@ public final class UsbSerialKeyerRigControlAdapterTest {
 
         @Override
         public boolean isOpen() {
-            return open;
+            return open && !closed;
         }
 
         @Override
@@ -108,6 +162,7 @@ public final class UsbSerialKeyerRigControlAdapterTest {
 
         @Override
         public void close() {
+            closed = true;
         }
     }
 
@@ -116,6 +171,49 @@ public final class UsbSerialKeyerRigControlAdapterTest {
 
         private FixedSerialKeyerPortFactory(SerialKeyerPort port) {
             this.port = port;
+        }
+
+        @Override
+        public String describeAvailability() {
+            return port.describeAvailability();
+        }
+
+        @Override
+        public boolean canOpenPort() {
+            return port.isOpen();
+        }
+
+        @Override
+        public SerialKeyerPort openPort() {
+            return port;
+        }
+    }
+
+    private static final class SelectableRecordingPortFactory implements SelectableSerialKeyerPortFactory {
+        private final RecordingSerialKeyerPort port;
+        private String preferredDeviceName;
+
+        private SelectableRecordingPortFactory(RecordingSerialKeyerPort port) {
+            this.port = port;
+        }
+
+        @Override
+        public List<UsbSerialDeviceOption> availableDevices() {
+            List<UsbSerialDeviceOption> devices = new ArrayList<>();
+            devices.add(new UsbSerialDeviceOption("usb-keyer-1", 0x1234, 0x5678));
+            devices.add(new UsbSerialDeviceOption("usb-keyer-2", 0x1111, 0x2222));
+            return devices;
+        }
+
+        @Override
+        public String preferredDeviceName() {
+            return preferredDeviceName;
+        }
+
+        @Override
+        public boolean selectDevice(String deviceName) {
+            preferredDeviceName = deviceName;
+            return true;
         }
 
         @Override

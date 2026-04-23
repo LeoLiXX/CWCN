@@ -8,6 +8,8 @@ import org.bi9clt.cwcn.core.tx.CwTxPlan;
 import org.bi9clt.cwcn.core.tx.CwTxRunner;
 import org.bi9clt.cwcn.core.tx.CwTxState;
 
+import java.util.List;
+
 public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter {
     private static final int DEFAULT_WPM = 18;
     private static final int DEFAULT_TONE_FREQUENCY_HZ = 650;
@@ -53,9 +55,13 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
     @Override
     public String describeAvailability() {
         SerialKeyerPort port = openPort;
-        return port != null && port.isOpen()
-                ? port.describeAvailability()
-                : portFactory.describeAvailability();
+        if (port != null && port.isOpen()) {
+            return port.describeAvailability();
+        }
+        if (port != null && !port.isOpen()) {
+            openPort = null;
+        }
+        return portFactory.describeAvailability();
     }
 
     @Override
@@ -165,6 +171,40 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
             return ((AndroidUsbSerialKeyerPortFactory) portFactory).requestPermission(pendingIntent);
         }
         return false;
+    }
+
+    public List<UsbSerialDeviceOption> availableDevices() {
+        if (portFactory instanceof SelectableSerialKeyerPortFactory) {
+            return ((SelectableSerialKeyerPortFactory) portFactory).availableDevices();
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    public String preferredDeviceName() {
+        if (portFactory instanceof SelectableSerialKeyerPortFactory) {
+            return ((SelectableSerialKeyerPortFactory) portFactory).preferredDeviceName();
+        }
+        return null;
+    }
+
+    public boolean selectDevice(String deviceName) {
+        if (portFactory instanceof SelectableSerialKeyerPortFactory) {
+            refreshRouteState();
+            return ((SelectableSerialKeyerPortFactory) portFactory).selectDevice(deviceName);
+        }
+        return false;
+    }
+
+    public void refreshRouteState() {
+        CwTxRunner runner = txRunner;
+        if (runner != null && runner.isRunning()) {
+            runner.stop();
+        }
+        SerialKeyerPort port = openPort;
+        if (port != null) {
+            port.close();
+        }
+        openPort = null;
     }
 
     private SerialKeyerPort ensureOpenPort() {
