@@ -16,8 +16,10 @@ import org.bi9clt.cwcn.core.log.ConfirmedQsoLog;
 import org.bi9clt.cwcn.core.log.ConfirmedLogQuery;
 import org.bi9clt.cwcn.core.log.LogDisplayFormatter;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
+import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoDraftFactory;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
+import org.bi9clt.cwcn.core.qso.QsoWorkflowSummaryFormatter;
 import org.bi9clt.cwcn.databinding.ActivityQsoLogbookBinding;
 
 import java.util.List;
@@ -62,6 +64,8 @@ public final class QsoLogbookActivity extends AppCompatActivity {
     private String activeFromQsoDateUtc;
     private String activeToQsoDateUtc;
     private SortOption activeSortOption = SortOption.NEWEST_FIRST;
+    private int totalConfirmedLogCount;
+    private int reviewQueueCount;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -106,6 +110,9 @@ public final class QsoLogbookActivity extends AppCompatActivity {
 
     private void reloadLogs() {
         confirmedLogs = localLogRepository.queryConfirmedLogs(buildQuery());
+        AppOverviewSnapshot overview = localLogRepository.loadOverview();
+        totalConfirmedLogCount = overview.confirmedLogCount();
+        reviewQueueCount = overview.manualReviewLogCount();
         if (confirmedLogs.isEmpty()) {
             selectedLogIndex = -1;
         } else if (selectedLogIndex < 0 || selectedLogIndex >= confirmedLogs.size()) {
@@ -119,13 +126,17 @@ public final class QsoLogbookActivity extends AppCompatActivity {
         binding.logSummaryText.setText(renderLogSummary());
         binding.selectedLogText.setText(renderSelectedLogText());
         binding.selectedLogRawText.setText(renderSelectedLogRawText());
+        binding.selectedLogReviewText.setText(renderSelectedLogReviewText());
         binding.actionStatusText.setText(renderActionStatus());
         boolean hasSelection = selectedLogIndex >= 0 && selectedLogIndex < confirmedLogs.size();
         binding.loadIntoEditorButton.setEnabled(hasSelection);
         binding.toggleReviewButton.setEnabled(hasSelection);
         binding.deleteLogButton.setEnabled(hasSelection);
+        binding.loadIntoEditorButton.setText(selectedLog() != null && selectedLog().needManualReview()
+                ? "Review In Editor"
+                : "Re-edit");
         binding.toggleReviewButton.setText(selectedLog() != null && selectedLog().needManualReview()
-                ? "Clear Review"
+                ? "Clear Review Flag"
                 : "Mark Review");
     }
 
@@ -191,7 +202,7 @@ public final class QsoLogbookActivity extends AppCompatActivity {
 
         boolean updatedReviewFlag = !selectedLog.needManualReview();
         boolean updated = localLogRepository.updateConfirmedLog(
-                selectedLogIndex,
+                selectedLog.id(),
                 selectedLog.withNeedManualReview(updatedReviewFlag)
         );
         if (!updated) {
@@ -222,7 +233,8 @@ public final class QsoLogbookActivity extends AppCompatActivity {
     }
 
     private void performDeleteSelectedLog(String callsign) {
-        boolean deleted = localLogRepository.deleteConfirmedLog(selectedLogIndex);
+        ConfirmedQsoLog selectedLog = selectedLog();
+        boolean deleted = selectedLog != null && localLogRepository.deleteConfirmedLog(selectedLog.id());
         if (!deleted) {
             Toast.makeText(this, "Unable to delete selected log.", Toast.LENGTH_SHORT).show();
             return;
@@ -238,10 +250,13 @@ public final class QsoLogbookActivity extends AppCompatActivity {
 
     private String renderLogSummary() {
         if (confirmedLogs.isEmpty()) {
-            return "Confirmed logs: 0\nFilter: " + renderFilterSummary();
+            return "Showing: 0 of " + totalConfirmedLogCount
+                    + "\nReview queue: " + reviewQueueCount
+                    + "\nFilter: " + renderFilterSummary();
         }
-        return "Confirmed logs: " + confirmedLogs.size()
-                + "\nSelected index: " + (selectedLogIndex >= 0 ? selectedLogIndex + 1 : 0)
+        return "Showing: " + confirmedLogs.size() + " of " + totalConfirmedLogCount
+                + "\nReview queue: " + reviewQueueCount
+                + "\nSelected: " + safeValue(selectedLog() == null ? null : selectedLog().remoteCallsign())
                 + "\nFilter: " + renderFilterSummary();
     }
 
@@ -271,6 +286,12 @@ public final class QsoLogbookActivity extends AppCompatActivity {
             return "No normalized text available.";
         }
         return "Normalized text: " + safeValue(selectedLog.normalizedText());
+    }
+
+    private String renderSelectedLogReviewText() {
+        ConfirmedQsoLog selectedLog = selectedLog();
+        return QsoWorkflowSummaryFormatter.renderConfirmedLogReviewSummary(selectedLog)
+                + "\nNext step: " + QsoWorkflowSummaryFormatter.renderConfirmedLogNextStep(selectedLog);
     }
 
     private String renderActionStatus() {
@@ -359,10 +380,17 @@ public final class QsoLogbookActivity extends AppCompatActivity {
     }
 
     private String buildButtonLabel(ConfirmedQsoLog log, boolean selected) {
-        return (selected ? "[Selected] " : "")
-                + LogDisplayFormatter.formatUtcDateTime(log.qsoDateUtc(), log.timeOnUtc())
-                + "  "
-                + safeValue(log.remoteCallsign());
+        StringBuilder builder = new StringBuilder();
+        if (selected) {
+            builder.append("[Selected] ");
+        }
+        if (log.needManualReview()) {
+            builder.append("[Review] ");
+        }
+        builder.append(LogDisplayFormatter.formatUtcDateTime(log.qsoDateUtc(), log.timeOnUtc()))
+                .append("  ")
+                .append(safeValue(log.remoteCallsign()));
+        return builder.toString();
     }
 
     private String safeValue(String value) {

@@ -117,42 +117,27 @@ public final class LocalLogRepository {
         );
         ConfirmedQsoLog latestConfirmedLog = latestLogs.isEmpty() ? null : latestLogs.get(0);
         int confirmedLogCount = countConfirmedLogs();
-        return new AppOverviewSnapshot(activeDraft, confirmedLogCount, latestConfirmedLog);
+        int manualReviewLogCount = countConfirmedLogs(Boolean.TRUE);
+        return new AppOverviewSnapshot(activeDraft, confirmedLogCount, manualReviewLogCount, latestConfirmedLog);
     }
 
-    public synchronized boolean updateConfirmedLog(int index, ConfirmedQsoLog updatedLog) {
-        if (updatedLog == null) {
-            return false;
-        }
-        List<ConfirmedQsoLog> logs = loadConfirmedLogs();
-        if (index < 0 || index >= logs.size()) {
-            return false;
-        }
-
-        ConfirmedQsoLog existingLog = logs.get(index);
-        long targetId = existingLog.id();
-        if (targetId <= 0L) {
+    public synchronized boolean updateConfirmedLog(long id, ConfirmedQsoLog updatedLog) {
+        if (id <= 0L || updatedLog == null) {
             return false;
         }
 
         SQLiteDatabase db = databaseHelper.getWritableDatabase();
         int rowsUpdated = db.update(
                 ConfirmedLogDatabaseHelper.TABLE_CONFIRMED_LOGS,
-                toConfirmedLogContentValues(withId(updatedLog, targetId)),
+                toConfirmedLogContentValues(withId(updatedLog, id)),
                 ConfirmedLogDatabaseHelper.COLUMN_ID + " = ?",
-                new String[]{String.valueOf(targetId)}
+                new String[]{String.valueOf(id)}
         );
         return rowsUpdated > 0;
     }
 
-    public synchronized boolean deleteConfirmedLog(int index) {
-        List<ConfirmedQsoLog> logs = loadConfirmedLogs();
-        if (index < 0 || index >= logs.size()) {
-            return false;
-        }
-
-        long targetId = logs.get(index).id();
-        if (targetId <= 0L) {
+    public synchronized boolean deleteConfirmedLog(long id) {
+        if (id <= 0L) {
             return false;
         }
 
@@ -160,7 +145,7 @@ public final class LocalLogRepository {
         int rowsDeleted = db.delete(
                 ConfirmedLogDatabaseHelper.TABLE_CONFIRMED_LOGS,
                 ConfirmedLogDatabaseHelper.COLUMN_ID + " = ?",
-                new String[]{String.valueOf(targetId)}
+                new String[]{String.valueOf(id)}
         );
         return rowsDeleted > 0;
     }
@@ -208,11 +193,18 @@ public final class LocalLogRepository {
     }
 
     private int countConfirmedLogs() {
+        return countConfirmedLogs(null);
+    }
+
+    private int countConfirmedLogs(Boolean reviewOnly) {
         SQLiteDatabase db = databaseHelper.getReadableDatabase();
-        try (Cursor cursor = db.rawQuery(
-                "SELECT COUNT(*) FROM " + ConfirmedLogDatabaseHelper.TABLE_CONFIRMED_LOGS,
-                null
-        )) {
+        String sql = "SELECT COUNT(*) FROM " + ConfirmedLogDatabaseHelper.TABLE_CONFIRMED_LOGS;
+        String[] args = null;
+        if (reviewOnly != null) {
+            sql += " WHERE " + ConfirmedLogDatabaseHelper.COLUMN_NEED_MANUAL_REVIEW + " = ?";
+            args = new String[]{reviewOnly ? "1" : "0"};
+        }
+        try (Cursor cursor = db.rawQuery(sql, args)) {
             if (cursor.moveToFirst()) {
                 return cursor.getInt(0);
             }

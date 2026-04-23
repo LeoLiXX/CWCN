@@ -12,6 +12,7 @@ import org.bi9clt.cwcn.core.log.ConfirmedQsoLog;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.log.LogDisplayFormatter;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
+import org.bi9clt.cwcn.core.qso.QsoWorkflowSummaryFormatter;
 import org.bi9clt.cwcn.databinding.ActivityHomeBinding;
 import org.bi9clt.cwcn.ui.debug.InputDebugActivity;
 import org.bi9clt.cwcn.ui.qso.QsoEditorActivity;
@@ -69,7 +70,8 @@ public final class HomeActivity extends AppCompatActivity {
                 + "\nPhase: " + draft.phase().displayName()
                 + "\nRST: " + rst
                 + "\nReady: " + yesNo(draft.readyForDraftConfirmation())
-                + "\nReview needed: " + yesNo(draft.needManualReview());
+                + "\nReview needed: " + yesNo(draft.needManualReview())
+                + "\nNext: " + QsoWorkflowSummaryFormatter.renderDraftNextStep(draft, false);
     }
 
     private String renderLogSummary(AppOverviewSnapshot overview) {
@@ -79,6 +81,7 @@ public final class HomeActivity extends AppCompatActivity {
 
         ConfirmedQsoLog latest = overview.latestConfirmedLog();
         return "Confirmed logs: " + overview.confirmedLogCount()
+                + "\nReview queue: " + overview.manualReviewLogCount()
                 + "\nLatest: " + safeValue(latest.remoteCallsign())
                 + "\nLogged at: " + LogDisplayFormatter.formatUtcDateTime(latest.qsoDateUtc(), latest.timeOnUtc())
                 + "\nReview flag: " + yesNo(latest.needManualReview());

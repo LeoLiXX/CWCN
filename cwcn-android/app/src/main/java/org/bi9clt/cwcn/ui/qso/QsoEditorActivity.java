@@ -17,6 +17,7 @@ import org.bi9clt.cwcn.core.log.LogDisplayFormatter;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.qso.QsoDraftFactory;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
+import org.bi9clt.cwcn.core.qso.QsoWorkflowSummaryFormatter;
 import org.bi9clt.cwcn.databinding.ActivityQsoEditorBinding;
 
 import java.io.File;
@@ -80,6 +81,7 @@ public final class QsoEditorActivity extends AppCompatActivity {
             editorStatusMessage = "Reloaded draft from local storage.";
             refreshUi();
         });
+        binding.clearDraftButton.setOnClickListener(view -> clearDraft());
         binding.saveDraftButton.setOnClickListener(view -> saveDraft());
         binding.confirmLogButton.setOnClickListener(view -> confirmLog());
         binding.exportAdifButton.setOnClickListener(view -> exportAdif());
@@ -106,6 +108,20 @@ public final class QsoEditorActivity extends AppCompatActivity {
         refreshUi();
     }
 
+    private void clearDraft() {
+        if (!hasEditorContent() && currentDraftSnapshot == null) {
+            Toast.makeText(this, "No active draft to clear.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        localLogRepository.clearDraft();
+        currentDraftSnapshot = null;
+        actionStatusMessage = "Cleared active draft.";
+        editorStatusMessage = "Cleared stored draft and reset editor.";
+        syncEditorFromSnapshot();
+        refreshUi();
+    }
+
     private void confirmLog() {
         QsoDraftSnapshot snapshot = buildSnapshotFromEditor();
         if (snapshot.remoteCallsignCandidate() == null || snapshot.remoteCallsignCandidate().isEmpty()) {
@@ -118,7 +134,9 @@ public final class QsoEditorActivity extends AppCompatActivity {
         currentDraftSnapshot = null;
         editorDirty = false;
         editorStatusMessage = "Confirmed log and cleared active draft.";
-        actionStatusMessage = "Confirmed log: " + log.remoteCallsign();
+        actionStatusMessage = "Confirmed log: "
+                + log.remoteCallsign()
+                + (log.needManualReview() ? " (review flag kept)" : "");
         syncEditorFromSnapshot();
         refreshUi();
     }
@@ -148,14 +166,19 @@ public final class QsoEditorActivity extends AppCompatActivity {
 
     private void refreshUi() {
         AppOverviewSnapshot overview = localLogRepository.loadOverview();
-        binding.draftMetaText.setText(renderDraftMeta());
-        binding.draftEvidenceText.setText(renderDraftEvidence());
+        QsoDraftSnapshot draftForDisplay = buildDisplaySnapshot();
+        binding.draftMetaText.setText(renderDraftMeta(draftForDisplay, overview));
+        binding.draftEvidenceText.setText(renderDraftEvidence(draftForDisplay));
+        binding.draftReviewText.setText(renderDraftReview(draftForDisplay));
+        binding.fieldOriginText.setText(QsoWorkflowSummaryFormatter.renderDraftFieldOriginSummary(draftForDisplay));
         binding.editorStatusText.setText(renderEditorStatus());
         binding.actionStatusText.setText(renderActionStatus());
         binding.confirmedLogSummaryText.setText(renderConfirmedLogSummary(overview));
         binding.confirmedLogListText.setText(renderConfirmedLogList());
         binding.saveDraftButton.setEnabled(editorDirty || hasEditorContent());
         binding.confirmLogButton.setEnabled(hasRemoteCallsign());
+        binding.clearDraftButton.setEnabled(editorDirty || currentDraftSnapshot != null || hasEditorContent());
+        binding.confirmLogButton.setText(resolveConfirmButtonText(draftForDisplay));
         binding.exportAdifButton.setEnabled(overview.confirmedLogCount() > 0);
     }
 
@@ -185,36 +208,53 @@ public final class QsoEditorActivity extends AppCompatActivity {
         );
     }
 
-    private String renderDraftMeta() {
-        if (currentDraftSnapshot == null) {
+    private QsoDraftSnapshot buildDisplaySnapshot() {
+        if (!editorDirty) {
+            return currentDraftSnapshot;
+        }
+        if (!hasEditorContent() && currentDraftSnapshot == null) {
+            return null;
+        }
+        return buildSnapshotFromEditor();
+    }
+
+    private String renderDraftMeta(QsoDraftSnapshot snapshot, AppOverviewSnapshot overview) {
+        if (snapshot == null) {
             return "No active draft stored yet.";
         }
 
         String updatedAt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-                .format(new Date(currentDraftSnapshot.updatedAtEpochMs()));
-        return "Phase: " + currentDraftSnapshot.phase().displayName()
-                + "\nReady: " + yesNo(currentDraftSnapshot.readyForDraftConfirmation())
-                + "\nManual review: " + yesNo(currentDraftSnapshot.needManualReview())
+                .format(new Date(snapshot.updatedAtEpochMs()));
+        return "Phase: " + snapshot.phase().displayName()
+                + "\nReady: " + yesNo(snapshot.readyForDraftConfirmation())
+                + "\nManual review: " + yesNo(snapshot.needManualReview())
+                + "\nReview queue: " + (overview == null ? 0 : overview.manualReviewLogCount())
+                + "\nSource: " + (editorDirty ? "unsaved editor preview" : "stored active draft")
                 + "\nUpdated: " + updatedAt;
     }
 
-    private String renderDraftEvidence() {
-        if (currentDraftSnapshot == null) {
+    private String renderDraftEvidence(QsoDraftSnapshot snapshot) {
+        if (snapshot == null) {
             return "No normalized text / hints available yet.";
         }
 
-        String hints = currentDraftSnapshot.hints().isEmpty()
+        String hints = snapshot.hints().isEmpty()
                 ? "(none)"
-                : String.join(" / ", currentDraftSnapshot.hints());
-        String normalizedText = currentDraftSnapshot.normalizedText().isEmpty()
+                : String.join(" / ", snapshot.hints());
+        String normalizedText = snapshot.normalizedText().isEmpty()
                 ? "(none)"
-                : currentDraftSnapshot.normalizedText();
-        String lastEventSummary = currentDraftSnapshot.lastEvent() == null
+                : snapshot.normalizedText();
+        String lastEventSummary = snapshot.lastEvent() == null
                 ? "(none)"
-                : currentDraftSnapshot.lastEvent().summary();
+                : snapshot.lastEvent().summary();
         return "Normalized: " + normalizedText
                 + "\nHints: " + hints
                 + "\nLast event: " + lastEventSummary;
+    }
+
+    private String renderDraftReview(QsoDraftSnapshot snapshot) {
+        return QsoWorkflowSummaryFormatter.renderDraftReviewSummary(snapshot)
+                + "\nNext step: " + QsoWorkflowSummaryFormatter.renderDraftNextStep(snapshot, editorDirty);
     }
 
     private String renderEditorStatus() {
@@ -235,7 +275,7 @@ public final class QsoEditorActivity extends AppCompatActivity {
 
     private String renderConfirmedLogSummary(AppOverviewSnapshot overview) {
         if (overview == null || overview.confirmedLogCount() == 0) {
-            return "Confirmed logs: 0";
+            return "Confirmed logs: 0\nReview queue: 0";
         }
         ConfirmedQsoLog latest = overview.latestConfirmedLog();
         String latestLoggedAt = LogDisplayFormatter.formatUtcDateTime(
@@ -243,6 +283,7 @@ public final class QsoEditorActivity extends AppCompatActivity {
                 latest.timeOnUtc()
         );
         return "Confirmed logs: " + overview.confirmedLogCount()
+                + "\nReview queue: " + overview.manualReviewLogCount()
                 + "\nLatest: " + latest.remoteCallsign()
                 + "\nLogged at: " + latestLoggedAt
                 + " / "
@@ -261,7 +302,8 @@ public final class QsoEditorActivity extends AppCompatActivity {
         int start = Math.max(0, logs.size() - 10);
         for (int i = logs.size() - 1; i >= start; i--) {
             ConfirmedQsoLog log = logs.get(i);
-            lines.add(LogDisplayFormatter.formatUtcDateTime(log.qsoDateUtc(), log.timeOnUtc())
+            String prefix = log.needManualReview() ? "[Review] " : "";
+            lines.add(prefix + LogDisplayFormatter.formatUtcDateTime(log.qsoDateUtc(), log.timeOnUtc())
                     + "  "
                     + safeValue(log.remoteCallsign())
                     + "  "
@@ -283,6 +325,13 @@ public final class QsoEditorActivity extends AppCompatActivity {
 
     private boolean hasRemoteCallsign() {
         return normalizedEditorValue(binding.remoteCallsignEditText.getText()) != null;
+    }
+
+    private String resolveConfirmButtonText(QsoDraftSnapshot snapshot) {
+        if (snapshot != null && snapshot.needManualReview()) {
+            return "Confirm With Review Flag";
+        }
+        return "Confirm Log";
     }
 
     private boolean hasDraftContent(QsoDraftSnapshot snapshot) {

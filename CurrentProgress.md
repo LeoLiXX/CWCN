@@ -2706,6 +2706,45 @@
 - [CwSignalSnapshotTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalSnapshotTest.java)
 - [CwFrontEndHealthClassifierTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifierTest.java)
 
+## 2026-04-23 M2 Draft And Log Review Workflow Polish
+
+- Shifted the current work from signal-side `M1` observability into `M2` workflow usability.
+- Added a reusable workflow formatter so the app now uses one shared logic layer for:
+- draft review status
+- field origin / locked-vs-live summary
+- recommended next step
+- confirmed-log review queue messaging
+- `QSO Editor` now shows:
+- draft review summary
+- next-step guidance
+- field origin summary
+- dynamic `Confirm With Review Flag` button text when the current draft is still uncertain
+- a direct `Clear Draft` action to abandon the active draft cleanly
+- `Logbook` now shows:
+- global review queue count
+- filtered-vs-total log count
+- selected-log review explanation and next-step guidance
+- clearer `[Review]` marking in the log list
+- safer review/edit flow wording such as `Review In Editor`
+- Fixed an important correctness bug in the logbook workflow:
+- `mark review` and `delete` now operate by confirmed-log database `id`
+- instead of using the index from a filtered/sorted list against the default repository order
+- which could previously target the wrong log under filters or alternate sort orders
+- `Home` summary now also reflects the draft next-step hint and confirmed-log review queue count.
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.qso.QsoWorkflowSummaryFormatterTest`
+- `.\gradlew.bat testDebugUnitTest`
+
+### Key files
+
+- [QsoWorkflowSummaryFormatter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/qso/QsoWorkflowSummaryFormatter.java)
+- [QsoEditorActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/qso/QsoEditorActivity.java)
+- [QsoLogbookActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/qso/QsoLogbookActivity.java)
+- [LocalLogRepository.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/log/LocalLogRepository.java)
+- [QsoWorkflowSummaryFormatterTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/qso/QsoWorkflowSummaryFormatterTest.java)
+
 ## 2026-04-23 Remembered Upgrade Over Uncertain Addressed Callsign Middle Split
 
 - Added addressed-side remembered recovery coverage for cases where the called station later appears with an uncertain middle split such as `BI ?CLT`.
