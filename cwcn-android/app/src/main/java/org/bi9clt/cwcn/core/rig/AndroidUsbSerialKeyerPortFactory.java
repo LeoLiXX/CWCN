@@ -189,6 +189,27 @@ public final class AndroidUsbSerialKeyerPortFactory implements SelectableSerialK
         return true;
     }
 
+    public boolean hasPreferredDeviceSelection() {
+        return preferredDeviceName != null && !preferredDeviceName.isEmpty();
+    }
+
+    public boolean hasAnyCandidateDevice() {
+        UsbManager usbManager = usbManager();
+        return usbManager != null && !candidateDevices(usbManager.getDeviceList()).isEmpty();
+    }
+
+    public boolean hasTargetDevice() {
+        UsbManager usbManager = usbManager();
+        return usbManager != null && matchedDevice(usbManager.getDeviceList()) != null;
+    }
+
+    public boolean isPreferredDeviceMissing() {
+        UsbManager usbManager = usbManager();
+        return usbManager != null
+                && hasPreferredDeviceSelection()
+                && matchedDevice(usbManager.getDeviceList()) == null;
+    }
+
     private UsbManager usbManager() {
         return appContext == null
                 ? null

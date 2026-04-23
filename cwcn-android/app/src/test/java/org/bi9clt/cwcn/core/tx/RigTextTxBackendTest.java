@@ -51,13 +51,34 @@ public final class RigTextTxBackendTest {
         assertEquals(CwTxState.ERROR, snapshots.get(snapshots.size() - 1).state());
     }
 
+    @Test
+    public void backendExposesWhenRouteUsesWpmButNotTone() {
+        RigTextTxBackend backend = new RigTextTxBackend(new FakeRigControlAdapter(true, true, true, false));
+
+        assertTrue(backend.usesWpm());
+        assertFalse(backend.usesToneFrequency());
+    }
+
     private static final class FakeRigControlAdapter implements RigControlAdapter {
         private final boolean ready;
         private final boolean sendTextResult;
+        private final boolean usesWpm;
+        private final boolean usesToneFrequency;
 
         private FakeRigControlAdapter(boolean ready, boolean sendTextResult) {
+            this(ready, sendTextResult, true, true);
+        }
+
+        private FakeRigControlAdapter(
+                boolean ready,
+                boolean sendTextResult,
+                boolean usesWpm,
+                boolean usesToneFrequency
+        ) {
             this.ready = ready;
             this.sendTextResult = sendTextResult;
+            this.usesWpm = usesWpm;
+            this.usesToneFrequency = usesToneFrequency;
         }
 
         @Override
@@ -108,6 +129,16 @@ public final class RigTextTxBackendTest {
         @Override
         public boolean sendText(String text) {
             return sendTextResult;
+        }
+
+        @Override
+        public boolean usesWpmForTextToCwProfile() {
+            return usesWpm;
+        }
+
+        @Override
+        public boolean usesToneFrequencyForTextToCwProfile() {
+            return usesToneFrequency;
         }
     }
 }

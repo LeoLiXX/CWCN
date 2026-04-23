@@ -46,6 +46,16 @@ public final class RigTextTxBackend implements CwTxBackend {
     }
 
     @Override
+    public boolean usesWpm() {
+        return adapter.usesWpmForTextToCwProfile();
+    }
+
+    @Override
+    public boolean usesToneFrequency() {
+        return adapter.usesToneFrequencyForTextToCwProfile();
+    }
+
+    @Override
     public boolean supportsProgressSnapshots() {
         return false;
     }

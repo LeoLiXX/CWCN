@@ -2977,3 +2977,43 @@
 ### Suggested next step
 
 - bring this route onto real bench hardware and verify whether plain CDC `SET_CONTROL_LINE_STATE` is sufficient for the intended USB keyer devices, then decide whether we need broader USB-serial chipset support or a dedicated hardware profile layer
+
+## 2026-04-23 TX Hardware Route Follow-Up 4: Parameter Semantics + USB Hotplug Refresh
+
+- Tightened TX parameter semantics so the UI and backend contract now distinguish between:
+- routes that really use `WPM`
+- routes that really use `tone frequency`
+- `CwTxBackend` now exposes explicit `usesWpm()` and `usesToneFrequency()` semantics.
+- `RigControlAdapter` now exposes matching profile-usage semantics for text-to-CW routes.
+- Practical effect:
+- the USB serial keyer route now explicitly declares:
+- `WPM` matters
+- `tone frequency` does not
+- `TxActivity` now reflects that directly:
+- USB keyer keeps `WPM` editable
+- USB keyer disables the tone-frequency field
+- backend summary now reports actual parameter usage instead of one combined `WPM/Tone` flag
+- Continued the same route with live hardware-state UX:
+- `TxActivity` now listens for USB attach / detach broadcasts
+- the USB keyer route automatically refreshes route state on device hotplug events
+- the selected route summary now distinguishes:
+- target mode
+- target state
+- active target
+- availability
+- Locked-target loss is now more explicit:
+- if the operator bound the route to a specific USB device and that exact device disappears, the TX page now refreshes immediately and reports that the selected USB keyer is no longer attached
+- Permission UX is also stricter now:
+- the `Request USB Permission` button is only active when the current target device actually exists
+- if a locked target is missing, the button now shows `Target Device Missing` instead of pretending permission can still be requested
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- start real bench validation with an actual USB keyer or RTS/DTR-capable interface, then decide whether the next layer should be:
+- richer device profile handling
+- broader non-CDC USB-serial support
+- or TX-side safety controls such as explicit test macros / stuck-line recovery UX

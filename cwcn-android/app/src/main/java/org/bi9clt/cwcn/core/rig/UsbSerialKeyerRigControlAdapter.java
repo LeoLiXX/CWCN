@@ -93,6 +93,16 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
     }
 
     @Override
+    public boolean usesWpmForTextToCwProfile() {
+        return true;
+    }
+
+    @Override
+    public boolean usesToneFrequencyForTextToCwProfile() {
+        return false;
+    }
+
+    @Override
     public boolean keyDown() {
         SerialKeyerPort port = ensureOpenPort();
         if (port == null || !port.isOpen()) {
@@ -185,6 +195,34 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
             return ((SelectableSerialKeyerPortFactory) portFactory).preferredDeviceName();
         }
         return null;
+    }
+
+    public boolean hasPreferredDeviceSelection() {
+        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
+            return ((AndroidUsbSerialKeyerPortFactory) portFactory).hasPreferredDeviceSelection();
+        }
+        return false;
+    }
+
+    public boolean hasAnyCandidateDevice() {
+        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
+            return ((AndroidUsbSerialKeyerPortFactory) portFactory).hasAnyCandidateDevice();
+        }
+        return !availableDevices().isEmpty();
+    }
+
+    public boolean hasTargetDevice() {
+        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
+            return ((AndroidUsbSerialKeyerPortFactory) portFactory).hasTargetDevice();
+        }
+        return hasAnyCandidateDevice();
+    }
+
+    public boolean isPreferredDeviceMissing() {
+        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
+            return ((AndroidUsbSerialKeyerPortFactory) portFactory).isPreferredDeviceMissing();
+        }
+        return false;
     }
 
     public boolean selectDevice(String deviceName) {

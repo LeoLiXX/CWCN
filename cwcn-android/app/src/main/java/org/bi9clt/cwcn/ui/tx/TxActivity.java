@@ -4,7 +4,9 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -58,7 +60,7 @@ public final class TxActivity extends AppCompatActivity {
     private boolean syncingFields;
     private boolean syncingUsbDeviceSelection;
     private boolean syncingUsbKeyLineSelection;
-    private BroadcastReceiver usbPermissionReceiver;
+    private BroadcastReceiver usbRouteReceiver;
     private ArrayAdapter<UsbSerialDeviceOption> usbDeviceAdapter;
 
     @Override
@@ -83,9 +85,9 @@ public final class TxActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         stopAllBackends();
-        if (usbPermissionReceiver != null) {
-            unregisterReceiver(usbPermissionReceiver);
-            usbPermissionReceiver = null;
+        if (usbRouteReceiver != null) {
+            unregisterReceiver(usbRouteReceiver);
+            usbRouteReceiver = null;
         }
         txAudioOutput.stop();
         super.onDestroy();
@@ -247,9 +249,12 @@ public final class TxActivity extends AppCompatActivity {
             binding.txStatusText.setText(renderIdleStatus(backend));
             binding.txProgressText.setText("Progress: 0%");
         }
-        boolean editableTxProfile = backend.supportsLivePlanProfile() || backend instanceof LocalSidetoneTxBackend;
-        binding.toneFrequencyEditText.setEnabled(editableTxProfile);
-        binding.toneFrequencyEditText.setAlpha(editableTxProfile ? 1.0f : 0.55f);
+        boolean editableWpm = backend.usesWpm();
+        boolean editableTone = backend.usesToneFrequency();
+        binding.wpmEditText.setEnabled(editableWpm);
+        binding.wpmEditText.setAlpha(editableWpm ? 1.0f : 0.55f);
+        binding.toneFrequencyEditText.setEnabled(editableTone);
+        binding.toneFrequencyEditText.setAlpha(editableTone ? 1.0f : 0.55f);
         refreshButtons();
     }
 
@@ -316,7 +321,9 @@ public final class TxActivity extends AppCompatActivity {
                 + "\nRoute: " + backend.describeRoute()
                 + "\nReady: " + yesNo(backend.isReady())
                 + "\nAvailability: " + backend.describeAvailability()
-                + "\nUses current WPM/Tone: " + yesNo(backend.supportsLivePlanProfile())
+                + "\nUses WPM: " + yesNo(backend.usesWpm())
+                + "\nUses tone frequency: " + yesNo(backend.usesToneFrequency())
+                + "\nSupports live profile: " + yesNo(backend.supportsLivePlanProfile())
                 + "\nProgress snapshots: " + yesNo(backend.supportsProgressSnapshots());
     }
 
@@ -386,20 +393,17 @@ public final class TxActivity extends AppCompatActivity {
             return;
         }
         java.util.List<UsbSerialDeviceOption> deviceOptions = refreshUsbDeviceSelection(usbAdapter);
-        binding.usbDeviceText.setText(
-                "Preferred: " + (usbAdapter.preferredDeviceName() == null ? "(auto / first available)" : usbAdapter.preferredDeviceName())
-                        + "\nActive target: " + usbAdapter.describeMatchedDevice()
-                        + "\nAvailability: " + usbAdapter.describeAvailability()
-        );
+        binding.usbDeviceText.setText(renderUsbRouteSummary(usbAdapter));
         syncUsbKeyLineSelection(usbAdapter);
         boolean hasCandidateDevices = hasRealUsbDeviceOption(deviceOptions);
-        boolean needsPermission = hasCandidateDevices && !usbAdapter.isReady();
+        boolean hasTargetDevice = usbAdapter.hasTargetDevice();
+        boolean needsPermission = hasTargetDevice && !usbAdapter.isReady();
         binding.usbDeviceSpinner.setEnabled(hasCandidateDevices);
         binding.refreshUsbDevicesButton.setEnabled(true);
         binding.requestUsbPermissionButton.setEnabled(needsPermission);
         binding.requestUsbPermissionButton.setText(needsPermission
                 ? "Request USB Permission"
-                : (hasCandidateDevices ? "USB Permission Ready" : "No USB Keyer Detected"));
+                : renderUsbPermissionButtonLabel(usbAdapter, hasCandidateDevices));
     }
 
     private java.util.List<UsbSerialDeviceOption> refreshUsbDeviceSelection(UsbSerialKeyerRigControlAdapter adapter) {
@@ -447,6 +451,48 @@ public final class TxActivity extends AppCompatActivity {
         return false;
     }
 
+    private String renderUsbRouteSummary(UsbSerialKeyerRigControlAdapter adapter) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Target mode: ");
+        if (adapter.hasPreferredDeviceSelection()) {
+            builder.append("Locked to ").append(adapter.preferredDeviceName());
+        } else {
+            builder.append("Auto / first available");
+        }
+        builder.append("\nTarget state: ").append(renderUsbTargetState(adapter));
+        builder.append("\nActive target: ").append(adapter.describeMatchedDevice());
+        builder.append("\nAvailability: ").append(adapter.describeAvailability());
+        return builder.toString();
+    }
+
+    private String renderUsbTargetState(UsbSerialKeyerRigControlAdapter adapter) {
+        if (adapter.isPreferredDeviceMissing()) {
+            return "Locked target missing";
+        }
+        if (adapter.hasTargetDevice()) {
+            return adapter.hasPreferredDeviceSelection()
+                    ? "Locked target attached"
+                    : "Auto target available";
+        }
+        if (adapter.hasAnyCandidateDevice()) {
+            return "Candidate device exists, but current target is unresolved";
+        }
+        return "No candidate device attached";
+    }
+
+    private String renderUsbPermissionButtonLabel(
+            UsbSerialKeyerRigControlAdapter adapter,
+            boolean hasCandidateDevices
+    ) {
+        if (!hasCandidateDevices) {
+            return "No USB Keyer Detected";
+        }
+        if (!adapter.hasTargetDevice()) {
+            return "Target Device Missing";
+        }
+        return "USB Permission Ready";
+    }
+
     private void syncUsbKeyLineSelection(UsbSerialKeyerRigControlAdapter adapter) {
         syncingUsbKeyLineSelection = true;
         binding.usbKeyLineSpinner.setSelection(adapter.keyLine().ordinal(), false);
@@ -457,6 +503,11 @@ public final class TxActivity extends AppCompatActivity {
         UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
         if (adapter == null) {
             Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!adapter.hasTargetDevice()) {
+            Toast.makeText(this, adapter.describeAvailability(), Toast.LENGTH_SHORT).show();
+            rebuildPlanPreview();
             return;
         }
         if (adapter.isReady()) {
@@ -492,34 +543,79 @@ public final class TxActivity extends AppCompatActivity {
     }
 
     private void registerUsbPermissionReceiver() {
-        usbPermissionReceiver = new BroadcastReceiver() {
+        usbRouteReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(android.content.Context context, Intent intent) {
-                if (!ACTION_USB_PERMISSION.equals(intent.getAction())) {
+                String action = intent.getAction();
+                if (action == null) {
                     return;
                 }
-                boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
-                Toast.makeText(
-                        TxActivity.this,
-                        granted
-                                ? "USB permission granted. Rechecking backend readiness."
-                                : "USB permission was denied.",
-                        Toast.LENGTH_SHORT
-                ).show();
-                UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
-                if (adapter != null) {
-                    adapter.refreshRouteState();
+                if (ACTION_USB_PERMISSION.equals(action)) {
+                    boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                    Toast.makeText(
+                            TxActivity.this,
+                            granted
+                                    ? "USB permission granted. Rechecking backend readiness."
+                                    : "USB permission was denied.",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                    handleUsbRouteChange(null, false);
+                    return;
                 }
-                lastPlaybackSnapshot = null;
-                rebuildPlanPreview();
+                if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
+                    handleUsbRouteChange(extractUsbDeviceName(intent), false);
+                    return;
+                }
+                if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+                    handleUsbRouteChange(extractUsbDeviceName(intent), true);
+                }
             }
         };
+        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         ContextCompat.registerReceiver(
                 this,
-                usbPermissionReceiver,
-                new IntentFilter(ACTION_USB_PERMISSION),
+                usbRouteReceiver,
+                filter,
                 ContextCompat.RECEIVER_NOT_EXPORTED
         );
+    }
+
+    private void handleUsbRouteChange(String deviceName, boolean detached) {
+        UsbSerialKeyerRigControlAdapter adapter = firstUsbSerialAdapter();
+        if (adapter != null) {
+            adapter.refreshRouteState();
+        }
+        lastPlaybackSnapshot = null;
+        rebuildPlanPreview();
+        if (selectedUsbSerialAdapter() == null) {
+            return;
+        }
+        if (detached && adapter != null && adapter.isPreferredDeviceMissing()) {
+            String preferred = adapter.preferredDeviceName();
+            Toast.makeText(
+                    this,
+                    "Selected USB keyer is no longer attached: "
+                            + (preferred == null ? "(unknown target)" : preferred),
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+        if (deviceName != null && !deviceName.isEmpty()) {
+            Toast.makeText(
+                    this,
+                    (detached ? "USB device detached: " : "USB device attached: ") + deviceName,
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
+    }
+
+    private String extractUsbDeviceName(Intent intent) {
+        UsbDevice device = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                ? intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice.class)
+                : intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+        return device == null ? null : device.getDeviceName();
     }
 
     private void restoreUsbRoutePreferences() {

@@ -28,4 +28,12 @@ public interface RigControlAdapter {
     default boolean configureTextToCwProfile(int wpm, int toneFrequencyHz) {
         return false;
     }
+
+    default boolean usesWpmForTextToCwProfile() {
+        return supportsConfigurableTextToCwProfile();
+    }
+
+    default boolean usesToneFrequencyForTextToCwProfile() {
+        return supportsConfigurableTextToCwProfile();
+    }
 }

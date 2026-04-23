@@ -13,6 +13,14 @@ public interface CwTxBackend {
 
     boolean supportsLivePlanProfile();
 
+    default boolean usesWpm() {
+        return supportsLivePlanProfile();
+    }
+
+    default boolean usesToneFrequency() {
+        return supportsLivePlanProfile();
+    }
+
     boolean supportsProgressSnapshots();
 
     boolean isRunning();
