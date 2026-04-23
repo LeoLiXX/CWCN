@@ -124,6 +124,9 @@ public final class TxActivity extends AppCompatActivity {
         binding.stopTxButton.setOnClickListener(view -> stopTx());
         binding.refreshUsbDevicesButton.setOnClickListener(view -> refreshSelectedUsbBackend());
         binding.requestUsbPermissionButton.setOnClickListener(view -> requestUsbPermissionForSelectedBackend());
+        binding.loadUsbDitTestButton.setOnClickListener(view -> applyUsbBenchPreset(CwTxPreset.BENCH_DIT, 12));
+        binding.loadUsbPatternTestButton.setOnClickListener(view -> applyUsbBenchPreset(CwTxPreset.BENCH_PATTERN, 15));
+        binding.releaseUsbKeyLineButton.setOnClickListener(view -> releaseSelectedUsbKeyLine());
     }
 
     private void setupBackendSelector() {
@@ -401,6 +404,7 @@ public final class TxActivity extends AppCompatActivity {
         binding.usbDeviceSpinner.setEnabled(hasCandidateDevices);
         binding.refreshUsbDevicesButton.setEnabled(true);
         binding.requestUsbPermissionButton.setEnabled(needsPermission);
+        binding.releaseUsbKeyLineButton.setEnabled(hasTargetDevice || usbAdapter.isReady());
         binding.requestUsbPermissionButton.setText(needsPermission
                 ? "Request USB Permission"
                 : renderUsbPermissionButtonLabel(usbAdapter, hasCandidateDevices));
@@ -540,6 +544,45 @@ public final class TxActivity extends AppCompatActivity {
         lastPlaybackSnapshot = null;
         rebuildPlanPreview();
         Toast.makeText(this, "USB device inventory and route state refreshed.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void releaseSelectedUsbKeyLine() {
+        UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
+        if (adapter == null) {
+            Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        stopTx();
+        boolean released = adapter.keyUp();
+        adapter.refreshRouteState();
+        lastPlaybackSnapshot = null;
+        rebuildPlanPreview();
+        Toast.makeText(
+                this,
+                released
+                        ? "USB key line released and route state reset."
+                        : "No open USB key line was available to release. Route state was still refreshed.",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
+
+    private void applyUsbBenchPreset(CwTxPreset preset, int recommendedWpm) {
+        UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
+        if (adapter == null) {
+            Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        syncingFields = true;
+        binding.txTextEditText.setText(preset.render(normalizedStationCallsign()));
+        binding.wpmEditText.setText(String.valueOf(recommendedWpm));
+        syncingFields = false;
+        lastPlaybackSnapshot = null;
+        rebuildPlanPreview();
+        Toast.makeText(
+                this,
+                "Loaded a short USB bench macro. Confirm wiring first, then start TX.",
+                Toast.LENGTH_SHORT
+        ).show();
     }
 
     private void registerUsbPermissionReceiver() {

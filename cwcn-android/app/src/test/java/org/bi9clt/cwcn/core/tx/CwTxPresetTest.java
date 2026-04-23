@@ -19,4 +19,11 @@ public final class CwTxPresetTest {
 
         assertTrue(rendered.contains("MYCALL"));
     }
+
+    @Test
+    public void benchDitPresetStaysCompact() {
+        String rendered = CwTxPreset.BENCH_DIT.render("bi9clt");
+
+        assertEquals("E E E", rendered);
+    }
 }

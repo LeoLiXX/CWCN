@@ -26,6 +26,7 @@ public final class CwTxRouteAdvisorTest {
 
         assertTrue(checklist.contains("USB RTS/DTR checklist"));
         assertTrue(checklist.contains("Tone note"));
+        assertTrue(checklist.contains("Release Key Line"));
     }
 
     private static final class FakeBackend implements CwTxBackend {

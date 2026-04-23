@@ -1,6 +1,8 @@
 package org.bi9clt.cwcn.core.tx;
 
 public enum CwTxPreset {
+    BENCH_DIT("Bench DIT", "E E E"),
+    BENCH_PATTERN("Bench VVV", "VVV VVV DE {MYCALL}"),
     GENERAL_CQ("CQ General", "CQ CQ CQ DE {MYCALL} {MYCALL} K"),
     CQ_DX("CQ DX", "CQ DX CQ DX DE {MYCALL} K"),
     TEST_CALL("Test Call", "VVV VVV TEST DE {MYCALL} K"),

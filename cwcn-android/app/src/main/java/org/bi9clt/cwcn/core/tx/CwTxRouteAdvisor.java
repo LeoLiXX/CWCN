@@ -40,6 +40,7 @@ public final class CwTxRouteAdvisor {
     private static String buildUsbKeyerChecklist(CwTxPlan plan) {
         StringBuilder builder = new StringBuilder();
         builder.append("USB RTS/DTR checklist: confirm the USB serial keyer is attached, verify which control line is wired, and keep the first test short.");
+        builder.append("\nSafety recovery: if the line looks stuck, use Release Key Line first, then Refresh USB Devices.");
         if (plan != null) {
             if (plan.wpm() > 35) {
                 builder.append("\nWPM warning: start below 35 WPM until RTS/DTR timing is confirmed on hardware.");
