@@ -2772,3 +2772,100 @@
 - [CwInterpreterCallsignRecoveryTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/interpreter/CwInterpreterCallsignRecoveryTest.java)
 - [CwFixtureLibrary.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/eval/CwFixtureLibrary.java)
 - [CwFixturePipelineRegressionTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwFixturePipelineRegressionTest.java)
+
+## 2026-04-23 Priority Execution Pass 1 2 3
+
+- Re-anchored the active execution order as:
+- `1` RX real-input stability and observability
+- `2` M2 review/edit/confirm/log workflow closure
+- `3` TX v1 minimal core loop
+
+### 1. RX real-input stability
+
+- Added per-frame microphone clipping awareness into `AudioFrame` and `MicrophoneRxAudioSource`.
+- Added a small reusable input-health layer:
+- `AudioInputHealthTracker`
+- `AudioInputHealthSnapshot`
+- `AudioInputHealthFormatter`
+- `InputDebugActivity` now shows a direct microphone-input health block in addition to front-end lock health, so live testing can distinguish:
+- too quiet input
+- hot input
+- clipping input
+- usable input
+- microphone coaching now prefers input-level problems first before suggesting front-end tuning.
+
+### 2. M2 review/edit/log workflow closure
+
+- `QsoLogbookActivity` no longer round-trips a confirmed log through the active draft just to edit it.
+- The logbook now opens `QsoEditorActivity` with the selected confirmed-log id.
+- `QsoEditorActivity` now supports a real confirmed-log edit mode:
+- reload selected log
+- reset unsaved edits back to the selected log
+- save editor changes back into the same confirmed log
+- keep or clear manual-review state based on the edited snapshot
+- The editor still keeps `Save Draft Copy` available, so confirmed-log review and ad-hoc draft capture can coexist.
+- Repository support was extended with `loadConfirmedLogById(...)`.
+- `ConfirmedQsoLog` now has a focused helper for applying editable draft fields while preserving log identity and UTC logging metadata.
+
+### 3. TX v1 minimal core loop
+
+- Added a first `core/tx` package:
+- `CwTxEngine`
+- `CwTxPlan`
+- `CwTxElement`
+- Extended that first TX slice from planning-only into a minimal runnable loop:
+- `CwTxState`
+- `CwTxPlaybackSnapshot`
+- `CwTxAudioOutput`
+- `CwTxRunner`
+- `CwTxBackend`
+- `LocalSidetoneTxBackend`
+- `RigTextTxBackend`
+- Added a first Android TX page:
+- `TxActivity`
+- `AudioTrackTxAudioOutput`
+- `Home` now exposes `Open TX Console`.
+- `TxActivity` now also exposes backend selection, so the UI contract is no longer hard-wired to local audio only.
+- `TxActivity` now also exposes:
+- station callsign input
+- reusable TX presets / macros
+- backend ready / not-ready state
+- explicit availability messaging before transmit
+- Current scope is still intentionally minimal, but no longer planning-only:
+- normalize operator text
+- map supported characters to Morse
+- build a deterministic key-down / key-up timing plan from WPM
+- expose a Morse preview plus total transmit duration
+- play local sidetone with `AudioTrack`
+- show start / stop / progress / current-element status
+- surface future rig text-to-CW adapters as formal TX routes even when they are still placeholder-only
+- keep placeholder rig backends visible but blocked with explicit `not ready` semantics instead of failing ambiguously
+- This is now the first reusable layer for later rig/keyer backends and a richer TX workflow.
+- Added the first actually working rig-path prototype:
+- `AudioVoxRigControlAdapter`
+- This adapter is now registered in `RigRegistry` as a real `text-to-CW` route instead of a placeholder.
+- Practical meaning:
+- the app can now generate CW audio through a formal rig adapter path
+- a radio or external keyer can in principle be driven through audio / VOX
+- without yet requiring CAT / USB serial / Bluetooth serial integration
+- The Audio VOX route now also consumes the live TX profile from `TxActivity`:
+- current WPM
+- current tone frequency
+- `TxActivity` now surfaces a route-specific checklist / warning block, so VOX testing is guided by:
+- backend readiness
+- tone-range hints
+- WPM-range hints
+- excessive-length warning for early over-the-air tests
+- Supporting refactor:
+- the reusable `AudioTrackTxAudioOutput` implementation was moved into `core.tx`
+- so both `TxActivity` and future rig adapters can share the same audio-output primitive without UI-layer coupling
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step after this checkpoint
+
+- keep `1` moving by comparing the new microphone input health summary against real on-device recordings
+- then calibrate the new TX sidetone page on real devices and decide whether to attach station presets / canned messages next
+- after that, start separating `local sidetone TX` from future `external rig/keyer TX backend` responsibilities

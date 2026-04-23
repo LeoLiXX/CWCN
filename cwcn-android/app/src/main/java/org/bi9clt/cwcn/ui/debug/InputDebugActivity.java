@@ -35,6 +35,9 @@ import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.core.adif.CwAdifExporter;
 import org.bi9clt.cwcn.core.adif.CwAdifFileWriter;
 import org.bi9clt.cwcn.core.audio.AudioFrame;
+import org.bi9clt.cwcn.core.audio.AudioInputHealthFormatter;
+import org.bi9clt.cwcn.core.audio.AudioInputHealthSnapshot;
+import org.bi9clt.cwcn.core.audio.AudioInputHealthTracker;
 import org.bi9clt.cwcn.core.audio.MicrophoneRxAudioSource;
 import org.bi9clt.cwcn.core.audio.RxAudioSource;
 import org.bi9clt.cwcn.core.audio.SyntheticFixtureRxAudioSource;
@@ -88,6 +91,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private MicrophoneRxAudioSource microphoneRxAudioSource;
     private SyntheticFixtureRxAudioSource syntheticFixtureRxAudioSource;
     private RxAudioSource activeRxAudioSource;
+    private AudioInputHealthTracker audioInputHealthTracker;
     private CwSignalProcessor cwSignalProcessor;
     private CwTimingModel cwTimingModel;
     private CwDecoder cwDecoder;
@@ -123,6 +127,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         microphoneRxAudioSource.setCallback(this);
         syntheticFixtureRxAudioSource = new SyntheticFixtureRxAudioSource();
         syntheticFixtureRxAudioSource.setCallback(this);
+        audioInputHealthTracker = new AudioInputHealthTracker();
         cwSignalProcessor = new CwSignalProcessor();
         cwTimingModel = new CwTimingModel();
         cwDecoder = new CwDecoder();
@@ -454,6 +459,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             builder.append("\nNotes: ").append(scenario.notes());
         }
         if (option == InputSourceOption.PHONE_MICROPHONE) {
+            builder.append("\n").append(renderMicrophoneInputHealth());
             builder.append("\n").append(renderMicrophoneToneWatch());
         }
         builder.append("\nPreferred Tone: ")
@@ -549,6 +555,23 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + " frame(s)";
     }
 
+    private String renderMicrophoneInputHealth() {
+        AudioInputHealthSnapshot snapshot = audioInputHealthTracker.snapshot();
+        return "Mic Input: "
+                + AudioInputHealthFormatter.summaryLabel(snapshot)
+                + "\nMic input window: "
+                + AudioInputHealthFormatter.compactWindowSummary(snapshot)
+                + "\nMic input detail: peak "
+                + snapshot.lastPeakAmplitude()
+                + ", RMS "
+                + String.format(Locale.US, "%.1f", snapshot.lastRmsAmplitude())
+                + ", clipped "
+                + Math.round(snapshot.lastClippedSampleRatio() * 100.0d)
+                + "%"
+                + "\nMic input history: "
+                + AudioInputHealthFormatter.stateHistory(snapshot);
+    }
+
     private String renderSourceHealthCoach(
             InputSourceOption option,
             @Nullable CwFixtureScenario scenario
@@ -567,6 +590,15 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private String renderMicrophoneHealthCoach(CwSignalSnapshot snapshot) {
+        AudioInputHealthSnapshot inputSnapshot = audioInputHealthTracker.snapshot();
+        if (inputSnapshot.totalFrames() <= 0) {
+            return AudioInputHealthFormatter.coachHint(inputSnapshot);
+        }
+        if (inputSnapshot.recentClippingFrameRatio() >= 0.10d
+                || inputSnapshot.recentQuietFrameRatio() >= 0.60d
+                || inputSnapshot.recentHotFrameRatio() >= 0.50d) {
+            return "Live mic check: " + AudioInputHealthFormatter.coachHint(inputSnapshot);
+        }
         if (!CwFrontEndHealthClassifier.hasFrontEndHistory(snapshot)) {
             return "Start the mic source, key a steady tone near the preferred pitch, and watch for the history row to leave idle/search.";
         }
@@ -843,6 +875,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         receivedSampleCount = 0L;
         lastPeakAmplitude = 0;
         lastRmsAmplitude = 0.0d;
+        audioInputHealthTracker.reset();
         cwSignalProcessor.reset();
         cwTimingModel.reset();
         cwDecoder.reset();
@@ -1707,6 +1740,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         receivedSampleCount += frame.sampleCount();
         lastPeakAmplitude = frame.peakAmplitude();
         lastRmsAmplitude = frame.rmsAmplitude();
+        audioInputHealthTracker.process(frame);
         List<CwToneEvent> toneEvents = cwSignalProcessor.process(frame);
         for (CwToneEvent toneEvent : toneEvents) {
             List<CwTimingEvent> timingEvents = cwTimingModel.process(toneEvent);

@@ -103,6 +103,13 @@
                 android:text="Open Logbook" />
 
             <Button
+                android:id="@+id/openTxButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Open TX Console" />
+
+            <Button
                 android:id="@+id/openDebugButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -132,7 +139,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:lineSpacingExtra="3dp"
-                android:text="Editor is for active drafting, Logbook is for reviewed confirmed logs, Debug stays for pipeline inspection."
+                android:text="Editor is for active drafting, Logbook is for reviewed confirmed logs, TX Console is for text-to-CW sidetone testing, Debug stays for pipeline inspection."
                 android:textColor="@color/cwcn_body"
                 android:textSize="14sp" />
         </LinearLayout>

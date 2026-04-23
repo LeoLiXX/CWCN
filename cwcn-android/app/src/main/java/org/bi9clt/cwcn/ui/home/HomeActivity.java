@@ -17,6 +17,7 @@ import org.bi9clt.cwcn.databinding.ActivityHomeBinding;
 import org.bi9clt.cwcn.ui.debug.InputDebugActivity;
 import org.bi9clt.cwcn.ui.qso.QsoEditorActivity;
 import org.bi9clt.cwcn.ui.qso.QsoLogbookActivity;
+import org.bi9clt.cwcn.ui.tx.TxActivity;
 
 public final class HomeActivity extends AppCompatActivity {
     private ActivityHomeBinding binding;
@@ -44,6 +45,8 @@ public final class HomeActivity extends AppCompatActivity {
                 startActivity(new Intent(this, QsoEditorActivity.class)));
         binding.openLogbookButton.setOnClickListener(view ->
                 startActivity(new Intent(this, QsoLogbookActivity.class)));
+        binding.openTxButton.setOnClickListener(view ->
+                startActivity(new Intent(this, TxActivity.class)));
         binding.openDebugButton.setOnClickListener(view ->
                 startActivity(new Intent(this, InputDebugActivity.class)));
     }

@@ -29,9 +29,14 @@ import java.util.List;
 import java.util.Locale;
 
 public final class QsoEditorActivity extends AppCompatActivity {
+    public static final String EXTRA_CONFIRMED_LOG_ID =
+            "org.bi9clt.cwcn.ui.qso.extra.CONFIRMED_LOG_ID";
+
     private ActivityQsoEditorBinding binding;
     private LocalLogRepository localLogRepository;
     private QsoDraftSnapshot currentDraftSnapshot;
+    private ConfirmedQsoLog currentConfirmedLog;
+    private long currentConfirmedLogId;
     private String actionStatusMessage = "";
     private String editorStatusMessage = "";
     private boolean syncingEditor;
@@ -51,7 +56,7 @@ public final class QsoEditorActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        reloadFromRepository();
+        reloadFromRepository(false);
     }
 
     private void setupEditorWatchers() {
@@ -77,18 +82,47 @@ public final class QsoEditorActivity extends AppCompatActivity {
         binding.openLogbookButton.setOnClickListener(view ->
                 startActivity(new Intent(this, QsoLogbookActivity.class)));
         binding.reloadDraftButton.setOnClickListener(view -> {
-            reloadFromRepository();
-            editorStatusMessage = "Reloaded draft from local storage.";
+            reloadFromRepository(true);
+            editorStatusMessage = isEditingConfirmedLog()
+                    ? "Reloaded confirmed log from local storage."
+                    : "Reloaded draft from local storage.";
             refreshUi();
         });
-        binding.clearDraftButton.setOnClickListener(view -> clearDraft());
+        binding.clearDraftButton.setOnClickListener(view -> clearEditorContext());
         binding.saveDraftButton.setOnClickListener(view -> saveDraft());
-        binding.confirmLogButton.setOnClickListener(view -> confirmLog());
+        binding.confirmLogButton.setOnClickListener(view -> {
+            if (isEditingConfirmedLog()) {
+                updateConfirmedLog();
+            } else {
+                confirmLog();
+            }
+        });
         binding.exportAdifButton.setOnClickListener(view -> exportAdif());
     }
 
     private void reloadFromRepository() {
-        currentDraftSnapshot = localLogRepository.loadDraft();
+        reloadFromRepository(true);
+    }
+
+    private void reloadFromRepository(boolean discardUnsavedChanges) {
+        if (editorDirty && !discardUnsavedChanges) {
+            refreshUi();
+            return;
+        }
+
+        currentConfirmedLogId = resolveConfirmedLogIdExtra();
+        currentConfirmedLog = currentConfirmedLogId > 0L
+                ? localLogRepository.loadConfirmedLogById(currentConfirmedLogId)
+                : null;
+        if (currentConfirmedLog != null) {
+            currentDraftSnapshot = QsoDraftFactory.createDraftFromConfirmedLog(
+                    currentConfirmedLog,
+                    System.currentTimeMillis(),
+                    "loaded from confirmed log"
+            );
+        } else {
+            currentDraftSnapshot = localLogRepository.loadDraft();
+        }
         syncEditorFromSnapshot();
         refreshUi();
     }
@@ -108,7 +142,24 @@ public final class QsoEditorActivity extends AppCompatActivity {
         refreshUi();
     }
 
-    private void clearDraft() {
+    private void clearEditorContext() {
+        if (isEditingConfirmedLog()) {
+            if (currentConfirmedLog == null) {
+                Toast.makeText(this, "Confirmed log is no longer available.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            currentDraftSnapshot = QsoDraftFactory.createDraftFromConfirmedLog(
+                    currentConfirmedLog,
+                    System.currentTimeMillis(),
+                    "reset to confirmed log"
+            );
+            actionStatusMessage = "Reset editor back to confirmed log.";
+            editorStatusMessage = "Discarded unsaved edits and restored the selected log.";
+            syncEditorFromSnapshot();
+            refreshUi();
+            return;
+        }
+
         if (!hasEditorContent() && currentDraftSnapshot == null) {
             Toast.makeText(this, "No active draft to clear.", Toast.LENGTH_SHORT).show();
             return;
@@ -118,6 +169,42 @@ public final class QsoEditorActivity extends AppCompatActivity {
         currentDraftSnapshot = null;
         actionStatusMessage = "Cleared active draft.";
         editorStatusMessage = "Cleared stored draft and reset editor.";
+        syncEditorFromSnapshot();
+        refreshUi();
+    }
+
+    private void updateConfirmedLog() {
+        if (currentConfirmedLog == null || currentConfirmedLogId <= 0L) {
+            Toast.makeText(this, "Confirmed log is no longer available.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        QsoDraftSnapshot snapshot = buildSnapshotFromEditor();
+        if (snapshot.remoteCallsignCandidate() == null || snapshot.remoteCallsignCandidate().isEmpty()) {
+            Toast.makeText(this, "Remote callsign is required before saving.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        ConfirmedQsoLog updatedLog = currentConfirmedLog.withDraftEdits(snapshot);
+        boolean updated = localLogRepository.updateConfirmedLog(currentConfirmedLogId, updatedLog);
+        if (!updated) {
+            Toast.makeText(this, "Unable to update confirmed log.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        currentConfirmedLog = localLogRepository.loadConfirmedLogById(currentConfirmedLogId);
+        currentDraftSnapshot = currentConfirmedLog == null
+                ? null
+                : QsoDraftFactory.createDraftFromConfirmedLog(
+                        currentConfirmedLog,
+                        System.currentTimeMillis(),
+                        "updated confirmed log"
+                );
+        editorDirty = false;
+        editorStatusMessage = "Saved editor changes back into the confirmed log.";
+        actionStatusMessage = "Updated confirmed log: "
+                + safeValue(updatedLog.remoteCallsign())
+                + (updatedLog.needManualReview() ? " (review flag kept)" : "");
         syncEditorFromSnapshot();
         refreshUi();
     }
@@ -175,6 +262,9 @@ public final class QsoEditorActivity extends AppCompatActivity {
         binding.actionStatusText.setText(renderActionStatus());
         binding.confirmedLogSummaryText.setText(renderConfirmedLogSummary(overview));
         binding.confirmedLogListText.setText(renderConfirmedLogList());
+        binding.reloadDraftButton.setText(isEditingConfirmedLog() ? "Reload Log" : "Reload Draft");
+        binding.saveDraftButton.setText(isEditingConfirmedLog() ? "Save Draft Copy" : "Save Draft");
+        binding.clearDraftButton.setText(isEditingConfirmedLog() ? "Reset To Log" : "Clear Draft");
         binding.saveDraftButton.setEnabled(editorDirty || hasEditorContent());
         binding.confirmLogButton.setEnabled(hasRemoteCallsign());
         binding.clearDraftButton.setEnabled(editorDirty || currentDraftSnapshot != null || hasEditorContent());
@@ -229,7 +319,7 @@ public final class QsoEditorActivity extends AppCompatActivity {
                 + "\nReady: " + yesNo(snapshot.readyForDraftConfirmation())
                 + "\nManual review: " + yesNo(snapshot.needManualReview())
                 + "\nReview queue: " + (overview == null ? 0 : overview.manualReviewLogCount())
-                + "\nSource: " + (editorDirty ? "unsaved editor preview" : "stored active draft")
+                + "\nSource: " + resolveDraftSourceLabel()
                 + "\nUpdated: " + updatedAt;
     }
 
@@ -263,6 +353,9 @@ public final class QsoEditorActivity extends AppCompatActivity {
         if (!editorStatusMessage.isEmpty()) {
             builder.append("\nLast edit action: ").append(editorStatusMessage);
         }
+        if (isEditingConfirmedLog()) {
+            builder.append("\nMode: editing confirmed log #").append(currentConfirmedLogId);
+        }
         return builder.toString();
     }
 
@@ -289,7 +382,10 @@ public final class QsoEditorActivity extends AppCompatActivity {
                 + " / "
                 + safeValue(latest.rstSent())
                 + " / "
-                + safeValue(latest.rstRcvd());
+                + safeValue(latest.rstRcvd())
+                + (isEditingConfirmedLog() && currentConfirmedLog != null
+                ? "\nEditing: #" + currentConfirmedLog.id() + " " + safeValue(currentConfirmedLog.remoteCallsign())
+                : "");
     }
 
     private String renderConfirmedLogList() {
@@ -328,10 +424,38 @@ public final class QsoEditorActivity extends AppCompatActivity {
     }
 
     private String resolveConfirmButtonText(QsoDraftSnapshot snapshot) {
+        if (isEditingConfirmedLog()) {
+            if (snapshot != null && snapshot.needManualReview()) {
+                return "Save To Log (Keep Review)";
+            }
+            return "Save To Log";
+        }
         if (snapshot != null && snapshot.needManualReview()) {
             return "Confirm With Review Flag";
         }
         return "Confirm Log";
+    }
+
+    private boolean isEditingConfirmedLog() {
+        return currentConfirmedLog != null && currentConfirmedLogId > 0L;
+    }
+
+    private long resolveConfirmedLogIdExtra() {
+        Intent intent = getIntent();
+        if (intent == null) {
+            return -1L;
+        }
+        return intent.getLongExtra(EXTRA_CONFIRMED_LOG_ID, -1L);
+    }
+
+    private String resolveDraftSourceLabel() {
+        if (editorDirty) {
+            return "unsaved editor preview";
+        }
+        if (isEditingConfirmedLog()) {
+            return "confirmed log #" + currentConfirmedLogId;
+        }
+        return "stored active draft";
     }
 
     private boolean hasDraftContent(QsoDraftSnapshot snapshot) {

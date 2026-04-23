@@ -28,17 +28,18 @@ public final class RigRegistry {
 
     public static List<RigControlAdapter> defaultAdapters() {
         return Arrays.asList(
+                new AudioVoxRigControlAdapter(),
                 new PlaceholderAdapter(
                         "generic-cat",
                         "Generic CAT / PTT Adapter",
-                        "预留给 CAT 频率读取、PTT 与基础电键控制。",
+                        "Reserved for CAT frequency/PTT/keying integration.",
                         false,
                         true
                 ),
                 new PlaceholderAdapter(
                         "generic-text-to-cw",
                         "Generic Text-to-CW Adapter",
-                        "预留给文本驱动发射后端，后续可落到 RTS / DTR / 外部 keyer。",
+                        "Reserved for external text-to-CW backends such as RTS/DTR or a hardware keyer.",
                         true,
                         true
                 )
@@ -71,12 +72,12 @@ public final class RigRegistry {
             UsbManager manager = ContextCompat.getSystemService(context, UsbManager.class);
             int deviceCount = manager == null ? 0 : manager.getDeviceList().size();
             if (!isReady(context)) {
-                return "设备未声明 USB Host 能力";
+                return "Device does not expose USB host capability.";
             }
             if (deviceCount > 0) {
-                return "USB Host 可用，检测到 " + deviceCount + " 个 USB 设备";
+                return "USB host available, detected " + deviceCount + " attached USB device(s).";
             }
-            return "USB Host 可用，当前未检测到接入设备";
+            return "USB host available, but no attached device is visible yet.";
         }
     }
 
@@ -104,21 +105,23 @@ public final class RigRegistry {
         @Override
         public String describeAvailability(Context context) {
             if (!isReady(context)) {
-                return "设备未声明蓝牙能力";
+                return "Device does not expose Bluetooth capability.";
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                     && ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
                     != PackageManager.PERMISSION_GRANTED) {
-                return "蓝牙能力存在，但尚未授予 BLUETOOTH_CONNECT";
+                return "Bluetooth exists, but BLUETOOTH_CONNECT permission is still missing.";
             }
 
             BluetoothManager manager = ContextCompat.getSystemService(context, BluetoothManager.class);
             BluetoothAdapter adapter = manager == null ? null : manager.getAdapter();
             if (adapter == null) {
-                return "蓝牙服务不可用";
+                return "Bluetooth service is unavailable.";
             }
-            return adapter.isEnabled() ? "蓝牙适配器可用且已开启" : "蓝牙适配器存在，但当前关闭";
+            return adapter.isEnabled()
+                    ? "Bluetooth adapter is available and enabled."
+                    : "Bluetooth adapter exists but is currently disabled.";
         }
     }
 
@@ -145,7 +148,7 @@ public final class RigRegistry {
 
         @Override
         public String describeAvailability(Context context) {
-            return "软件层已预留，后续接入 TCP/UDP/CAT 协议";
+            return "Software route reserved for later TCP/UDP/CAT integration.";
         }
     }
 
@@ -172,7 +175,7 @@ public final class RigRegistry {
 
         @Override
         public String describeAvailability(Context context) {
-            return "兼容路径已保留，后续与音频输出链路一起接入";
+            return "Compatibility route reserved for later audio-output plus VOX integration.";
         }
     }
 
@@ -213,6 +216,11 @@ public final class RigRegistry {
         }
 
         @Override
+        public String describeAvailability() {
+            return "Adapter contract is present, but no real rig implementation is attached yet.";
+        }
+
+        @Override
         public boolean supportsTextToCw() {
             return supportsTextToCw;
         }
@@ -220,6 +228,16 @@ public final class RigRegistry {
         @Override
         public boolean supportsPttControl() {
             return supportsPttControl;
+        }
+
+        @Override
+        public boolean isReady() {
+            return false;
+        }
+
+        @Override
+        public boolean supportsConfigurableTextToCwProfile() {
+            return false;
         }
 
         @Override

@@ -89,6 +89,29 @@ public final class LocalLogRepository {
         return queryConfirmedLogs(ConfirmedLogQuery.defaultQuery());
     }
 
+    public synchronized ConfirmedQsoLog loadConfirmedLogById(long id) {
+        if (id <= 0L) {
+            return null;
+        }
+
+        SQLiteDatabase db = databaseHelper.getReadableDatabase();
+        try (Cursor cursor = db.query(
+                ConfirmedLogDatabaseHelper.TABLE_CONFIRMED_LOGS,
+                null,
+                ConfirmedLogDatabaseHelper.COLUMN_ID + " = ?",
+                new String[]{String.valueOf(id)},
+                null,
+                null,
+                null,
+                "1"
+        )) {
+            if (cursor.moveToFirst()) {
+                return readConfirmedLog(cursor);
+            }
+        }
+        return null;
+    }
+
     public synchronized List<ConfirmedQsoLog> queryConfirmedLogs(ConfirmedLogQuery query) {
         ArrayList<ConfirmedQsoLog> logs = new ArrayList<>();
         ConfirmedLogQuery safeQuery = query == null ? ConfirmedLogQuery.defaultQuery() : query;

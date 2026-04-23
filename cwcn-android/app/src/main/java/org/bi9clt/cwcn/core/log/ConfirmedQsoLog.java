@@ -91,6 +91,28 @@ public final class ConfirmedQsoLog {
         );
     }
 
+    public ConfirmedQsoLog withDraftEdits(QsoDraftSnapshot snapshot) {
+        if (snapshot == null) {
+            return this;
+        }
+        return new ConfirmedQsoLog(
+                id,
+                snapshot.remoteCallsignCandidate(),
+                qsoDateUtc,
+                timeOnUtc,
+                mode,
+                CwAdifExporter.normalizeRstValue(snapshot.rstSentCandidate()),
+                CwAdifExporter.normalizeRstValue(snapshot.rstRcvdCandidate()),
+                snapshot.nameCandidate(),
+                snapshot.qthCandidate(),
+                snapshot.stationCallsignUsed(),
+                phaseName(snapshot.phase()),
+                snapshot.normalizedText(),
+                snapshot.needManualReview(),
+                confirmedAtEpochMs
+        );
+    }
+
     public long id() {
         return id;
     }

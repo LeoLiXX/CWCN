@@ -17,8 +17,6 @@ import org.bi9clt.cwcn.core.log.ConfirmedLogQuery;
 import org.bi9clt.cwcn.core.log.LogDisplayFormatter;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
-import org.bi9clt.cwcn.core.qso.QsoDraftFactory;
-import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoWorkflowSummaryFormatter;
 import org.bi9clt.cwcn.databinding.ActivityQsoLogbookBinding;
 
@@ -182,15 +180,11 @@ public final class QsoLogbookActivity extends AppCompatActivity {
         }
 
         ConfirmedQsoLog log = confirmedLogs.get(selectedLogIndex);
-        QsoDraftSnapshot snapshot = QsoDraftFactory.createDraftFromConfirmedLog(
-                log,
-                System.currentTimeMillis(),
-                "loaded from logbook"
-        );
-        localLogRepository.saveDraft(snapshot);
-        actionStatusMessage = "Loaded log into active draft: " + safeValue(log.remoteCallsign());
-        Toast.makeText(this, "Loaded selected log into draft.", Toast.LENGTH_SHORT).show();
-        startActivity(new Intent(this, QsoEditorActivity.class));
+        actionStatusMessage = "Opened log in editor: " + safeValue(log.remoteCallsign());
+        Toast.makeText(this, "Opened selected log in editor.", Toast.LENGTH_SHORT).show();
+        Intent intent = new Intent(this, QsoEditorActivity.class);
+        intent.putExtra(QsoEditorActivity.EXTRA_CONFIRMED_LOG_ID, log.id());
+        startActivity(intent);
     }
 
     private void toggleSelectedLogReviewFlag() {

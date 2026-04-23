@@ -45,6 +45,9 @@
             android:name=".ui.qso.QsoEditorActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.tx.TxActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.debug.InputDebugActivity"
             android:exported="false" />
     </application>

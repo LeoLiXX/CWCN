@@ -16,6 +16,7 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
     private static final int SAMPLE_RATE_HZ = 16000;
     private static final int CHANNEL_COUNT = 1;
     private static final int FRAME_SIZE_SAMPLES = 256;
+    private static final int CLIPPING_SAMPLE_THRESHOLD = 32700;
 
     private final Context appContext;
 
@@ -140,11 +141,15 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
 
                 short[] samples = Arrays.copyOf(readBuffer, readCount);
                 int peak = 0;
+                int clippedSampleCount = 0;
                 double sumSquares = 0.0d;
                 for (short sample : samples) {
                     int absolute = Math.abs((int) sample);
                     if (absolute > peak) {
                         peak = absolute;
+                    }
+                    if (absolute >= CLIPPING_SAMPLE_THRESHOLD) {
+                        clippedSampleCount += 1;
                     }
                     sumSquares += (double) sample * sample;
                 }
@@ -158,6 +163,7 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
                             CHANNEL_COUNT,
                             peak,
                             rms,
+                            clippedSampleCount,
                             SystemClock.elapsedRealtime()
                     ));
                 }
