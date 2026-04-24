@@ -3090,3 +3090,994 @@
 
 - start real USB keyer bench validation and compare the observed failure stages against actual hardware behavior
 - if CDC `SET_CONTROL_LINE_STATE` proves insufficient on target devices, the next layer should be a richer USB-serial/profile compatibility path rather than more generic UI work
+
+## 2026-04-23 TX Hardware Route Follow-Up 7: Bench Event Timeline on TX Page
+
+- Continued from explicit USB failure stages into a more practical bench-validation tool.
+- Added a lightweight in-memory TX bench log buffer:
+- compact timestamped entries
+- bounded history size
+- clear-log action
+- no new persistence complexity yet
+- `TxActivity` now records a session timeline directly on the TX page, including:
+- backend selection
+- USB target mode / locked device changes
+- key line changes
+- permission request sent / granted / denied
+- USB attach / detach broadcasts
+- manual refresh
+- bench macro loading
+- start blocked / requested / failed
+- playback state transitions
+- diagnostic-stage transitions
+- Practical effect:
+- during first real hardware validation we no longer only see the current snapshot
+- we also keep a short breadcrumb trail of what happened just before failure or success
+- this should make it much easier to identify whether the main issue is:
+- target selection
+- permission
+- hotplug instability
+- route refresh timing
+- or backend start/playback failure
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- use the new bench log with a real USB CDC/ACM keyer or RTS/DTR interface
+- record which diagnostic stages and event sequences appear on actual hardware
+- then decide whether the next investment should be:
+- broader USB-serial chipset compatibility
+- per-device routing profiles
+- or RX real-input stability returning to the top of the queue
+
+## 2026-04-23 TX Hardware Route Follow-Up 8: Copyable Bench Report
+
+- Continued the same real-bench path by making the TX page easier to use during actual hardware validation and later feedback.
+- Added a `Copy Report` action next to the bench log controls.
+- The copied report now bundles the key state needed for troubleshooting into one pasteable block:
+- backend summary
+- current plan summary
+- USB route summary
+- current playback status
+- current playback progress
+- bench event timeline
+- Added a small formatter utility so the copied report keeps a stable readable section layout.
+- Practical effect:
+- after a failed or successful USB keying attempt, we can now grab one compact report instead of manually transcribing:
+- current backend
+- diagnostic stage
+- target mode
+- next action context
+- recent event trail
+- This should make first real-device bring-up much easier to compare across:
+- different cables / OTG adapters
+- different CDC devices
+- different `RTS` / `DTR` wiring choices
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- use `Copy Report` during the first real USB bench session and collect a few concrete route/failure samples
+- after that, decide whether the next TX investment should be:
+- broader USB-serial chipset/profile compatibility
+- explicit per-device presets
+- or a shift back to RX real-input stability with TX held at this bench-ready level
+
+## 2026-04-23 TX Hardware Route Follow-Up 9: Bench Summary for Faster On-Bench Decisions
+
+- Continued the TX bench tooling by adding a compact `Bench Summary` layer on top of the detailed route/log views.
+- Added a small formatter that turns the current TX state into a single actionable summary using:
+- selected backend
+- backend readiness/running state
+- USB diagnostic stage when relevant
+- last playback outcome
+- current next-step hint
+- The TX page now shows this summary inline above the raw bench log, so the operator can immediately see whether the route is:
+- ready for a short transmission
+- blocked by permission
+- blocked by missing target/device
+- blocked by open/claim/interface issues
+- or simply suitable for local dry-run / VOX validation
+- The copied bench report now also includes this new `Bench Summary` section, so pasted reports start with the most important interpretation before the raw details.
+- Practical effect:
+- during real USB bring-up, we no longer need to scan the full route summary first just to answer “what state am I in right now?”
+- the page and copied report now both start with a short human-usable diagnosis plus next action
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- take one real USB keyer / RTS-DTR bench session and collect a few copied reports under:
+- no permission
+- device attached and ready
+- a forced failure case if possible
+- then use those real samples to decide whether the next TX work should focus on:
+- profile/chipset compatibility
+- stronger safety recovery
+- or holding TX steady and shifting effort back to RX
+
+## 2026-04-23 TX Hardware Route Follow-Up 10: P0 Real Bench Checklist and Results Template
+
+- Started turning P0 from a vague "go test hardware" task into a concrete execution package.
+- Added [TxUsbBenchChecklist.md](/D:/Workshop/CWCN/TxUsbBenchChecklist.md):
+- ordered first-pass hardware validation steps
+- expected diagnostic stages
+- minimum success criteria
+- decision rules for what to do after the first session
+- Added [TxUsbBenchResults.md](/D:/Workshop/CWCN/TxUsbBenchResults.md):
+- a paste-ready place to store `Copy Report` outputs
+- a consistent scenario template for comparing real hardware runs
+- Practical effect:
+- the first real USB bench session no longer needs to be improvised
+- results should now be comparable across:
+- no-device / no-permission / ready states
+- `RTS` vs `DTR`
+- refresh / release / detach recovery
+
+### Verification
+
+- no code-path changes in this step
+- latest code verification remains:
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- run the first real USB bench session directly against [TxUsbBenchChecklist.md](/D:/Workshop/CWCN/TxUsbBenchChecklist.md)
+- paste the resulting reports into [TxUsbBenchResults.md](/D:/Workshop/CWCN/TxUsbBenchResults.md)
+- then choose the next TX branch from actual hardware evidence instead of speculation
+
+## 2026-04-23 TX Hardware Route Follow-Up 11: Mock USB Keyer Backend For Hardware-Free P0
+
+- Added a `Mock USB Serial Keyer Adapter` backend so P0 can move forward even without any physical USB keyer or rig hardware.
+- Added a mock USB route model with selectable bench scenarios:
+- `No Device Attached`
+- `Device Attached, No Permission`
+- `Ready`
+- `Open Failed`
+- `Claim Failed`
+- `No Control Interface`
+- `Locked Target Missing`
+- `No CDC Candidate`
+- The existing TX USB page now surfaces a `Mock bench scenario` selector when the mock backend is selected.
+- Existing bench tooling works on top of the mock route too:
+- route summary
+- bench summary
+- bench log
+- `Copy Report`
+- `Load DIT Test`
+- `Load VVV Test`
+- `RTS` / `DTR` switching
+- Practical effect:
+- P0 can now be split into two layers:
+- app-level/mock validation on a phone immediately
+- real hardware validation later when a real USB keyer path is available
+- This should let us validate most of the operator flow and diagnostic semantics before any physical rig bench session.
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug`
+
+### Suggested next step
+
+- install the latest debug APK on the phone
+- select `Mock USB Serial Keyer Adapter`
+- follow the new mock-first steps in [TxUsbBenchChecklist.md](/D:/Workshop/CWCN/TxUsbBenchChecklist.md)
+- paste the first mock reports into [TxUsbBenchResults.md](/D:/Workshop/CWCN/TxUsbBenchResults.md)
+
+## 2026-04-23 TX Hardware Route Follow-Up 12: First Mock P0 Report Captured
+
+- Captured the first meaningful mock P0 result into [TxUsbBenchResults.md](/D:/Workshop/CWCN/TxUsbBenchResults.md).
+- Confirmed route flow:
+- `usb-serial-no-device`
+- `usb-serial-no-permission`
+- `usb-serial-ready`
+- short mock `DTR` DIT playback completed successfully
+- The copied report now also confirmed `Progress snapshots: yes`, which means the newer TX reporting path is present on the installed APK.
+- Practical conclusion:
+- the mock ready path is no longer speculative
+- remaining mock P0 value is now mainly in the failure branches rather than repeating the ready path
+
+### Suggested next step
+
+- capture the remaining mock failure-path reports:
+- `Open Failed`
+- `Claim Failed`
+- `Locked Target Missing`
+- then decide whether TX should branch toward:
+- compatibility/profile work
+- safety/recovery UX
+- or pause TX and return more attention to RX real-input stability
+
+## 2026-04-23 Audio VOX Follow-Up: Tone Path Sounds Normal Again
+
+- Continued tightening the `Audio VOX Text Adapter` after on-device listening feedback reported:
+- muffled tone
+- dry / flat timbre
+- "waterlogged broken speaker" character
+- Root cause was largely in the TX PCM generation path:
+- the tone renderer was applying a fresh fade-in / fade-out envelope on every `20ms` write chunk
+- `AudioTrack` buffering was also underspecified
+- The TX audio path now:
+- renders the full dot/dash as one coherent PCM tone with edge ramp only at the element boundaries
+- writes that PCM to `AudioTrack` in chunks without re-sculpting the envelope mid-element
+- uses `48kHz` output instead of `16kHz`
+- uses corrected byte-based buffer sizing
+- Added focused unit coverage for the tone renderer and kept `AudioVoxRigControlAdapter` verification in place.
+- On-device result after reinstall:
+- spacing remains clear
+- tone quality is now reported as normal again
+
+### Key files
+
+- [AudioTrackTxAudioOutput.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/tx/AudioTrackTxAudioOutput.java)
+- [TxPcmToneRenderer.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/tx/TxPcmToneRenderer.java)
+- [TxPcmToneRendererTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/tx/TxPcmToneRendererTest.java)
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.tx.TxPcmToneRendererTest --tests org.bi9clt.cwcn.core.rig.AudioVoxRigControlAdapterTest`
+- `.\gradlew.bat assembleDebug`
+
+### Suggested next step
+
+- hold `Audio VOX` at this improved state unless a new major defect appears
+- prioritize mock USB failure-path coverage before spending more time on cosmetic TX voicing tweaks
+
+## 2026-04-23 Launcher Icon Follow-Up: Adaptive Safe-Zone Fix
+
+- Fixed adaptive launcher icon edge clipping by adding inset wrappers around the foreground and monochrome layers.
+- Practical effect:
+- the launcher icon no longer rides the crop boundary too aggressively on adaptive icon masks
+- both normal launcher icon and themed monochrome icon benefit from the same safe padding
+
+### Key files
+
+- [ic_launcher.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml)
+- [ic_launcher_round.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml)
+- [ic_cwcn_launcher_foreground_inset.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/drawable/ic_cwcn_launcher_foreground_inset.xml)
+- [ic_cwcn_launcher_monochrome_inset.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/drawable/ic_cwcn_launcher_monochrome_inset.xml)
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+
+## 2026-04-23 TX Hardware Route Follow-Up 13: Mock Failure-Sweep Coverage Is Coherent
+
+- Continued the mock-first TX P0 pass after the initial ready-path report.
+- Captured a broader mock bench session that exercised, in one run:
+- `usb-serial-open-failed`
+- `usb-serial-claim-failed`
+- `usb-serial-no-control-interface`
+- `usb-serial-target-missing`
+- `usb-serial-no-cdc`
+- Then returned the mock route to `usb-serial-ready` and completed a longer `DTR` pattern playback successfully.
+- Practical conclusion:
+- the mock TX bench path now looks coherent enough for this phase
+- the main remaining uncertainty is no longer app-side mock route semantics, but real USB hardware behavior
+- A small observability gap is now easier to see:
+- when several mock failure stages are swept in one session, the copied report header reflects the final current state
+- while earlier failure stages survive only in the bench log timeline
+- That is acceptable for now, but if we keep investing in TX bench tooling, a future polish step could expose:
+- last significant diagnostic stage
+- or a quick copy action per transition / per failure state
+
+### Key files
+
+- [TxUsbBenchResults.md](/D:/Workshop/CWCN/TxUsbBenchResults.md)
+- [ContextCheckpoint.md](/D:/Workshop/CWCN/ContextCheckpoint.md)
+
+### Suggested next step
+
+- do not spend more time widening mock scenarios unless a contradiction appears
+- next meaningful branch should be one of:
+- real USB bench on actual hardware
+- small TX observability polish for multi-failure capture
+- or returning priority to RX real-input stability
+
+## 2026-04-23 TX Hardware Route Follow-Up 14: Multi-Failure Report Summary Refinement
+
+- Continued the TX bench observability polish after the mock failure-sweep exposed one awkward reporting edge:
+- if a session swept several USB failure stages and then recovered to `Ready`
+- the copied report header previously reflected only the final current state
+- while the interesting failures survived only in the bench log body
+- TX bench reporting now retains the most recent significant USB issue and surfaces it in:
+- `Bench Summary`
+- `Copy Report`
+- but only when the route has already recovered to `usb-serial-ready`
+- Practical effect:
+- recovered sessions now preserve a compact reminder of the last important USB failure
+- currently blocked sessions no longer duplicate the same error twice in both:
+- current route summary
+- and an unnecessary `Recent USB Issue` section
+
+### Key files
+
+- [TxActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/tx/TxActivity.java)
+- [CwTxBenchSummaryFormatter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/tx/CwTxBenchSummaryFormatter.java)
+- [CwTxBenchReportFormatter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/tx/CwTxBenchReportFormatter.java)
+- [CwTxBenchSummaryFormatterTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/tx/CwTxBenchSummaryFormatterTest.java)
+- [CwTxBenchReportFormatterTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/tx/CwTxBenchReportFormatterTest.java)
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.tx.CwTxBenchReportFormatterTest --tests org.bi9clt.cwcn.core.tx.CwTxBenchSummaryFormatterTest`
+- `.\gradlew.bat assembleDebug`
+
+## 2026-04-23 TX Hardware Route Follow-Up 15: Preserve Scroll Position During Bench-State Refresh
+
+- Continued improving TX page trial comfort after user feedback that fault handling should not interrupt the test flow by dragging the page around.
+- Added explicit scroll-position preservation around the main TX page refresh paths:
+- preview rebuilds
+- playback status/progress refresh
+- Also adjusted the TX page scroll container so child refreshes are less likely to steal focus during route-state changes.
+- Practical effect:
+- USB fault transitions, summary refreshes, and bench-log growth should be less likely to yank the operator away from the part of the page they are currently watching
+- This is implemented and built, but still awaits one more on-device comfort check
+
+### Key files
+
+- [TxActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/tx/TxActivity.java)
+- [activity_tx.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_tx.xml)
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+
+## 2026-04-23 Audio VOX Wrap-Up For This Phase
+
+- On-device feedback after the TX audio-path fixes now says the `Audio VOX` tone sounds much fuller and no longer has the earlier obviously broken character.
+- Current project judgement:
+- `Audio VOX` is good enough for ongoing bench use
+- there is no strong reason to keep tuning timbre right now
+- any further sound-character tweaks should be deferred until a new concrete defect or comparison target appears
+
+### Suggested next step
+
+- treat current TX state as close to milestone-ready
+- unless the new scroll-preservation change still feels disruptive on device
+- prepare to shift the main engineering focus back to `RX real-input stability`
+
+## 2026-04-23 RX Real-Input Stability: Frame-Gap Recovery + Debug Observability
+
+- Main focus has now shifted back from TX bench polish to RX real-input stability.
+- Added a defensive frame-gap recovery path in [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java).
+- When a microphone/input callback gap is large enough, the front end now:
+- emits a synthetic protective `TONE_OFF` if a tone was active
+- clears stale tone-active / target-lock / retune-candidate state
+- avoids carrying old lock state across long capture discontinuities
+- Extended [CwSignalSnapshot.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalSnapshot.java) to expose:
+- frame-gap reset count
+- last frame gap
+- last reset threshold
+- worst frame gap
+- last reset timestamp
+- The Debug UI in [InputDebugActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/debug/InputDebugActivity.java) now shows those continuity metrics in both:
+- `Signal State`
+- `Signal Health Summary`
+- Added/updated unit coverage in:
+- [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java)
+- [CwSignalSnapshotTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalSnapshotTest.java)
+- [CwFrontEndHealthClassifierTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/eval/CwFrontEndHealthClassifierTest.java)
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest --tests org.bi9clt.cwcn.core.signal.CwSignalSnapshotTest --tests org.bi9clt.cwcn.core.eval.CwFrontEndHealthClassifierTest`
+- `.\gradlew.bat assembleDebug`
+
+### Suggested next step
+
+1. Use the Debug page with live microphone input and watch whether frame-gap resets appear during start/stop, app resume, or device-load spikes.
+2. If resets are frequent, extend observability one layer earlier into audio-input continuity tracking.
+3. If resets stay rare but live decode still feels unstable, shift next to timing-model robustness under real jitter.
+
+## 2026-04-23 Live RX Phone-Speaker Test Follow-Up
+
+- Ran the first practical phone-speaker-to-microphone style RX check with app-generated CW audio:
+- test message: `CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K.`
+- tested tone frequencies included roughly `730 Hz`, `600 Hz`, and `650 Hz`
+- Observed result:
+- when playback volume is too low, decode quality becomes very poor
+- raising volume gives a clear improvement
+- screenshot evidence showed `Frame Gap Resets: 0`, `Last gap: 20 ms`, and `Worst gap: 45 ms`
+- Practical conclusion:
+- this case is not primarily callback discontinuity
+- the immediate RX issue is weak-input / low lock-coverage behavior
+- the app switching freeze was likely caused by Debug UI refresh pressure rather than signal processor frame gaps
+- Fixed the Debug UI pressure by throttling live UI refresh from every audio frame to a bounded periodic refresh while keeping the processing pipeline frame-accurate.
+- Backgrounded Debug UI no longer keeps queueing heavy live text refreshes.
+- The test also exposed a callsign candidate pollution case:
+- repeated self-call could become `BI9CLTBI9C`
+- added cleanup for `clean callsign + partial repeat of same callsign prefix`
+- added regression coverage for:
+- `CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K`
+- `CQ CQ CQ DE BI9CLTBI9C PSE K`
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.interpreter.CwInterpreterCallsignRecoveryTest`
+- `.\gradlew.bat assembleDebug`
+
+### Suggested next step
+
+1. Reinstall the latest debug APK and repeat the same phone-speaker test.
+2. First check whether switching apps still causes UI unresponsiveness.
+3. Then compare low-volume and moderate-volume runs again:
+- if low volume still fails but moderate volume is stable, add clearer weak-input coaching and perhaps an input-level calibration helper
+- if moderate volume still produces wrong symbols, move next into timing-model jitter tolerance
+
+## 2026-04-23 RX Tone Acquisition: Preferred/Actual Frequency Mismatch
+
+- Live testing showed that decode quality can collapse when the configured preferred tone and the real received tone are far apart.
+- The failure mode points to front-end acquisition rather than callsign inference:
+- the previous scan was centered on the preferred tone
+- preferred-frequency bias stayed strong even while the front end was still unlocked
+- Updated [CwSignalProcessor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/signal/CwSignalProcessor.java) so unlocked acquisition now:
+- first tries the normal preferred-tone window
+- falls back to a wider supported-frequency scan only if the preferred window does not yield a reliable lock
+- uses a softer preferred-tone bias during wide acquisition
+- keeps the stricter continuity/preferred protection once a target is already locked
+- Added regression coverage in [CwSignalProcessorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java) for clean tones far above and far below the preferred setting.
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest --tests org.bi9clt.cwcn.core.signal.CwSignalSnapshotTest --tests org.bi9clt.cwcn.core.eval.CwFrontEndHealthClassifierTest`
+
+### Suggested next step
+
+1. Reinstall the next debug APK and repeat the phone-speaker RX test with the RX preferred tone intentionally offset from the TX tone.
+2. Watch `Target Tone` and recent tracking offset in the Debug UI.
+3. If it now locks but decoding still drops symbols, move next to timing jitter / gap classification under real microphone input.
+
+## 2026-04-24 RX Real-Noise Fixture Matrix
+
+- Added targeted synthetic fixtures for the next on-device RX comprehensive test:
+- `weak_broadband_noise_report`: low-volume useful CW plus stronger broadband noise, intended to mirror quiet-room playback that is simply too soft.
+- `near_frequency_narrowband_noise_report`: adjacent continuous CW-like carrier close to the target tone, intended to expose near-frequency pull without making the baseline impossible.
+- `agc_pumping_volume_report`: fast/deep QSB-style amplitude swing plus light drift/noise, intended to approximate phone mic / OS AGC pumping.
+- Reclassified `drifting_nearby_interferer_directed_report` as a boundary observation: decoded text and QSO semantics can survive, but the final front-end state may end on a strong off-target carrier after the useful keyed signal finishes.
+- Enriched fixture evaluation summaries with additional front-end log fields:
+- `lastRms`
+- `lastToneRms`
+- `residual`
+- `dominance`
+- `isolation`
+- `threshold`
+- `release`
+- `noiseFloor`
+- `signalFloor`
+- `toneOnOff`
+- `frameGapResets`
+- `worstFrameGapMs`
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwFixturePipelineRegressionTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.eval.CwFixtureEvaluationResultTest`
+
+### Suggested next step
+
+1. Reinstall the next debug APK and run the Debug fixture list plus live microphone phone-speaker tests.
+2. For poor-copy cases, paste the full fixture/live summary and compare `toneOnOff`, `lockCoverage`, `threshold/release`, `noiseFloor/signalFloor`, and `Target Tone`.
+3. If `toneOnOff` is much lower than expected or dot estimates become too long, prioritize timing/gap robustness under near-frequency interference.
+4. If `lockCoverage` and `peakIsolation` are weak at low volume but recover when volume rises, prioritize input-level coaching/calibration before heavier DSP.
+
+## 2026-04-24 RX Debug Focus View
+
+- Simplified the Debug RX screen for on-device receive testing.
+- Added a default `RX Focus` panel near the top with:
+- selected source and capture state
+- peak/rms input level
+- preferred/tracked tone and lock state
+- front-end quality/bottleneck reason
+- tone/residual/isolation levels
+- tone on/off and frame-gap reset counts
+- decoded text, normalized text, and callsign candidates
+- Added Start/Stop buttons directly inside the focus panel so basic RX tests no longer require scrolling to the full capture section.
+- Moved currently secondary areas behind `Show Detailed Panels`:
+- device transport status
+- ADIF preview/export
+- QSO manual editor
+- full interpreter/decoder/timing/capture/signal detail sections
+- bootstrap module list
+- fixture evaluation long summary
+- Fixture selector is now hidden unless `Synthetic Fixture` is the selected input source.
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+
+## 2026-04-24 Rig Profile + Rig Setup Skeleton
+
+- Shifted the next mainline milestone from RX debug polishing to formal rig integration scaffolding.
+- Added a new rig abstraction layer in `core/rig`:
+- `RigCapability`
+- `RigSupportLevel`
+- `RigProfile`
+- `RigProfileCatalog`
+- `RigRegistry.defaultProfiles()`
+- The new profile layer separates:
+- transport family
+- rig profile family
+- adapter implementation
+- user-facing setup flow
+- Seeded the first profile families:
+- `Generic Audio VOX`
+- `Generic USB Serial Keyer`
+- `Mock USB Serial Keyer`
+- `Generic Serial CAT / PTT`
+- `Generic Network CAT`
+- `Generic Bluetooth Serial Rig`
+- Added a new formal UI entry:
+- `RigSetupActivity`
+- shows transport readiness
+- shows profile families, capability summaries, setup notes, and constraints
+- explains recommended integration order
+- can pin the current preferred rig path for later UI flows
+- Added a `Rig Setup` entry on Home while preserving existing `TX Console` and `Debug Tools`.
+- Home now echoes the currently pinned rig path.
+- Added design document:
+- [RigIntegrationUiPlan.md](/D:/Workshop/CWCN/RigIntegrationUiPlan.md)
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest`
+- `.\gradlew.bat assembleDebug`
+
+## 2026-04-24 Rig Setup Per-Profile Persistence + TX Default Integration
+
+- Extended the new rig-setup line so configuration is now saved per rig profile family rather than as one global shared block.
+- Practical result:
+- saving `USB Serial Keyer` defaults no longer silently overwrites `Audio VOX` or future `CAT` defaults
+- the selected profile editor now reloads that profile's own settings when the spinner changes
+- Tightened the `Rig Setup` status copy:
+- it now distinguishes the currently selected profile preview from the pinned/default rig path
+- Home rig summary now renders the compact configuration summary, not just:
+- support level
+- transport kind
+- Began wiring the formal rig setup into the actual TX workflow:
+- TX default `WPM`
+- TX default tone frequency
+- USB preferred-device hint fallback
+- USB key-line fallback
+- now come from the pinned rig profile settings when console-local TX preferences are not already set
+- This is the first concrete bridge from:
+- `Rig Setup`
+- into:
+- `TX Console`
+- which means the rig profile work is no longer only scaffolding/UI shell
+
+### Key files
+
+- [RigSelectionStore.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigSelectionStore.java)
+- [RigProfileConfigurationFormatter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileConfigurationFormatter.java)
+- [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java)
+- [HomeActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/home/HomeActivity.java)
+- [TxActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/tx/TxActivity.java)
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest`
+
+### Suggested next step
+
+1. Turn the current generic CAT placeholders into a real profile/config schema.
+2. Continue replacing TX/RX local ad-hoc defaults with selected-rig-backed defaults where it improves operator flow.
+3. Keep `Debug` alive as an engineering tool, but continue moving the normal user path onto `Home -> Rig Setup -> TX/RX`.
+
+## 2026-04-24 CAT Profile Schema v1
+
+- Continued the formal rig line by adding a first reusable `CAT` profile schema instead of leaving `CAT` as only:
+- serial vs network transport
+- plus a few raw host/baud fields
+- Added [CatProtocolFamily.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/CatProtocolFamily.java) with the first protocol-family layer:
+- `Generic CAT`
+- `Yaesu-style CAT`
+- `Icom CI-V`
+- `Kenwood-style CAT`
+- `Hamlib rigctld`
+- Extended [RigProfileSettings.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileSettings.java) and [RigSelectionStore.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigSelectionStore.java) so each rig family can now persist:
+- serial CAT protocol family
+- network CAT protocol family
+- existing serial/network transport hints
+- Updated [activity_rig_setup.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_rig_setup.xml) and [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java) to expose protocol-family spinners for:
+- serial CAT
+- network CAT
+- Updated [RigProfileConfigurationFormatter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileConfigurationFormatter.java) so summaries now show the chosen CAT family directly.
+- Practical effect:
+- we now have a stable place to say "this rig route is serial/network CAT, and it behaves like Yaesu / Icom / Kenwood / rigctld"
+- the next CAT work can focus on real adapter binding and vendor/model mapping rather than still debating config shape
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest`
+
+### Suggested next step
+
+1. Attach concrete vendor/model profile families onto the new CAT schema.
+2. Define which CAT backends should target:
+- direct serial dialect
+- CI-V specifics
+- rigctld / bridge mode
+3. Start shaping a formal operating-screen rig summary so the chosen CAT family is visible outside Rig Setup.
+
+## 2026-04-24 Concrete CAT Family Catalog Seeds
+
+- Built on top of the new CAT schema by seeding the first concrete CAT-oriented profile families into [RigProfileCatalog.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileCatalog.java):
+- `Generic Yaesu Serial CAT`
+- `Generic Icom CI-V`
+- `Generic Kenwood Serial CAT`
+- `Generic Hamlib rigctld`
+- These are still `PLANNED`, but they matter because the app is no longer forced to represent all future CAT work as one vague `generic-cat`.
+- Practical effect:
+- `Rig Setup` can now grow toward real-world operator choices earlier
+- later adapter work can target a named CAT family instead of retrofitting semantics back into one catch-all profile
+- Updated rig tests so this richer catalog shape is pinned by regression coverage.
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest`
+
+### Suggested next step
+
+1. Pick the first real CAT implementation target:
+- Yaesu-style serial CAT
+- Icom CI-V
+- Hamlib `rigctld`
+2. Add the minimum extra setup fields only for that chosen family.
+3. Keep the other CAT families as catalog placeholders until the first real adapter path settles.
+
+## 2026-04-24 CAT Family Recommended Defaults
+
+- Continued tightening the CAT setup model so concrete CAT families are no longer just different names in the catalog.
+- [RigProfile.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfile.java) can now carry profile-specific recommended default settings.
+- [RigSelectionStore.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigSelectionStore.java) now uses a profile's own recommended defaults when no profile-specific override has been saved yet.
+- Practical effect in `Rig Setup`:
+- first opening `Generic Yaesu Serial CAT` now defaults to `Yaesu-style CAT`
+- first opening `Generic Icom CI-V` now defaults to `Icom CI-V`
+- first opening `Generic Kenwood Serial CAT` now defaults to `Kenwood-style CAT`
+- first opening `Generic Hamlib rigctld` now defaults to `Hamlib rigctld`
+- Also seeded a first-pass recommended serial baud per CAT family:
+- Yaesu-style: `38400`
+- Icom CI-V: `19200`
+- Kenwood-style: `57600`
+- This keeps the setup page feeling more intentional before any real CAT adapter is attached.
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest`
+
+### Suggested next step
+
+1. Pick the first real CAT backend target and bind it to one of the now-defaulted CAT families.
+2. Only after choosing that target, add the truly necessary family-specific fields such as:
+- CI-V address
+- serial framing quirks
+- rigctld capability/session options
+3. Avoid widening the setup schema again until one family has a working adapter path.
+
+## 2026-04-24 Rig Setup Default-vs-Override UX
+
+- Continued improving the `Rig Setup` page so it now communicates whether a profile is currently using:
+- its recommended family defaults
+- or a saved user override
+- [RigSelectionStore.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigSelectionStore.java) now exposes:
+- `hasSavedSettings(...)`
+- `clearSettings(...)`
+- This lets the UI reason about profile state instead of only loading/saving opaque blobs.
+- [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java) now:
+- shows whether the selected profile preview comes from saved overrides or recommended defaults
+- enables a profile-scoped `Restore Recommended Defaults` action
+- disables that reset action when no override exists yet
+- [activity_rig_setup.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_rig_setup.xml) now includes that reset button directly in the profile configuration panel.
+- Practical effect:
+- experimenting with CAT family defaults is lower-risk
+- the user can return one profile to its recommended defaults without disturbing other rig families
+- the page now better matches the per-profile persistence model we already built
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest`
+
+### Suggested next step
+
+1. Stop widening setup UX for the moment.
+2. Pick the first real CAT implementation target:
+- `Hamlib rigctld`
+- or `Yaesu-style serial CAT`
+3. Add only the backend/session scaffolding needed for that target.
+
+## 2026-04-24 Hamlib rigctld Backend Skeleton
+
+- Began the first real CAT backend implementation with a network-based `Hamlib rigctld` path instead of adding more setup-only structure.
+- Added the new session layer:
+- [HamlibRigctldSession.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/HamlibRigctldSession.java)
+- [HamlibRigctldSessionFactory.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/HamlibRigctldSessionFactory.java)
+- [SocketHamlibRigctldSession.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SocketHamlibRigctldSession.java)
+- [SocketHamlibRigctldSessionFactory.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SocketHamlibRigctldSessionFactory.java)
+- Added the actual adapter:
+- [HamlibRigctldRigControlAdapter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/HamlibRigctldRigControlAdapter.java)
+- Current behavior of the adapter:
+- reads the pinned/profile-selected network CAT settings from `Rig Setup`
+- requires `Hamlib rigctld` protocol family plus host/port
+- uses official rigctld command paths for:
+- `KEYSPD`
+- `CWPITCH`
+- `send_morse`
+- `PTT`
+- Registered the adapter in [RigRegistry.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigRegistry.java), so it now appears as a real TX backend candidate.
+- Updated [RigProfileCatalog.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileCatalog.java) so the concrete `Generic Hamlib rigctld` profile now points at adapter id `hamlib-rigctld`.
+- Added `INTERNET` permission in [AndroidManifest.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/AndroidManifest.xml).
+- Added tests:
+- [HamlibRigctldRigControlAdapterTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/rig/HamlibRigctldRigControlAdapterTest.java)
+- expanded [CwTxRouteAdvisorTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/tx/CwTxRouteAdvisorTest.java)
+- Practical status:
+- this is still a skeleton, not a field-proven backend
+- but the project now has a real CAT backend seam with:
+- socket session
+- command dispatch
+- TX backend registration
+- route guidance
+- tests
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.HamlibRigctldRigControlAdapterTest --tests org.bi9clt.cwcn.core.tx.CwTxRouteAdvisorTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest`
+
+### Suggested next step
+
+1. Add lightweight operator-facing diagnostics for rigctld connection failures in TX.
+2. Optionally add a tiny `Test rigctld connection` action in `Rig Setup` or `TX Console`.
+3. Only after that, decide whether to deepen:
+- `rigctld`
+- or start the first direct serial CAT backend.
+
+## 2026-04-24 rigctld TX Diagnostics Polish
+
+- Tightened the first `rigctld` backend rollout so TX failures are less opaque during the next bench round.
+- [RigTextTxBackend.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/tx/RigTextTxBackend.java) now includes `adapter.describeAvailability()` in the final error snapshot when a rig adapter rejects the request.
+- Practical effect:
+- a failed rigctld send now carries the latest connection/configuration note instead of only saying "rejected"
+- [TxActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/tx/TxActivity.java) now gives `hamlib-rigctld` a dedicated recovery hint instead of the generic rig fallback.
+- This keeps the first on-device/network bench loop more discussion-friendly without adding a bigger probe UI yet.
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.HamlibRigctldRigControlAdapterTest --tests org.bi9clt.cwcn.core.tx.CwTxRouteAdvisorTest --tests org.bi9clt.cwcn.core.tx.RigTextTxBackendTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest`
+
+## 2026-04-24 Rig Setup rigctld Probe Action
+
+- Added a lightweight `Test rigctld Connection` action directly into the network CAT section of [activity_rig_setup.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_rig_setup.xml).
+- [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java) now runs a background probe using the current editor values, which means:
+- host/port changes do not need to be saved first
+- the operator can validate a candidate rigctld endpoint before switching to TX
+- [HamlibRigctldSession.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/HamlibRigctldSession.java) and [SocketHamlibRigctldSession.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SocketHamlibRigctldSession.java) now support a lightweight `getInfo()` probe path.
+- [HamlibRigctldRigControlAdapter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/HamlibRigctldRigControlAdapter.java) now exposes `probeConfiguration(...)` so UI can:
+- reject non-network / non-rigctld profiles cleanly
+- attempt a real host/port probe
+- surface the returned rig info first line when available
+- Practical effect:
+- the first real network-CAT bench loop no longer has to start with full text TX
+- `Rig Setup` has become the right place to confirm basic rigctld reachability
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.HamlibRigctldRigControlAdapterTest --tests org.bi9clt.cwcn.core.tx.CwTxRouteAdvisorTest --tests org.bi9clt.cwcn.core.tx.RigTextTxBackendTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest`
+
+### Suggested next step
+
+1. Use `Rig Setup -> Test rigctld Connection` against a real rigctld endpoint and paste back the probe result.
+2. If probe succeeds, do the first very short `send_morse` TX bench from the TX page.
+3. If probe fails, tighten host/port/family diagnostics before widening CAT scope again.
+
+## 2026-04-24 TX Console Pinned-Rig Route Alignment
+
+- Continued the formal rig integration by making `TX Console` follow the pinned rig path more directly instead of always opening on `Local Sidetone`.
+- [TxActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/tx/TxActivity.java) now derives the preferred TX backend from the pinned `RigProfile.adapterId()` and auto-selects the matching backend when one exists in the current build.
+- Safe fallback remains in place:
+- if the pinned rig profile has no usable text-to-CW backend in TX yet, the page still falls back to `Local Sidetone`
+- [activity_tx.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_tx.xml) now shows a compact pinned-rig summary directly below the backend selector.
+- That summary makes three things visible in one place:
+- pinned rig/config summary
+- preferred TX route inferred from the pinned rig
+- currently active TX route, including a note when the operator temporarily overrides it inside TX
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+
+### Suggested next step
+
+1. Keep `Rig Setup` as the canonical route/config source and continue shrinking TX-local ambiguity.
+2. Next useful increment is a tighter TX-side rig status block or first real bench feedback against the pinned backend path.
+3. Avoid widening CAT schema again until more of the existing pinned-rig flow is exercised.
+
+## 2026-04-24 Yaesu FT-Series Bench Path
+
+- Added a new formal Yaesu-family rig profile in [RigProfileCatalog.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileCatalog.java):
+- `Yaesu FT-Series via rigctld`
+- This profile is intentionally broader than only `FT-710`, so current bench work can cover:
+- `FT-710`
+- `FT-891`
+- `FT-991A`
+- and nearby Yaesu FT rigs exposed through `Hamlib rigctld`
+- The profile is marked `Bench-ready` and points directly at the already-existing `hamlib-rigctld` adapter, which means:
+- pinning this profile in `Rig Setup` now gives CWCN a real formal Yaesu-family path it can auto-select in TX
+- [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java) now nudges current Yaesu FT benching toward this rigctld route first, instead of waiting for native Android Yaesu serial CAT.
+- [CwTxRouteAdvisor.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/tx/CwTxRouteAdvisor.java) now explicitly mentions the Yaesu FT-family recommendation inside the rigctld checklist.
+- Added concrete operator notes in [YaesuRigctldBenchChecklist.md](/D:/Workshop/CWCN/YaesuRigctldBenchChecklist.md).
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.tx.CwTxRouteAdvisorTest assembleDebug`
+
+### Suggested next step
+
+1. In `Rig Setup`, pin `Yaesu FT-Series via rigctld`.
+2. Fill host/port and run `Test rigctld Connection`.
+3. If probe passes, move immediately to the first short TX bench with `DIT` or `VVV`.
+
+## 2026-04-24 Testing Workbench + Wider rigctld Family Support
+
+- Added [TestingWorkbench.md](/D:/Workshop/CWCN/TestingWorkbench.md) as the unified entry page for current testing/bench markdowns.
+- It now centralizes links to:
+- [TxUsbBenchChecklist.md](/D:/Workshop/CWCN/TxUsbBenchChecklist.md)
+- [TxUsbBenchResults.md](/D:/Workshop/CWCN/TxUsbBenchResults.md)
+- [YaesuRigctldBenchChecklist.md](/D:/Workshop/CWCN/YaesuRigctldBenchChecklist.md)
+- [YaesuRigctldBenchResults.md](/D:/Workshop/CWCN/YaesuRigctldBenchResults.md)
+- Continued the formal rig family rollout beyond Yaesu by adding two more `Bench-ready` profiles in [RigProfileCatalog.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileCatalog.java):
+- `Icom Family via rigctld`
+- `Kenwood Family via rigctld`
+- These new families reuse the existing `Hamlib rigctld` backend, which means the app now has formal first-step operating paths for three large radio families:
+- Yaesu
+- Icom
+- Kenwood
+- Added a small family helper in [RigProfileFamilies.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileFamilies.java) so family-aware wording can stay shared and low-risk.
+- Wired that family awareness into:
+- [RigProfileConfigurationFormatter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileConfigurationFormatter.java)
+- [HamlibRigctldRigControlAdapter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/HamlibRigctldRigControlAdapter.java)
+- [TxActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/tx/TxActivity.java)
+- so summary/probe/recovery text is now more specific for:
+- Yaesu
+- Icom
+- Kenwood
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest --tests org.bi9clt.cwcn.core.rig.HamlibRigctldRigControlAdapterTest --tests org.bi9clt.cwcn.core.tx.CwTxRouteAdvisorTest assembleDebug`
+
+### Suggested next step
+
+1. Keep using `TestingWorkbench.md` as the front door for bench work.
+2. When real hardware is ready, start with family-specific rigctld benching before designing native CAT per vendor.
+3. The next concrete engineering branch after enough bench feedback is likely:
+- native Yaesu serial CAT
+- or native Icom CI-V
+- rather than adding more abstract rig families first.
+
+## 2026-04-24 Native Yaesu Serial CAT Probe
+
+- Began the first native-serial CAT path with Yaesu instead of staying entirely on `rigctld`.
+- Added a new serial CAT transport/probe seam in `core/rig`:
+- [SerialCatSession.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatSession.java)
+- [SerialCatSessionFactory.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatSessionFactory.java)
+- [AndroidUsbCdcAcmSerialCatSession.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/AndroidUsbCdcAcmSerialCatSession.java)
+- [AndroidUsbSerialCatSessionFactory.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/AndroidUsbSerialCatSessionFactory.java)
+- Added [SerialCatProbe.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatProbe.java) as the first native probe helper.
+- Current native probe scope is intentionally narrow:
+- only `Yaesu-style CAT` first
+- safe read-first query style such as `FA;` / `IF;`
+- meant to validate link responsiveness, not yet full native TX/CW control
+- `Rig Setup` now surfaces this path directly:
+- `Request Serial CAT USB Permission`
+- `Test Serial CAT Connection`
+- serial probe status text
+- Added native Yaesu serial bench docs:
+- [YaesuSerialCatBenchChecklist.md](/D:/Workshop/CWCN/YaesuSerialCatBenchChecklist.md)
+- [YaesuSerialCatBenchResults.md](/D:/Workshop/CWCN/YaesuSerialCatBenchResults.md)
+- and linked them from [TestingWorkbench.md](/D:/Workshop/CWCN/TestingWorkbench.md).
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.SerialCatProbeTest assembleDebug`
+- `.\gradlew.bat assembleDebug`
+
+### Suggested next step
+
+1. Use `Generic Yaesu Serial CAT` in `Rig Setup` and validate permission + probe behavior on a real FT-family radio.
+2. Once probe behavior is stable, reuse the same native-serial seam for `ICOM CI-V`.
+3. Only after native serial probe is stable should we decide whether native TX/CW keying should happen:
+- through CAT key commands
+- through mixed CAT + key-line
+- or stay routed through rigctld for longer.
+
+## 2026-04-24 Native Icom CI-V Probe
+
+- Continued exactly along the requested order:
+- `Yaesu first`
+- then `Icom`
+- The native serial seam is now shared by both families.
+- [SerialCatSession.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatSession.java) now supports raw binary transactions in addition to ASCII helper flow.
+- Practical effect:
+- `Yaesu-style CAT` can keep using ASCII read commands
+- `Icom CI-V` can now use proper binary frame probing
+- Added `CI-V address hex` as a real persisted rig setting through:
+- [RigProfileSettings.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigProfileSettings.java)
+- [RigSelectionStore.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/RigSelectionStore.java)
+- `Rig Setup` now exposes that address in the serial CAT section.
+- [SerialCatProbe.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatProbe.java) now supports:
+- Yaesu native serial probe
+- Icom native CI-V probe
+- Added Icom test docs:
+- [IcomCivBenchChecklist.md](/D:/Workshop/CWCN/IcomCivBenchChecklist.md)
+- [IcomCivBenchResults.md](/D:/Workshop/CWCN/IcomCivBenchResults.md)
+- and linked them from [TestingWorkbench.md](/D:/Workshop/CWCN/TestingWorkbench.md).
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.SerialCatProbeTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest assembleDebug`
+
+### Suggested next step
+
+1. Treat native serial work as two current probe-capable families:
+- Yaesu
+- Icom
+2. When hardware arrives, stabilize:
+- Yaesu probe
+- Icom probe
+before implementing native CAT-driven TX behavior.
+3. After that, the likely next family is:
+- Kenwood native serial CAT
+using the same serial session/probe seam.
+
+## 2026-04-24 Kenwood Native Probe + Native Serial CAT Adapter
+
+- Continued the same shared serial-CAT seam instead of opening a fourth one-off path.
+- [SerialCatProbe.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatProbe.java) now supports:
+- Yaesu-style CAT probe
+- Icom CI-V probe
+- Kenwood-style CAT probe
+- The Kenwood probe starts conservatively with read-only ASCII checks such as:
+- `ID;`
+- `FA;`
+- `IF;`
+- [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java) now treats `Kenwood-style CAT` as a first-class serial probe family in the `Rig Setup` status text and button gating.
+- Added Kenwood bench docs:
+- [KenwoodSerialCatBenchChecklist.md](/D:/Workshop/CWCN/KenwoodSerialCatBenchChecklist.md)
+- [KenwoodSerialCatBenchResults.md](/D:/Workshop/CWCN/KenwoodSerialCatBenchResults.md)
+- and linked them from [TestingWorkbench.md](/D:/Workshop/CWCN/TestingWorkbench.md).
+- Also replaced the old `generic-cat` placeholder with a first real shared native adapter:
+- [SerialCatRigControlAdapter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatRigControlAdapter.java)
+- This adapter does not claim native TX is finished.
+- What it does do now is:
+- bind the selected serial-CAT rig profile to a real adapter object
+- report family-aware readiness/availability through the shared serial session factory
+- establish a concrete place for later Yaesu/Icom/Kenwood family-specific TX/PTT commands
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.SerialCatProbeTest --tests org.bi9clt.cwcn.core.rig.SerialCatRigControlAdapterTest --tests org.bi9clt.cwcn.core.rig.RigProfileCatalogTest --tests org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatterTest assembleDebug`
+
+### Suggested next step
+
+1. Keep `Kenwood` at the same probe-first maturity as `Yaesu` and `Icom`.
+2. Use [SerialCatRigControlAdapter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatRigControlAdapter.java) as the shared landing zone for the first real native serial control behavior.
+3. The next concrete implementation branch should be:
+- family-specific native PTT/CW control for `Yaesu`
+- then mirror that pattern into `Icom`

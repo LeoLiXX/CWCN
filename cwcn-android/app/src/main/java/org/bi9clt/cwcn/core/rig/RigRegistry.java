@@ -21,19 +21,23 @@ public final class RigRegistry {
         Context appContext = context == null ? null : context.getApplicationContext();
         return Arrays.asList(
                 new AudioVoxRigControlAdapter(),
+                new HamlibRigctldRigControlAdapter(appContext),
                 new UsbSerialKeyerRigControlAdapter(
                         new AndroidUsbSerialKeyerPortFactory(appContext),
                         SerialKeyerTxOutput.KeyLine.RTS,
                         18,
                         650
                 ),
-                new PlaceholderAdapter(
-                        "generic-cat",
-                        "Generic CAT / PTT Adapter",
-                        "Reserved for CAT frequency/PTT/keying integration.",
-                        false,
-                        true
+                new UsbSerialKeyerRigControlAdapter(
+                        "usb-serial-keyer-mock",
+                        "Mock USB Serial Keyer Adapter",
+                        "Simulate a USB serial keyer route and toggle the %s control line without external hardware.",
+                        new MockUsbSerialKeyerPortFactory(),
+                        SerialKeyerTxOutput.KeyLine.RTS,
+                        18,
+                        650
                 ),
+                new SerialCatRigControlAdapter(appContext),
                 new PlaceholderAdapter(
                         "generic-text-to-cw",
                         "Generic Text-to-CW Adapter",
@@ -51,6 +55,10 @@ public final class RigRegistry {
                 new NetworkCatTransport(),
                 new VoxTransport()
         );
+    }
+
+    public static List<RigProfile> defaultProfiles() {
+        return RigProfileCatalog.defaultProfiles();
     }
 
     public static List<RigControlAdapter> defaultAdapters() {
