@@ -9,4 +9,9 @@
         <item name="android:windowBackground">@color/cwcn_screen_background</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+
+    <style name="Theme.CWCN.Splash" parent="Theme.CWCN">
+        <item name="android:windowBackground">@drawable/splash_window_background</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
 </resources>

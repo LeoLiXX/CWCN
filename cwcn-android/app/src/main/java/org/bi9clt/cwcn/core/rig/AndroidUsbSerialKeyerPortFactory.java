@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-public final class AndroidUsbSerialKeyerPortFactory implements SelectableSerialKeyerPortFactory {
+public final class AndroidUsbSerialKeyerPortFactory implements UsbSerialRouteFactory {
     private static final int USB_CLASS_COMM = 2;
     private static final int USB_CDC_SUBCLASS_ACM = 2;
 

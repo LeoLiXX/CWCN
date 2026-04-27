@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/cwcn_screen_background" />
+    <item
+        android:gravity="top|end"
+        android:top="-120dp"
+        android:right="-100dp">
+        <shape android:shape="oval">
+            <size
+                android:width="320dp"
+                android:height="320dp" />
+            <gradient
+                android:angle="45"
+                android:centerColor="#1F74EBDD"
+                android:endColor="#0074EBDD"
+                android:startColor="#5874EBDD" />
+        </shape>
+    </item>
+    <item
+        android:gravity="bottom|start"
+        android:bottom="-140dp"
+        android:left="-100dp">
+        <shape android:shape="oval">
+            <size
+                android:width="300dp"
+                android:height="300dp" />
+            <gradient
+                android:angle="45"
+                android:centerColor="#1FD7A93A"
+                android:endColor="#00D7A93A"
+                android:startColor="#48D7A93A" />
+        </shape>
+    </item>
+</layer-list>

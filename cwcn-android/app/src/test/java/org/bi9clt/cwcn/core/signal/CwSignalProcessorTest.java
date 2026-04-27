@@ -29,6 +29,36 @@ public final class CwSignalProcessorTest {
     }
 
     @Test
+    public void unlockedAcquisitionCanFindCleanToneFarAbovePreferredFrequency() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(600);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 12, 790.0d, 17000.0d);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue(snapshot.toneActive());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 790) <= 20);
+        assertTrue(snapshot.toneDominanceRatio() >= 0.24d);
+    }
+
+    @Test
+    public void unlockedAcquisitionCanFindCleanToneFarBelowPreferredFrequency() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(760);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 12, 520.0d, 17000.0d);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue(snapshot.toneActive());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 520) <= 20);
+        assertTrue(snapshot.toneDominanceRatio() >= 0.24d);
+    }
+
+    @Test
     public void strongerOutOfBandToneDoesNotPullTrackingAwayFromPreferredWindow() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(650);
@@ -38,7 +68,10 @@ public final class CwSignalProcessorTest {
 
         CwSignalSnapshot snapshot = processor.snapshot();
         assertTrue(snapshot.targetToneLocked());
-        assertTrue(Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
+        assertTrue("target=" + snapshot.targetToneFrequencyHz()
+                        + " winner=" + snapshot.acquisitionWinnerFrequencyHz()
+                        + " source=" + snapshot.acquisitionWinnerSource(),
+                Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
         assertTrue(snapshot.toneDominanceRatio() >= 0.25d);
         assertEquals(650, snapshot.preferredToneFrequencyHz());
     }
@@ -64,7 +97,10 @@ public final class CwSignalProcessorTest {
 
         CwSignalSnapshot snapshot = processor.snapshot();
         assertTrue(snapshot.targetToneLocked());
-        assertTrue(Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
+        assertTrue("target=" + snapshot.targetToneFrequencyHz()
+                        + " winner=" + snapshot.acquisitionWinnerFrequencyHz()
+                        + " source=" + snapshot.acquisitionWinnerSource(),
+                Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
     }
 
     @Test
@@ -197,6 +233,84 @@ public final class CwSignalProcessorTest {
     }
 
     @Test
+    public void offPreferredLowerToneCanStillLockUnderDeterministicBroadbandNoise() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processNoisyFrames(processor, 8, 0.0d, 0.0d, 1800.0d);
+        processNoisyFrames(processor, 14, 600.0d, 15000.0d, 4200.0d, 8);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.toneActive());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.targetToneLocked());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 600) <= 20);
+    }
+
+    @Test
+    public void offPreferredHigherToneCanStillLockUnderDeterministicBroadbandNoise() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processNoisyFrames(processor, 8, 0.0d, 0.0d, 1800.0d);
+        processNoisyFrames(processor, 14, 800.0d, 15000.0d, 4200.0d, 8);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.toneActive());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.targetToneLocked());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 800) <= 20);
+    }
+
+    @Test
+    public void cleanActual700HzBeatsFarLowerPreferred450Hz() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(450);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 12, 700.0d, 17000.0d);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.toneActive());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.targetToneLocked());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertEquals(450, snapshot.preferredToneFrequencyHz());
+    }
+
+    @Test
+    public void cleanActual700HzBeatsFarHigherPreferred850Hz() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(850);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 12, 700.0d, 17000.0d);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.toneActive());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.targetToneLocked());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertEquals(850, snapshot.preferredToneFrequencyHz());
+    }
+
+    @Test
+    public void noisyActual700HzStillBeatsPreferred450HzPrior() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(450);
+
+        processNoisyFrames(processor, 8, 0.0d, 0.0d, 1800.0d);
+        processNoisyFrames(processor, 14, 700.0d, 15000.0d, 4200.0d, 8);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        String debug = "target=" + snapshot.targetToneFrequencyHz()
+                + " winner=" + snapshot.acquisitionWinnerFrequencyHz()
+                + " source=" + snapshot.acquisitionWinnerSource()
+                + " locked=" + snapshot.targetToneLocked()
+                + " toneActive=" + snapshot.toneActive();
+        assertTrue(debug, snapshot.toneActive());
+        assertTrue(debug, snapshot.targetToneLocked());
+        assertTrue(debug, Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertTrue("winner=" + snapshot.acquisitionWinnerFrequencyHz(), Math.abs(snapshot.acquisitionWinnerFrequencyHz() - 700) <= 20);
+    }
+
+    @Test
     public void peakLockStatsRemainAvailableAfterRunFallsBackToSearch() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(650);
@@ -311,7 +425,7 @@ public final class CwSignalProcessorTest {
         processor.setPreferredToneFrequencyHz(650);
 
         processFrames(processor, 8, 0.0d, 0.0d);
-        processFrames(processor, 4, 670.0d, 18000.0d);
+        processFramesCollecting(processor, 4, 670.0d, 18000.0d, 8);
         AudioFrame transitionFrame = buildPartialFrame(
                 12 * frameDurationMs(),
                 12 * FRAME_SIZE,
@@ -343,6 +457,113 @@ public final class CwSignalProcessorTest {
         assertEquals(CwToneEvent.Type.TONE_OFF, events.get(0).type());
         assertTrue(events.get(0).timestampMs() >= (12 * frameDurationMs()));
         assertTrue(events.get(0).timestampMs() <= (13 * frameDurationMs()) + 6L);
+    }
+
+    @Test
+    public void longFrameGapForcesToneOffAndClearsLockState() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 6, 670.0d, 16000.0d);
+
+        List<CwToneEvent> events = processor.process(buildFrame(
+                200L,
+                20 * FRAME_SIZE,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d
+        ));
+
+        assertEquals(1, events.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, events.get(0).type());
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(!snapshot.toneActive());
+        assertTrue(!snapshot.targetToneLocked());
+        assertEquals(1, snapshot.frameGapResetCount());
+        assertTrue(snapshot.lastFrameGapMs() >= 104L);
+        assertTrue(snapshot.lastFrameGapResetThresholdMs() >= 40L);
+        assertTrue(snapshot.worstFrameGapMs() >= snapshot.lastFrameGapMs());
+        assertEquals(200L, snapshot.lastFrameGapResetAtMs());
+    }
+
+    @Test
+    public void longFrameGapAllowsCleanReacquisitionWithoutStaleCarryover() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFrames(processor, 6, 670.0d, 16000.0d);
+        processor.process(buildFrame(
+                200L,
+                20 * FRAME_SIZE,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d
+        ));
+
+        for (int index = 0; index < 8; index++) {
+            processor.process(buildFrame(
+                    220L + (index * frameDurationMs()),
+                    (30 + index) * FRAME_SIZE,
+                    670.0d,
+                    16000.0d,
+                    0.0d,
+                    0.0d
+            ));
+        }
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.toneActive());
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue(Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
+        assertEquals(1, snapshot.frameGapResetCount());
+    }
+
+    @Test
+    public void keepsTrackedToneNearOffPreferredSignalAcrossShortSilence() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(600);
+
+        processFramesCollecting(processor, 8, 0.0d, 0.0d, 0);
+        processFramesCollecting(processor, 10, 780.0d, 16000.0d, 8);
+        processFramesCollecting(processor, 8, 0.0d, 0.0d, 18);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 780) <= 20);
+        assertEquals(600, snapshot.preferredToneFrequencyHz());
+    }
+
+    @Test
+    public void trackedToneFallsBackToPreferredAfterLongIdleStretch() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(600);
+
+        processFramesCollecting(processor, 8, 0.0d, 0.0d, 0);
+        processFramesCollecting(processor, 10, 780.0d, 16000.0d, 8);
+        processFramesCollecting(processor, 70, 0.0d, 0.0d, 18);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertEquals(600, snapshot.targetToneFrequencyHz());
+        assertTrue(!snapshot.targetToneLocked());
+    }
+
+    @Test
+    public void offPreferredToneBurstReentryKeepsTrackingOnActualTone() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(600);
+
+        processFramesCollecting(processor, 8, 0.0d, 0.0d, 0);
+        processFramesCollecting(processor, 4, 760.0d, 14500.0d, 8);
+        processFramesCollecting(processor, 4, 0.0d, 0.0d, 12);
+        processFramesCollecting(processor, 4, 760.0d, 14500.0d, 16);
+
+        CwSignalSnapshot snapshot = processor.snapshot();
+        assertTrue(snapshot.targetToneLocked());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 760) <= 20);
+        assertEquals(600, snapshot.preferredToneFrequencyHz());
     }
 
     private void processFrames(

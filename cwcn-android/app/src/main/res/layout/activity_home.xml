@@ -24,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Home entrance for operating, editing, and reviewing CW QSOs."
+            android:text="Start from rig setup, then focus on RX validation and the core operating path."
             android:textColor="@color/cwcn_subtitle"
             android:textSize="15sp" />
 
@@ -36,6 +36,40 @@
             android:textColor="@color/cwcn_accent"
             android:textSize="14sp"
             android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/developerModePanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="App Mode"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/developerModeStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/toggleDeveloperModeButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Enable Developer Mode" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -63,12 +97,12 @@
                 android:textSize="14sp" />
 
             <TextView
-                android:id="@+id/logSummaryText"
+                android:id="@+id/rigSummaryText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_subtitle"
+                android:textColor="@color/cwcn_body"
                 android:textSize="13sp" />
         </LinearLayout>
 
@@ -89,35 +123,22 @@
                 android:textStyle="bold" />
 
             <Button
-                android:id="@+id/openQsoEditorButton"
+                android:id="@+id/openOperateButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:text="Open QSO Editor" />
+                android:text="Start Operating" />
 
             <Button
-                android:id="@+id/openLogbookButton"
+                android:id="@+id/openRigSetupButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Open Logbook" />
-
-            <Button
-                android:id="@+id/openTxButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Open TX Console" />
-
-            <Button
-                android:id="@+id/openDebugButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Open Debug Tools" />
+                android:text="Connect Radio" />
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/developerToolsPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -128,10 +149,27 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Navigation Notes"
+                android:text="Developer Tools"
                 android:textColor="@color/cwcn_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/developerToolsNoteText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:text="Bench TX, raw pipeline inspection, and low-level diagnostics live here."
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/openDeveloperToolsButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Open Developer Tools" />
 
             <TextView
                 android:id="@+id/navigationNoteText"
@@ -139,7 +177,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:lineSpacingExtra="3dp"
-                android:text="Editor is for active drafting, Logbook is for reviewed confirmed logs, TX Console is for text-to-CW sidetone testing, Debug stays for pipeline inspection."
+                android:text="Rig Setup is the formal rig entry, Operate is the main user path, and Debug stays available only for RX and protocol inspection."
                 android:textColor="@color/cwcn_body"
                 android:textSize="14sp" />
         </LinearLayout>

@@ -1440,6 +1440,8 @@ public final class CwFixtureScenario {
         private final int extraPauseEveryCharacters;
         private final double extraPauseDotUnits;
         private final List<Integer> extraPauseCharacterOffsets;
+        private final Integer toneFrequencyOverrideHz;
+        private final Integer endToneFrequencyOverrideHz;
 
         public PartTimingProfile(
                 double wpmScale,
@@ -1462,7 +1464,9 @@ public final class CwFixtureScenario {
                     1.0d,
                     extraPauseEveryCharacters,
                     extraPauseDotUnits,
-                    Collections.emptyList()
+                    Collections.emptyList(),
+                    null,
+                    null
             );
         }
 
@@ -1489,7 +1493,9 @@ public final class CwFixtureScenario {
                     handoffGapScale,
                     extraPauseEveryCharacters,
                     extraPauseDotUnits,
-                    Collections.emptyList()
+                    Collections.emptyList(),
+                    null,
+                    null
             );
         }
 
@@ -1506,6 +1512,38 @@ public final class CwFixtureScenario {
                 double extraPauseDotUnits,
                 List<Integer> extraPauseCharacterOffsets
         ) {
+            this(
+                    wpmScale,
+                    endWpmScale,
+                    timingJitterDepthOverride,
+                    dotSwingDepthOverride,
+                    dotJitterBoost,
+                    letterGapScale,
+                    wordGapScale,
+                    handoffGapScale,
+                    extraPauseEveryCharacters,
+                    extraPauseDotUnits,
+                    extraPauseCharacterOffsets,
+                    null,
+                    null
+            );
+        }
+
+        public PartTimingProfile(
+                double wpmScale,
+                double endWpmScale,
+                Double timingJitterDepthOverride,
+                Double dotSwingDepthOverride,
+                double dotJitterBoost,
+                double letterGapScale,
+                double wordGapScale,
+                double handoffGapScale,
+                int extraPauseEveryCharacters,
+                double extraPauseDotUnits,
+                List<Integer> extraPauseCharacterOffsets,
+                Integer toneFrequencyOverrideHz,
+                Integer endToneFrequencyOverrideHz
+        ) {
             this.wpmScale = wpmScale;
             this.endWpmScale = endWpmScale;
             this.timingJitterDepthOverride = timingJitterDepthOverride;
@@ -1517,10 +1555,50 @@ public final class CwFixtureScenario {
             this.extraPauseEveryCharacters = extraPauseEveryCharacters;
             this.extraPauseDotUnits = extraPauseDotUnits;
             this.extraPauseCharacterOffsets = sanitizePauseOffsets(extraPauseCharacterOffsets);
+            this.toneFrequencyOverrideHz = sanitizeToneFrequencyOverride(toneFrequencyOverrideHz);
+            this.endToneFrequencyOverrideHz = sanitizeToneFrequencyOverride(
+                    endToneFrequencyOverrideHz == null ? toneFrequencyOverrideHz : endToneFrequencyOverrideHz
+            );
         }
 
         public static PartTimingProfile defaultProfile() {
-            return new PartTimingProfile(1.0d, 1.0d, null, null, 0.0d, 1.0d, 1.0d, 1.0d, 0, 0.0d, Collections.emptyList());
+            return new PartTimingProfile(
+                    1.0d,
+                    1.0d,
+                    null,
+                    null,
+                    0.0d,
+                    1.0d,
+                    1.0d,
+                    1.0d,
+                    0,
+                    0.0d,
+                    Collections.emptyList(),
+                    null,
+                    null
+            );
+        }
+
+        public PartTimingProfile withToneFrequencyHz(int toneFrequencyHz) {
+            return withToneSweepHz(toneFrequencyHz, toneFrequencyHz);
+        }
+
+        public PartTimingProfile withToneSweepHz(int toneFrequencyHz, int endToneFrequencyHz) {
+            return new PartTimingProfile(
+                    wpmScale,
+                    endWpmScale,
+                    timingJitterDepthOverride,
+                    dotSwingDepthOverride,
+                    dotJitterBoost,
+                    letterGapScale,
+                    wordGapScale,
+                    handoffGapScale,
+                    extraPauseEveryCharacters,
+                    extraPauseDotUnits,
+                    extraPauseCharacterOffsets,
+                    toneFrequencyHz,
+                    endToneFrequencyHz
+            );
         }
 
         public double wpmScale() {
@@ -1567,6 +1645,18 @@ public final class CwFixtureScenario {
             return new ArrayList<>(extraPauseCharacterOffsets);
         }
 
+        public Integer toneFrequencyOverrideHz() {
+            return toneFrequencyOverrideHz;
+        }
+
+        public Integer endToneFrequencyOverrideHz() {
+            return endToneFrequencyOverrideHz;
+        }
+
+        public boolean hasToneOverride() {
+            return toneFrequencyOverrideHz != null;
+        }
+
         public boolean isDefault() {
             return approximatelyEquals(wpmScale, 1.0d)
                     && approximatelyEquals(endWpmScale, 1.0d)
@@ -1578,7 +1668,9 @@ public final class CwFixtureScenario {
                     && approximatelyEquals(handoffGapScale, 1.0d)
                     && extraPauseEveryCharacters <= 0
                     && approximatelyEquals(extraPauseDotUnits, 0.0d)
-                    && extraPauseCharacterOffsets.isEmpty();
+                    && extraPauseCharacterOffsets.isEmpty()
+                    && toneFrequencyOverrideHz == null
+                    && endToneFrequencyOverrideHz == null;
         }
 
         public String summaryLabel() {
@@ -1613,6 +1705,13 @@ public final class CwFixtureScenario {
             if (!extraPauseCharacterOffsets.isEmpty() && extraPauseDotUnits > 0.0d) {
                 parts.add("pause @" + joinPauseOffsets(extraPauseCharacterOffsets) + " +" + trimDouble(extraPauseDotUnits) + " dot");
             }
+            if (toneFrequencyOverrideHz != null) {
+                if (endToneFrequencyOverrideHz != null && !toneFrequencyOverrideHz.equals(endToneFrequencyOverrideHz)) {
+                    parts.add("tone " + toneFrequencyOverrideHz + "->" + endToneFrequencyOverrideHz + "Hz");
+                } else {
+                    parts.add("tone " + toneFrequencyOverrideHz + "Hz");
+                }
+            }
             return parts.isEmpty() ? "default" : String.join(", ", parts);
         }
 
@@ -1636,6 +1735,13 @@ public final class CwFixtureScenario {
                 labels.add(String.valueOf(offset));
             }
             return String.join(",", labels);
+        }
+
+        private Integer sanitizeToneFrequencyOverride(Integer toneFrequencyHz) {
+            if (toneFrequencyHz == null || toneFrequencyHz <= 0) {
+                return null;
+            }
+            return toneFrequencyHz;
         }
 
         private static boolean approximatelyEquals(double left, double right) {

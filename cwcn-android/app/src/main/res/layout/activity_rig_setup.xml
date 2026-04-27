@@ -1,0 +1,898 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/cwcn_screen_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Rig Setup"
+            android:textColor="@color/cwcn_title"
+            android:textSize="30sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/subtitleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Choose your radio path, save the connection defaults, and keep bench tools outside the main setup flow."
+            android:textColor="@color/cwcn_subtitle"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/versionText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColor="@color/cwcn_accent"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/usbAttachStatusPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="USB Attach"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/usbAttachStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/backButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Back" />
+
+        <LinearLayout
+            android:id="@+id/developerModePanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Developer Mode"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/developerModeStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/toggleDeveloperModeButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Enable Developer Mode" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/developerQuickActionsPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical">
+
+            <Button
+                android:id="@+id/openDeveloperToolsButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Open Developer Tools" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/connectionGuidePanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Connection Guide"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/connectionGuideText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/readinessSummaryPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Readiness Snapshot"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/readinessSummaryText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Selected Rig Path"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Spinner
+                android:id="@+id/profileSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:padding="12dp" />
+
+            <Button
+                android:id="@+id/saveSelectedProfileButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Use This Rig Path" />
+
+            <TextView
+                android:id="@+id/selectedProfileStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/profileConfigPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Profile Configuration"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Default CW profile"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/defaultWpmEditText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="18"
+                    android:inputType="number"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <EditText
+                    android:id="@+id/defaultToneFrequencyEditText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="650"
+                    android:inputType="number"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/usbConfigGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="USB serial / key line"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <Spinner
+                    android:id="@+id/usbKeyLineSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <EditText
+                    android:id="@+id/usbPreferredDeviceNameEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="Preferred USB device hint"
+                    android:inputType="text"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/serialCatConfigGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/serialCatProtocolLabelText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Serial CAT"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <Spinner
+                    android:id="@+id/serialCatProtocolSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <EditText
+                    android:id="@+id/serialCatBaudRateEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="9600"
+                    android:inputType="number"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <TextView
+                    android:id="@+id/serialCatKeyLineLabelText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="CW keying line"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <Spinner
+                    android:id="@+id/serialCatKeyLineSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <TextView
+                    android:id="@+id/serialCatKeyingPolarityLabelText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="CW keying polarity"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <Spinner
+                    android:id="@+id/serialCatKeyingPolaritySpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <CheckBox
+                    android:id="@+id/serialCatAssertRtsCheckBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Assert RTS during keying" />
+
+                <CheckBox
+                    android:id="@+id/serialCatAssertDtrCheckBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Assert DTR during keying" />
+
+                <TextView
+                    android:id="@+id/serialCatPortPickerLabelText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Detected CAT port"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <Spinner
+                    android:id="@+id/serialCatPortSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <TextView
+                    android:id="@+id/serialCatKeyingPortLabelText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Detected keying port"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <Spinner
+                    android:id="@+id/serialCatKeyingPortSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <EditText
+                    android:id="@+id/serialCatPortHintEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="CAT port hint (advanced fallback)"
+                    android:inputType="text"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <EditText
+                    android:id="@+id/serialCatCivAddressEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="CI-V address hex (e.g. 94)"
+                    android:inputType="textCapCharacters"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <Button
+                    android:id="@+id/requestSerialCatPermissionButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="Request Serial CAT USB Permission" />
+
+                <Button
+                    android:id="@+id/testSerialCatConnectionButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Test Serial CAT Connection" />
+
+                <Button
+                    android:id="@+id/testSerialCatPttButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Pulse Legacy CAT TX/PTT" />
+
+                <Button
+                    android:id="@+id/testSerialCatKeyingButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Pulse Keying Port (DTR/RTS)" />
+
+                <Button
+                    android:id="@+id/holdSerialCatKeyingButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Hold Keying Line (1.5s)" />
+
+                <Button
+                    android:id="@+id/openCloseSerialCatKeyingPortButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Open/Close Keying Port Only" />
+
+                <Button
+                    android:id="@+id/runSerialCatKeyingSweepButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Run Keying Sweep (All Ports/Lines)" />
+
+                <TextView
+                    android:id="@+id/serialCatTimingLabLabelText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="DTR Timing Lab"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <Spinner
+                    android:id="@+id/serialCatTimingAssertOrderSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <Spinner
+                    android:id="@+id/serialCatTimingReleaseOrderSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/serialCatTimingPreDelayEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:hint="Pre-delay ms"
+                        android:inputType="number"
+                        android:padding="12dp"
+                        android:singleLine="true"
+                        android:textColor="@color/cwcn_body"
+                        android:textColorHint="@color/cwcn_subtitle" />
+
+                    <EditText
+                        android:id="@+id/serialCatTimingHoldEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:hint="Hold ms"
+                        android:inputType="number"
+                        android:padding="12dp"
+                        android:singleLine="true"
+                        android:textColor="@color/cwcn_body"
+                        android:textColorHint="@color/cwcn_subtitle" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/serialCatTimingInterLineGapEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:hint="Inter-line gap ms"
+                        android:inputType="number"
+                        android:padding="12dp"
+                        android:singleLine="true"
+                        android:textColor="@color/cwcn_body"
+                        android:textColorHint="@color/cwcn_subtitle" />
+
+                    <EditText
+                        android:id="@+id/serialCatTimingReleaseGapEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:hint="Release gap ms"
+                        android:inputType="number"
+                        android:padding="12dp"
+                        android:singleLine="true"
+                        android:textColor="@color/cwcn_body"
+                        android:textColorHint="@color/cwcn_subtitle" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/runSerialCatTimingLabButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Run DTR Timing Lab" />
+
+                <TextView
+                    android:id="@+id/serialCatShortPulseLabLabelText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="Short Pulse Lab"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <Spinner
+                    android:id="@+id/serialCatShortPulsePresetSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/serialCatShortPulsePreDelayEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:hint="Pre-delay ms"
+                        android:inputType="number"
+                        android:padding="12dp"
+                        android:singleLine="true"
+                        android:textColor="@color/cwcn_body"
+                        android:textColorHint="@color/cwcn_subtitle" />
+
+                    <EditText
+                        android:id="@+id/serialCatShortPulseTailHoldEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:hint="Tail-hold ms"
+                        android:inputType="number"
+                        android:padding="12dp"
+                        android:singleLine="true"
+                        android:textColor="@color/cwcn_body"
+                        android:textColorHint="@color/cwcn_subtitle" />
+                </LinearLayout>
+
+                <EditText
+                    android:id="@+id/serialCatShortPulseReleaseGapEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="Extra release gap ms"
+                    android:inputType="number"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <Button
+                    android:id="@+id/runSerialCatShortPulseLabButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Run Short Pulse Lab" />
+
+                <TextView
+                    android:id="@+id/serialCatProbeStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:lineSpacingExtra="3dp"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/networkCatConfigGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/networkCatProtocolLabelText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Network CAT"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <Spinner
+                    android:id="@+id/networkCatProtocolSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <EditText
+                    android:id="@+id/networkHostEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="Host or IP"
+                    android:inputType="textUri"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <EditText
+                    android:id="@+id/networkPortEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="4532"
+                    android:inputType="number"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <Button
+                    android:id="@+id/testNetworkCatConnectionButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="Test rigctld Connection" />
+
+                <TextView
+                    android:id="@+id/networkCatProbeStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:lineSpacingExtra="3dp"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/bluetoothConfigGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Bluetooth serial"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/bluetoothDeviceHintEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="Bluetooth target hint"
+                    android:inputType="text"
+                    android:padding="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/audioVoxConfigHintText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:lineSpacingExtra="3dp"
+                android:text="Audio VOX uses the same default WPM/tone values, but final VOX timing still needs to be tuned on the radio side."
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/saveProfileConfigButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Save Profile Configuration" />
+
+            <Button
+                android:id="@+id/resetProfileConfigButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Restore Recommended Defaults" />
+
+            <TextView
+                android:id="@+id/profileConfigStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/transportSummaryPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Transport Status"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/transportSummaryText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/profileSummaryPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Rig Profiles"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/profileSummaryText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/nextStepPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Recommended Next Step"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/nextStepText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>

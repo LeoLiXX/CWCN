@@ -83,6 +83,7 @@ public final class CwTxRunner {
                         "TX running"
                 ));
             }
+            audioOutput.finish();
             emitSnapshot(listener, buildSnapshot(
                     CwTxState.COMPLETED,
                     plan,

@@ -5,5 +5,8 @@ public interface CwTxAudioOutput {
 
     void playSilence(int durationMs) throws InterruptedException;
 
+    default void finish() throws InterruptedException {
+    }
+
     void stop();
 }

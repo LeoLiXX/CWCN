@@ -144,6 +144,43 @@ public final class UsbSerialKeyerRigControlAdapterTest {
         assertEquals("Permission missing", adapter.diagnosticStageLabel());
     }
 
+    @Test
+    public void mockFactorySupportsPermissionTransitionAndScenarioSelection() {
+        UsbSerialKeyerRigControlAdapter adapter = new UsbSerialKeyerRigControlAdapter(
+                "usb-serial-keyer-mock",
+                "Mock USB Serial Keyer Adapter",
+                "Mock %s",
+                new MockUsbSerialKeyerPortFactory(),
+                SerialKeyerTxOutput.KeyLine.RTS,
+                20,
+                650
+        );
+
+        assertTrue(adapter.supportsMockBenchScenarios());
+        assertTrue(adapter.selectMockBenchScenario(MockUsbSerialBenchScenario.NO_PERMISSION));
+        assertEquals(MockUsbSerialBenchScenario.NO_PERMISSION, adapter.selectedMockBenchScenario());
+        assertEquals("usb-serial-no-permission", adapter.diagnosticStageCode());
+        assertTrue(adapter.requestUsbPermission(null));
+        assertEquals("usb-serial-ready", adapter.diagnosticStageCode());
+    }
+
+    @Test
+    public void mockFactoryCanSimulateTargetMissing() {
+        UsbSerialKeyerRigControlAdapter adapter = new UsbSerialKeyerRigControlAdapter(
+                "usb-serial-keyer-mock",
+                "Mock USB Serial Keyer Adapter",
+                "Mock %s",
+                new MockUsbSerialKeyerPortFactory(),
+                SerialKeyerTxOutput.KeyLine.RTS,
+                20,
+                650
+        );
+
+        assertTrue(adapter.selectMockBenchScenario(MockUsbSerialBenchScenario.TARGET_MISSING));
+        assertEquals("usb-serial-target-missing", adapter.diagnosticStageCode());
+        assertTrue(adapter.isPreferredDeviceMissing());
+    }
+
     private static final class RecordingSerialKeyerPort implements SerialKeyerPort {
         private final boolean open;
         private final List<String> events = new ArrayList<>();

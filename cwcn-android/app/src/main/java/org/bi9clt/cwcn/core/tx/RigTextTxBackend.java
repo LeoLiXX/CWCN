@@ -6,6 +6,7 @@ public final class RigTextTxBackend implements CwTxBackend {
     private final RigControlAdapter adapter;
 
     private volatile boolean running;
+    private volatile Thread workerThread;
 
     public RigTextTxBackend(RigControlAdapter adapter) {
         this.adapter = adapter;
@@ -57,7 +58,7 @@ public final class RigTextTxBackend implements CwTxBackend {
 
     @Override
     public boolean supportsProgressSnapshots() {
-        return false;
+        return true;
     }
 
     @Override
@@ -84,6 +85,25 @@ public final class RigTextTxBackend implements CwTxBackend {
                 false,
                 "Sending text to rig adapter: " + adapter.displayName()
         ));
+        Thread thread = new Thread(() -> runSendText(plan, listener), "cwcn-rig-text-backend");
+        workerThread = thread;
+        thread.start();
+        return true;
+    }
+
+    @Override
+    public void stop() {
+        Thread thread = workerThread;
+        if (thread != null) {
+            thread.interrupt();
+        }
+        if (running) {
+            adapter.keyUp();
+        }
+        running = false;
+    }
+
+    private void runSendText(CwTxPlan plan, CwTxRunner.Listener listener) {
         boolean sent = false;
         try {
             sent = adapter.sendText(plan.normalizedText());
@@ -100,9 +120,10 @@ public final class RigTextTxBackend implements CwTxBackend {
                     false,
                     "Rig adapter error: " + exception.getMessage()
             ));
-            return true;
+            return;
         } finally {
             running = false;
+            workerThread = null;
         }
 
         listener.onSnapshot(new CwTxPlaybackSnapshot(
@@ -117,16 +138,8 @@ public final class RigTextTxBackend implements CwTxBackend {
                 false,
                 sent
                         ? "Rig adapter accepted text TX request."
-                        : "Rig adapter rejected the text TX request."
+                        : "Rig adapter rejected the text TX request. "
+                                + adapter.describeAvailability()
         ));
-        return true;
-    }
-
-    @Override
-    public void stop() {
-        if (running) {
-            adapter.keyUp();
-        }
-        running = false;
     }
 }

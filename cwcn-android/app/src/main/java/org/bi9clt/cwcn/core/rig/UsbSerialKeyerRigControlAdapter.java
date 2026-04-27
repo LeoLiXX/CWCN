@@ -16,6 +16,9 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
 
     private final SerialKeyerPortFactory portFactory;
     private final CwTxEngine txEngine;
+    private final String adapterId;
+    private final String adapterDisplayName;
+    private final String capabilityTemplate;
 
     private volatile SerialKeyerTxOutput.KeyLine keyLine;
     private volatile int wpm;
@@ -30,6 +33,31 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
             int wpm,
             int toneFrequencyHz
     ) {
+        this(
+                "usb-serial-keyer",
+                "USB Serial Keyer Adapter",
+                "Drive a simple serial keyer by toggling the %s control line according to CW timing.",
+                portFactory,
+                keyLine,
+                wpm,
+                toneFrequencyHz
+        );
+    }
+
+    UsbSerialKeyerRigControlAdapter(
+            String adapterId,
+            String adapterDisplayName,
+            String capabilityTemplate,
+            SerialKeyerPortFactory portFactory,
+            SerialKeyerTxOutput.KeyLine keyLine,
+            int wpm,
+            int toneFrequencyHz
+    ) {
+        this.adapterId = adapterId == null ? "usb-serial-keyer" : adapterId;
+        this.adapterDisplayName = adapterDisplayName == null ? "USB Serial Keyer Adapter" : adapterDisplayName;
+        this.capabilityTemplate = capabilityTemplate == null
+                ? "Drive a simple serial keyer by toggling the %s control line according to CW timing."
+                : capabilityTemplate;
         this.portFactory = portFactory;
         this.keyLine = keyLine;
         this.txEngine = new CwTxEngine();
@@ -39,17 +67,17 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
 
     @Override
     public String id() {
-        return "usb-serial-keyer";
+        return adapterId;
     }
 
     @Override
     public String displayName() {
-        return "USB Serial Keyer Adapter";
+        return adapterDisplayName;
     }
 
     @Override
     public String describeCapabilities() {
-        return "Drive a simple serial keyer by toggling the " + keyLine + " control line according to CW timing.";
+        return String.format(capabilityTemplate, keyLine);
     }
 
     @Override
@@ -173,15 +201,15 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
     }
 
     public String describeMatchedDevice() {
-        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
-            return ((AndroidUsbSerialKeyerPortFactory) portFactory).describeMatchedDevice();
+        if (portFactory instanceof UsbSerialRouteFactory) {
+            return ((UsbSerialRouteFactory) portFactory).describeMatchedDevice();
         }
         return "USB device details are unavailable in this environment.";
     }
 
     public boolean requestUsbPermission(PendingIntent pendingIntent) {
-        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
-            return ((AndroidUsbSerialKeyerPortFactory) portFactory).requestPermission(pendingIntent);
+        if (portFactory instanceof UsbSerialRouteFactory) {
+            return ((UsbSerialRouteFactory) portFactory).requestPermission(pendingIntent);
         }
         return false;
     }
@@ -201,29 +229,55 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
     }
 
     public boolean hasPreferredDeviceSelection() {
-        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
-            return ((AndroidUsbSerialKeyerPortFactory) portFactory).hasPreferredDeviceSelection();
+        if (portFactory instanceof UsbSerialRouteFactory) {
+            return ((UsbSerialRouteFactory) portFactory).hasPreferredDeviceSelection();
         }
         return false;
     }
 
     public boolean hasAnyCandidateDevice() {
-        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
-            return ((AndroidUsbSerialKeyerPortFactory) portFactory).hasAnyCandidateDevice();
+        if (portFactory instanceof UsbSerialRouteFactory) {
+            return ((UsbSerialRouteFactory) portFactory).hasAnyCandidateDevice();
         }
         return !availableDevices().isEmpty();
     }
 
     public boolean hasTargetDevice() {
-        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
-            return ((AndroidUsbSerialKeyerPortFactory) portFactory).hasTargetDevice();
+        if (portFactory instanceof UsbSerialRouteFactory) {
+            return ((UsbSerialRouteFactory) portFactory).hasTargetDevice();
         }
         return hasAnyCandidateDevice();
     }
 
     public boolean isPreferredDeviceMissing() {
-        if (portFactory instanceof AndroidUsbSerialKeyerPortFactory) {
-            return ((AndroidUsbSerialKeyerPortFactory) portFactory).isPreferredDeviceMissing();
+        if (portFactory instanceof UsbSerialRouteFactory) {
+            return ((UsbSerialRouteFactory) portFactory).isPreferredDeviceMissing();
+        }
+        return false;
+    }
+
+    public boolean supportsMockBenchScenarios() {
+        return portFactory instanceof MockUsbSerialBenchFactory;
+    }
+
+    public java.util.List<MockUsbSerialBenchScenario> availableMockBenchScenarios() {
+        if (portFactory instanceof MockUsbSerialBenchFactory) {
+            return ((MockUsbSerialBenchFactory) portFactory).availableBenchScenarios();
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    public MockUsbSerialBenchScenario selectedMockBenchScenario() {
+        if (portFactory instanceof MockUsbSerialBenchFactory) {
+            return ((MockUsbSerialBenchFactory) portFactory).selectedBenchScenario();
+        }
+        return null;
+    }
+
+    public boolean selectMockBenchScenario(MockUsbSerialBenchScenario scenario) {
+        if (portFactory instanceof MockUsbSerialBenchFactory) {
+            refreshRouteState();
+            return ((MockUsbSerialBenchFactory) portFactory).selectBenchScenario(scenario);
         }
         return false;
     }

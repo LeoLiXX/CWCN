@@ -12,6 +12,11 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 public final class CwInterpreter {
+    public enum RecoveryMode {
+        SEMANTIC_RECOVERY,
+        RAW_COPY_FOCUS
+    }
+
     private static final List<String> REPORT_TOKEN_VARIANTS = Arrays.asList("5NN", "599", "ENN");
     private static final List<String> CONTROL_TOKEN_VARIANTS = Arrays.asList("BK", "KN", "K");
     private static final List<String> COMPOUND_KEYWORDS = Arrays.asList(
@@ -30,6 +35,8 @@ public final class CwInterpreter {
             "DE", "BK", "KN", "TU", "TNX", "AGN", "PSE", "PLS", "5NN", "ENN", "599"
     ));
 
+    private final RecoveryMode recoveryMode;
+
     private String rawText = "";
     private String normalizedText = "";
     private List<CwInterpretedToken> tokens = new ArrayList<>();
@@ -40,6 +47,16 @@ public final class CwInterpreter {
     private List<String> callsignCandidates = new ArrayList<>();
     private List<String> phraseHints = new ArrayList<>();
     private CwInterpretationEvent lastEvent;
+
+    public CwInterpreter() {
+        this(RecoveryMode.SEMANTIC_RECOVERY);
+    }
+
+    public CwInterpreter(RecoveryMode recoveryMode) {
+        this.recoveryMode = recoveryMode == null
+                ? RecoveryMode.SEMANTIC_RECOVERY
+                : recoveryMode;
+    }
 
     public synchronized void process(CwDecodeEvent decodeEvent) {
         if (decodeEvent.type() != CwDecodeEvent.Type.CHARACTER_DECODED
@@ -77,6 +94,11 @@ public final class CwInterpreter {
     }
 
     private void parseCurrentText(long timestampMs) {
+        if (recoveryMode == RecoveryMode.RAW_COPY_FOCUS) {
+            parseRawCopyFocusText(timestampMs);
+            return;
+        }
+
         ArrayList<CwInterpretedToken> parsedTokens = new ArrayList<>();
         ArrayList<String> rawCallsignCandidates = new ArrayList<>();
         LinkedHashSet<String> hintSet = new LinkedHashSet<>();
@@ -105,8 +127,10 @@ public final class CwInterpreter {
         normalizedText = String.join(" ", normalizedParts).trim();
         tokens = parsedTokens;
         ContextualCallsigns contextualCallsigns = extractContextualCallsigns(parsedTokens);
+        String repeatedCleanCallsign = chooseRepeatedTrustedCleanCallsign(rawCallsignCandidates);
         callsignCandidates = buildRecoveredCallsignCandidates(rawCallsignCandidates, contextualCallsigns);
-        primaryCallsignCandidate = choosePrimaryCallsignCandidate(parsedTokens, callsignCandidates);
+        callsignCandidates = preferRepeatedCleanCallsign(callsignCandidates, repeatedCleanCallsign);
+        primaryCallsignCandidate = choosePrimaryCallsignCandidate(parsedTokens, callsignCandidates, repeatedCleanCallsign);
         if (isTrustedCleanCallsign(primaryCallsignCandidate)) {
             rememberedPrimaryCallsign = primaryCallsignCandidate;
         }
@@ -172,6 +196,80 @@ public final class CwInterpreter {
                 normalizedText,
                 latestTokenSummary
         );
+    }
+
+    private void parseRawCopyFocusText(long timestampMs) {
+        ArrayList<CwInterpretedToken> parsedTokens = new ArrayList<>();
+        ArrayList<String> normalizedParts = new ArrayList<>();
+        LinkedHashSet<String> callsignSet = new LinkedHashSet<>();
+
+        if (!rawText.isEmpty()) {
+            String semanticRawText = rawText.toUpperCase(Locale.US).replace(CwDecoder.UNKNOWN_CHARACTER, "?");
+            List<String> rawParts = normalizeRawParts(semanticRawText.split("\\s+"));
+            for (int index = 0; index < rawParts.size(); index++) {
+                String rawPart = rawParts.get(index);
+                if (rawPart.isEmpty()) {
+                    continue;
+                }
+                String normalized = normalizeToken(rawPart);
+                CwInterpretedToken.Type type = classifyRawCopyFocusToken(rawPart, normalized);
+                parsedTokens.add(new CwInterpretedToken(rawPart, normalized, type));
+                normalizedParts.add(normalized);
+                if (type == CwInterpretedToken.Type.CALLSIGN_CANDIDATE) {
+                    callsignSet.add(normalized);
+                }
+            }
+        }
+
+        normalizedText = String.join(" ", normalizedParts).trim();
+        tokens = parsedTokens;
+        callsignCandidates = new ArrayList<>(callsignSet);
+        primaryCallsignCandidate = callsignCandidates.isEmpty() ? null : callsignCandidates.get(0);
+        phraseHints = new ArrayList<>();
+
+        String latestTokenSummary = parsedTokens.isEmpty()
+                ? "(none)"
+                : formatTokenSummary(parsedTokens.get(parsedTokens.size() - 1));
+        lastEvent = new CwInterpretationEvent(
+                timestampMs,
+                rawText,
+                normalizedText,
+                latestTokenSummary
+        );
+    }
+
+    private CwInterpretedToken.Type classifyRawCopyFocusToken(String rawToken, String normalizedToken) {
+        if ("CQ".equals(normalizedToken)) {
+            return CwInterpretedToken.Type.CQ;
+        }
+        if ("DE".equals(normalizedToken)) {
+            return CwInterpretedToken.Type.DE;
+        }
+        if ("QRZ".equals(normalizedToken)) {
+            return CwInterpretedToken.Type.QRZ;
+        }
+        if ("THANKS".equals(normalizedToken)) {
+            return CwInterpretedToken.Type.THANKS;
+        }
+        if ("AGAIN".equals(normalizedToken)) {
+            return CwInterpretedToken.Type.AGAIN;
+        }
+        if ("R".equals(normalizedToken)) {
+            return CwInterpretedToken.Type.ACK;
+        }
+        if (isRequestToken(normalizedToken)) {
+            return CwInterpretedToken.Type.REQUEST;
+        }
+        if (isReportToken(rawToken, normalizedToken)) {
+            return CwInterpretedToken.Type.REPORT;
+        }
+        if (isControlToken(normalizedToken)) {
+            return CwInterpretedToken.Type.CONTROL;
+        }
+        if (isCallsignCandidate(normalizedToken)) {
+            return CwInterpretedToken.Type.CALLSIGN_CANDIDATE;
+        }
+        return CwInterpretedToken.Type.FREE_TEXT;
     }
 
     private String normalizeToken(String rawToken) {
@@ -694,6 +792,7 @@ public final class CwInterpreter {
         }
         variants.add(rawCandidate);
         addTrimmedRepairVariants(variants, rawCandidate);
+        addRepeatedPartialCallsignRepairVariants(variants, rawCandidate);
         for (String keyword : COMPOUND_BRIDGE_KEYWORDS) {
             int searchFrom = 1;
             while (searchFrom < rawCandidate.length()) {
@@ -711,6 +810,30 @@ public final class CwInterpreter {
             }
         }
         return variants;
+    }
+
+    private void addRepeatedPartialCallsignRepairVariants(List<String> variants, String rawCandidate) {
+        if (rawCandidate == null || rawCandidate.length() < 7) {
+            return;
+        }
+        for (int unitLength = 3; unitLength <= 10 && unitLength < rawCandidate.length(); unitLength++) {
+            String base = rawCandidate.substring(0, unitLength);
+            if (!isTrustedCleanCallsign(base)) {
+                continue;
+            }
+            int index = unitLength;
+            while (index + unitLength <= rawCandidate.length()
+                    && rawCandidate.substring(index, index + unitLength).equals(base)) {
+                index += unitLength;
+            }
+            String trailingFragment = rawCandidate.substring(index);
+            if (trailingFragment.length() < 3 || trailingFragment.length() > Math.max(3, base.length() - 2)) {
+                continue;
+            }
+            if (base.startsWith(trailingFragment)) {
+                addRepairedVariant(variants, base);
+            }
+        }
     }
 
     private void addTrimmedRepairVariants(List<String> variants, String rawCandidate) {
@@ -962,10 +1085,14 @@ public final class CwInterpreter {
 
     private String choosePrimaryCallsignCandidate(
             List<CwInterpretedToken> parsedTokens,
-            List<String> rankedCandidates
+            List<String> rankedCandidates,
+            String repeatedCleanCallsign
     ) {
         if (rankedCandidates.isEmpty()) {
             return null;
+        }
+        if (repeatedCleanCallsign != null && rankedCandidates.contains(repeatedCleanCallsign)) {
+            return repeatedCleanCallsign;
         }
 
         ContextualCallsigns contextualCallsigns = extractContextualCallsigns(parsedTokens);
@@ -1008,7 +1135,7 @@ public final class CwInterpreter {
                 }
             }
             if (contextualUpgrade != null) {
-                return contextualUpgrade;
+                return preferCleanRepeatedPartialCallsign(contextualUpgrade, rankedCandidates);
             }
         }
 
@@ -1020,6 +1147,86 @@ public final class CwInterpreter {
         }
 
         return rankedCandidates.get(0);
+    }
+
+    private List<String> preferRepeatedCleanCallsign(List<String> rankedCandidates, String repeatedCleanCallsign) {
+        if (rankedCandidates == null || rankedCandidates.isEmpty() || repeatedCleanCallsign == null) {
+            return rankedCandidates;
+        }
+        ArrayList<String> preferred = new ArrayList<>();
+        preferred.add(repeatedCleanCallsign);
+        for (String candidate : rankedCandidates) {
+            if (candidate == null
+                    || repeatedCleanCallsign.equals(candidate)
+                    || isLikelyPollutedRepeatOfCleanCallsign(repeatedCleanCallsign, candidate)) {
+                continue;
+            }
+            preferred.add(candidate);
+        }
+        return preferred;
+    }
+
+    private String chooseRepeatedTrustedCleanCallsign(List<String> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        String bestCandidate = null;
+        int bestCount = 1;
+        for (String candidate : candidates) {
+            if (!isTrustedCleanCallsign(candidate)) {
+                continue;
+            }
+            int count = 0;
+            for (String otherCandidate : candidates) {
+                if (candidate.equals(otherCandidate)) {
+                    count += 1;
+                }
+            }
+            if (count > bestCount
+                    || (count == bestCount
+                    && bestCandidate != null
+                    && candidate.compareTo(bestCandidate) < 0)) {
+                bestCandidate = candidate;
+                bestCount = count;
+            }
+        }
+        return bestCount >= 2 ? bestCandidate : null;
+    }
+
+    private boolean isLikelyPollutedRepeatOfCleanCallsign(String cleanCallsign, String candidate) {
+        if (!isTrustedCleanCallsign(cleanCallsign)
+                || candidate == null
+                || candidate.length() <= cleanCallsign.length()) {
+            return false;
+        }
+        if (candidate.contains(cleanCallsign)) {
+            return true;
+        }
+        if (candidate.length() < cleanCallsign.length() + 3) {
+            return false;
+        }
+        String prefix = candidate.substring(0, cleanCallsign.length());
+        String tail = candidate.substring(cleanCallsign.length());
+        int tailCompareLength = Math.min(cleanCallsign.length(), tail.length());
+        return hammingDistance(prefix, cleanCallsign) <= 1
+                && tailCompareLength >= 3
+                && hammingDistance(tail.substring(0, tailCompareLength), cleanCallsign.substring(0, tailCompareLength)) <= 1;
+    }
+
+    private String preferCleanRepeatedPartialCallsign(String candidate, List<String> rankedCandidates) {
+        if (candidate == null || rankedCandidates == null || rankedCandidates.isEmpty()) {
+            return candidate;
+        }
+        for (String rankedCandidate : rankedCandidates) {
+            if (rankedCandidate == null || rankedCandidate.equals(candidate) || !isTrustedCleanCallsign(rankedCandidate)) {
+                continue;
+            }
+            String merged = mergeCompatibleCallsigns(candidate, rankedCandidate);
+            if (rankedCandidate.equals(merged)) {
+                return rankedCandidate;
+            }
+        }
+        return candidate;
     }
 
     private String upgradeRememberedCallsign(String preferredCallsign, List<String> rankedCandidates) {
@@ -1389,7 +1596,11 @@ public final class CwInterpreter {
         }
         String cleanSegment = contaminationSegment.replace("?", "");
         if (cleanSegment.isEmpty() || cleanSegment.length() > 2) {
-            return false;
+            return isTrustedCleanCallsign(shorter)
+                    && cleanSegment.length() <= Math.max(2, shorter.length() - 2)
+                    && (prefixAligned
+                    ? shorter.startsWith(cleanSegment)
+                    : shorter.endsWith(cleanSegment));
         }
         return prefixAligned
                 ? shorter.endsWith(cleanSegment)
@@ -1407,6 +1618,19 @@ public final class CwInterpreter {
             }
         }
         return score;
+    }
+
+    private int hammingDistance(String left, String right) {
+        if (left == null || right == null || left.length() != right.length()) {
+            return Integer.MAX_VALUE;
+        }
+        int distance = 0;
+        for (int index = 0; index < left.length(); index++) {
+            if (left.charAt(index) != right.charAt(index)) {
+                distance += 1;
+            }
+        }
+        return distance;
     }
 
     private ContextualCallsigns extractContextualCallsigns(List<CwInterpretedToken> parsedTokens) {

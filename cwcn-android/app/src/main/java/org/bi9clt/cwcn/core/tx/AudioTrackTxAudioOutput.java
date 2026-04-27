@@ -6,15 +6,19 @@ import android.media.AudioManager;
 import android.media.AudioTrack;
 
 public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
-    private static final int SAMPLE_RATE_HZ = 16000;
+    private static final int SAMPLE_RATE_HZ = 48000;
     private static final int CHANNEL_MASK = AudioFormat.CHANNEL_OUT_MONO;
     private static final int PCM_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
     private static final int CHUNK_DURATION_MS = 20;
-    private static final double SIDETONE_GAIN = 0.35d;
+    private static final double SIDETONE_GAIN = 0.45d;
+    private static final int EDGE_RAMP_MS = 4;
+    private static final int FINISH_TAIL_SILENCE_MS = 12;
+    private static final int FINISH_SETTLE_MS = 18;
 
     private final Object lock = new Object();
 
     private AudioTrack audioTrack;
+    private long framesWritten;
 
     @Override
     public void playTone(int frequencyHz, int durationMs) throws InterruptedException {
@@ -22,45 +26,75 @@ public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
             return;
         }
         AudioTrack track = ensureAudioTrack();
-        int remainingMs = durationMs;
-        int sampleCursor = 0;
-        while (remainingMs > 0) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new InterruptedException("TX tone playback interrupted");
-            }
-            int chunkMs = Math.min(CHUNK_DURATION_MS, remainingMs);
-            short[] pcm = buildToneChunk(frequencyHz, chunkMs, sampleCursor);
-            track.write(pcm, 0, pcm.length);
-            sampleCursor += pcm.length;
-            remainingMs -= chunkMs;
-        }
+        short[] pcm = TxPcmToneRenderer.buildTonePcm(
+                SAMPLE_RATE_HZ,
+                frequencyHz,
+                durationMs,
+                SIDETONE_GAIN,
+                EDGE_RAMP_MS
+        );
+        writePcm(track, pcm);
     }
 
     @Override
     public void playSilence(int durationMs) throws InterruptedException {
-        int remainingMs = durationMs;
-        while (remainingMs > 0) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new InterruptedException("TX silence interrupted");
-            }
-            int chunkMs = Math.min(CHUNK_DURATION_MS, remainingMs);
-            Thread.sleep(chunkMs);
-            remainingMs -= chunkMs;
+        if (durationMs <= 0) {
+            return;
         }
+        AudioTrack track = ensureAudioTrack();
+        short[] pcm = TxPcmToneRenderer.buildSilencePcm(SAMPLE_RATE_HZ, durationMs);
+        writePcm(track, pcm);
     }
 
     @Override
     public void stop() {
         synchronized (lock) {
-            if (audioTrack != null) {
-                try {
-                    audioTrack.pause();
-                    audioTrack.flush();
-                } catch (IllegalStateException ignored) {
-                }
-                audioTrack.release();
-                audioTrack = null;
+            releaseAudioTrack(true);
+        }
+    }
+
+    @Override
+    public void finish() throws InterruptedException {
+        AudioTrack track;
+        synchronized (lock) {
+            track = audioTrack;
+        }
+        if (track == null) {
+            synchronized (lock) {
+                releaseAudioTrack(false);
             }
+            return;
+        }
+        writePcm(track, TxPcmToneRenderer.buildSilencePcm(SAMPLE_RATE_HZ, FINISH_TAIL_SILENCE_MS));
+        long targetFrames;
+        synchronized (lock) {
+            targetFrames = framesWritten;
+        }
+        if (targetFrames <= 0L) {
+            synchronized (lock) {
+                releaseAudioTrack(false);
+            }
+            return;
+        }
+        long deadlineMs = System.currentTimeMillis() + 1500L;
+        while (System.currentTimeMillis() < deadlineMs) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException("TX audio drain interrupted");
+            }
+            int playedFrames;
+            try {
+                playedFrames = track.getPlaybackHeadPosition();
+            } catch (IllegalStateException ignored) {
+                break;
+            }
+            if (playedFrames >= targetFrames) {
+                break;
+            }
+            Thread.sleep(5L);
+        }
+        Thread.sleep(FINISH_SETTLE_MS);
+        synchronized (lock) {
+            releaseAudioTrack(false);
         }
     }
 
@@ -74,7 +108,8 @@ public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
                     CHANNEL_MASK,
                     PCM_ENCODING
             );
-            int bufferSize = Math.max(minBufferSize, SAMPLE_RATE_HZ / 2);
+            int halfSecondBufferBytes = SAMPLE_RATE_HZ * Short.BYTES / 2;
+            int bufferSize = Math.max(minBufferSize, halfSecondBufferBytes);
             audioTrack = new AudioTrack.Builder()
                     .setAudioAttributes(new AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -89,18 +124,47 @@ public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
                     .setTransferMode(AudioTrack.MODE_STREAM)
                     .setBufferSizeInBytes(bufferSize)
                     .build();
+            framesWritten = 0L;
             audioTrack.play();
             return audioTrack;
         }
     }
 
-    private short[] buildToneChunk(int frequencyHz, int durationMs, int sampleCursor) {
-        int sampleCount = Math.max(1, SAMPLE_RATE_HZ * durationMs / 1000);
-        short[] pcm = new short[sampleCount];
-        for (int index = 0; index < sampleCount; index++) {
-            double angle = 2.0d * Math.PI * frequencyHz * (sampleCursor + index) / SAMPLE_RATE_HZ;
-            pcm[index] = (short) Math.round(Math.sin(angle) * Short.MAX_VALUE * SIDETONE_GAIN);
+    private void writePcm(AudioTrack track, short[] pcm) throws InterruptedException {
+        int chunkSamples = Math.max(1, SAMPLE_RATE_HZ * CHUNK_DURATION_MS / 1000);
+        int offset = 0;
+        while (offset < pcm.length) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException("TX audio playback interrupted");
+            }
+            int count = Math.min(chunkSamples, pcm.length - offset);
+            int written = track.write(pcm, offset, count);
+            if (written <= 0) {
+                throw new IllegalStateException("AudioTrack write failed: " + written);
+            }
+            offset += written;
+            synchronized (lock) {
+                framesWritten += written;
+            }
         }
-        return pcm;
+    }
+
+    private void releaseAudioTrack(boolean flushBeforeRelease) {
+        if (audioTrack == null) {
+            framesWritten = 0L;
+            return;
+        }
+        try {
+            if (!flushBeforeRelease) {
+                audioTrack.pause();
+            } else {
+                audioTrack.stop();
+                audioTrack.flush();
+            }
+        } catch (IllegalStateException ignored) {
+        }
+        audioTrack.release();
+        audioTrack = null;
+        framesWritten = 0L;
     }
 }

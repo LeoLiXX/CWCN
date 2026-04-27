@@ -2,6 +2,8 @@ plugins {
     id 'com.android.application'
 }
 
+def cwcnBuildTime = new Date().format("yyyy-MM-dd HH:mm:ss Z")
+
 configurations.configureEach {
     exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
     exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
@@ -17,6 +19,8 @@ android {
         targetSdk 33
         versionCode 1
         versionName "0.1.0-alpha01"
+        buildConfigField "String", "AUTHOR_CALLSIGN", "\"BI9CLT\""
+        buildConfigField "String", "BUILD_TIME", "\"${cwcnBuildTime}\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -40,6 +44,12 @@ android {
     buildFeatures {
         viewBinding true
         buildConfig true
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "cwcn-${variant.buildType.name}.apk"
+        }
     }
 }
 

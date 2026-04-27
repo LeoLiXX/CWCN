@@ -29,6 +29,29 @@ public final class CwTxRouteAdvisorTest {
         assertTrue(checklist.contains("Release Key Line"));
     }
 
+    @Test
+    public void mockUsbKeyerChecklistUsesSameUsbGuidance() {
+        CwTxBackend backend = new FakeBackend("rig-text:usb-serial-keyer-mock");
+        CwTxPlan plan = new CwTxEngine().buildPlan("CQ TEST", 20, 650);
+
+        String checklist = CwTxRouteAdvisor.buildChecklist(backend, plan);
+
+        assertTrue(checklist.contains("USB RTS/DTR checklist"));
+    }
+
+    @Test
+    public void hamlibRigctldChecklistMentionsRigSetupAndSendMorse() {
+        CwTxBackend backend = new FakeBackend("rig-text:hamlib-rigctld");
+        CwTxPlan plan = new CwTxEngine().buildPlan("CQ TEST", 22, 700);
+
+        String checklist = CwTxRouteAdvisor.buildChecklist(backend, plan);
+
+        assertTrue(checklist.contains("Rig Setup"));
+        assertTrue(checklist.contains("send_morse"));
+        assertTrue(checklist.contains("network CAT"));
+        assertTrue(checklist.contains("Yaesu"));
+    }
+
     private static final class FakeBackend implements CwTxBackend {
         private final String id;
 

@@ -12,7 +12,9 @@ public final class CwTimingModel {
     private static final double STARTUP_DASH_RATIO = 1.65d;
     private static final double DOT_SMOOTHING = 0.17d;
     private static final double GAP_SMOOTHING = 0.16d;
-
+    private static final double INTRA_GAP_MAX_RATIO = 1.8d;
+    private static final double LETTER_GAP_MAX_RATIO = 4.35d;
+    private static final double WORD_GAP_MAX_RATIO = 10.0d;
     private boolean initialized;
     private double dotEstimateMs = DEFAULT_DOT_MS;
     private double dashEstimateMs = DEFAULT_DOT_MS * 3.0d;
@@ -147,8 +149,9 @@ public final class CwTimingModel {
             dashEstimateMs = rawDuration * 3.0d;
         }
 
-        // Blend toward the default boot dot so startup is stable for both fast and slow senders.
-        double bootstrapDot = (inferredDot + DEFAULT_DOT_MS) * 0.5d;
+        // Keep some default bias for stability, but lean harder toward the observed first element
+        // so faster on-air starts do not begin with an overly slow dot estimate.
+        double bootstrapDot = (inferredDot * 0.65d) + (DEFAULT_DOT_MS * 0.35d);
         dotEstimateMs = clampDot(bootstrapDot);
         intraGapEstimateMs = dotEstimateMs;
         dashEstimateMs = Math.max(dashEstimateMs, dotEstimateMs * 3.0d);
@@ -188,13 +191,13 @@ public final class CwTimingModel {
 
     private CwTimingEvent.Classification classifyGap(long gapDurationMs) {
         double ratio = gapDurationMs / Math.max(1.0d, dotEstimateMs);
-        if (ratio <= 1.8d) {
+        if (ratio <= INTRA_GAP_MAX_RATIO) {
             return CwTimingEvent.Classification.INTRA_SYMBOL_GAP;
         }
-        if (ratio <= 4.8d) {
+        if (ratio <= LETTER_GAP_MAX_RATIO) {
             return CwTimingEvent.Classification.LETTER_GAP;
         }
-        if (ratio <= 10.0d) {
+        if (ratio <= WORD_GAP_MAX_RATIO) {
             return CwTimingEvent.Classification.WORD_GAP;
         }
         return CwTimingEvent.Classification.UNKNOWN;

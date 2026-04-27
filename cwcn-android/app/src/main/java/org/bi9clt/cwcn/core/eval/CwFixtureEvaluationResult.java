@@ -44,6 +44,19 @@ public final class CwFixtureEvaluationResult {
     private final int maxConsecutiveToneActiveUnlockedFrames;
     private final int preferredToneFrequencyHz;
     private final int trackedToneFrequencyHz;
+    private final double lastRmsAmplitude;
+    private final double lastToneRmsAmplitude;
+    private final double lastWidebandResidualRmsAmplitude;
+    private final double toneDominanceRatio;
+    private final double narrowbandIsolationRatio;
+    private final int currentThreshold;
+    private final int releaseThreshold;
+    private final int noiseFloorEstimate;
+    private final int signalFloorEstimate;
+    private final int totalToneOnEvents;
+    private final int totalToneOffEvents;
+    private final int frameGapResetCount;
+    private final long worstFrameGapMs;
 
     public CwFixtureEvaluationResult(
             String scenarioId,
@@ -189,7 +202,20 @@ public final class CwFixtureEvaluationResult {
                 toneActiveUnlockedFrameRatio,
                 maxConsecutiveToneActiveUnlockedFrames,
                 preferredToneFrequencyHz,
-                trackedToneFrequencyHz
+                trackedToneFrequencyHz,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0L
         );
     }
 
@@ -233,6 +259,114 @@ public final class CwFixtureEvaluationResult {
             int preferredToneFrequencyHz,
             int trackedToneFrequencyHz
     ) {
+        this(
+                scenarioId,
+                scenarioDisplayName,
+                evaluatedAtEpochMs,
+                completed,
+                passed,
+                exactTextMatch,
+                primaryCallsignScore,
+                textTokenRecall,
+                callsignRecall,
+                hintRecall,
+                qsoSemanticScore,
+                expectedNormalizedText,
+                actualNormalizedText,
+                expectedPhase,
+                actualPhase,
+                expectedRstSent,
+                actualRstSent,
+                expectedRstRcvd,
+                actualRstRcvd,
+                actualCallsigns,
+                actualHints,
+                missingTextTokens,
+                missingCallsigns,
+                missingHints,
+                failureReasons,
+                normalizedTokenCount,
+                totalTokenCount,
+                normalizedTokenPairs,
+                finalToneLocked,
+                endedOnToneOffEvent,
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames,
+                toneActiveUnlockedFrameRatio,
+                maxConsecutiveToneActiveUnlockedFrames,
+                preferredToneFrequencyHz,
+                trackedToneFrequencyHz,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0L
+        );
+    }
+
+    public CwFixtureEvaluationResult(
+            String scenarioId,
+            String scenarioDisplayName,
+            long evaluatedAtEpochMs,
+            boolean completed,
+            boolean passed,
+            boolean exactTextMatch,
+            double primaryCallsignScore,
+            double textTokenRecall,
+            double callsignRecall,
+            double hintRecall,
+            double qsoSemanticScore,
+            String expectedNormalizedText,
+            String actualNormalizedText,
+            String expectedPhase,
+            String actualPhase,
+            String expectedRstSent,
+            String actualRstSent,
+            String expectedRstRcvd,
+            String actualRstRcvd,
+            List<String> actualCallsigns,
+            List<String> actualHints,
+            List<String> missingTextTokens,
+            List<String> missingCallsigns,
+            List<String> missingHints,
+            List<String> failureReasons,
+            int normalizedTokenCount,
+            int totalTokenCount,
+            List<String> normalizedTokenPairs,
+            boolean finalToneLocked,
+            boolean endedOnToneOffEvent,
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames,
+            double toneActiveUnlockedFrameRatio,
+            int maxConsecutiveToneActiveUnlockedFrames,
+            int preferredToneFrequencyHz,
+            int trackedToneFrequencyHz,
+            double lastRmsAmplitude,
+            double lastToneRmsAmplitude,
+            double lastWidebandResidualRmsAmplitude,
+            double toneDominanceRatio,
+            double narrowbandIsolationRatio,
+            int currentThreshold,
+            int releaseThreshold,
+            int noiseFloorEstimate,
+            int signalFloorEstimate,
+            int totalToneOnEvents,
+            int totalToneOffEvents,
+            int frameGapResetCount,
+            long worstFrameGapMs
+    ) {
         this.scenarioId = scenarioId;
         this.scenarioDisplayName = scenarioDisplayName;
         this.evaluatedAtEpochMs = evaluatedAtEpochMs;
@@ -271,6 +405,19 @@ public final class CwFixtureEvaluationResult {
         this.maxConsecutiveToneActiveUnlockedFrames = maxConsecutiveToneActiveUnlockedFrames;
         this.preferredToneFrequencyHz = preferredToneFrequencyHz;
         this.trackedToneFrequencyHz = trackedToneFrequencyHz;
+        this.lastRmsAmplitude = lastRmsAmplitude;
+        this.lastToneRmsAmplitude = lastToneRmsAmplitude;
+        this.lastWidebandResidualRmsAmplitude = lastWidebandResidualRmsAmplitude;
+        this.toneDominanceRatio = toneDominanceRatio;
+        this.narrowbandIsolationRatio = narrowbandIsolationRatio;
+        this.currentThreshold = currentThreshold;
+        this.releaseThreshold = releaseThreshold;
+        this.noiseFloorEstimate = noiseFloorEstimate;
+        this.signalFloorEstimate = signalFloorEstimate;
+        this.totalToneOnEvents = totalToneOnEvents;
+        this.totalToneOffEvents = totalToneOffEvents;
+        this.frameGapResetCount = frameGapResetCount;
+        this.worstFrameGapMs = worstFrameGapMs;
     }
 
     public String scenarioId() {
@@ -434,6 +581,58 @@ public final class CwFixtureEvaluationResult {
 
     public int trackingErrorHz() {
         return trackedToneFrequencyHz - preferredToneFrequencyHz;
+    }
+
+    public double lastRmsAmplitude() {
+        return lastRmsAmplitude;
+    }
+
+    public double lastToneRmsAmplitude() {
+        return lastToneRmsAmplitude;
+    }
+
+    public double lastWidebandResidualRmsAmplitude() {
+        return lastWidebandResidualRmsAmplitude;
+    }
+
+    public double toneDominanceRatio() {
+        return toneDominanceRatio;
+    }
+
+    public double narrowbandIsolationRatio() {
+        return narrowbandIsolationRatio;
+    }
+
+    public int currentThreshold() {
+        return currentThreshold;
+    }
+
+    public int releaseThreshold() {
+        return releaseThreshold;
+    }
+
+    public int noiseFloorEstimate() {
+        return noiseFloorEstimate;
+    }
+
+    public int signalFloorEstimate() {
+        return signalFloorEstimate;
+    }
+
+    public int totalToneOnEvents() {
+        return totalToneOnEvents;
+    }
+
+    public int totalToneOffEvents() {
+        return totalToneOffEvents;
+    }
+
+    public int frameGapResetCount() {
+        return frameGapResetCount;
+    }
+
+    public long worstFrameGapMs() {
+        return worstFrameGapMs;
     }
 
     private boolean frontEndHistorySuggestsSignalLoss() {
@@ -694,6 +893,20 @@ public final class CwFixtureEvaluationResult {
                     .append(", bestLockRun=").append(maxConsecutiveLockedFrames).append(" frame(s)")
                     .append(", worstToneActiveGap=").append(maxConsecutiveToneActiveUnlockedFrames).append(" frame(s)");
         }
+        if (hasDetailedSignalMetrics()) {
+            builder.append("\nFront-end levels: lastRms=").append(String.format(Locale.US, "%.0f", lastRmsAmplitude))
+                    .append(", lastToneRms=").append(String.format(Locale.US, "%.0f", lastToneRmsAmplitude))
+                    .append(", residual=").append(String.format(Locale.US, "%.0f", lastWidebandResidualRmsAmplitude))
+                    .append(", dominance=").append(percent(toneDominanceRatio))
+                    .append(", isolation=").append(percent(narrowbandIsolationRatio))
+                    .append(", threshold=").append(currentThreshold)
+                    .append(", release=").append(releaseThreshold)
+                    .append(", noiseFloor=").append(noiseFloorEstimate)
+                    .append(", signalFloor=").append(signalFloorEstimate)
+                    .append(", toneOnOff=").append(totalToneOnEvents).append("/").append(totalToneOffEvents)
+                    .append(", frameGapResets=").append(frameGapResetCount)
+                    .append(", worstFrameGapMs=").append(worstFrameGapMs);
+        }
         builder.append("\nExpected text: ").append(safeText(expectedNormalizedText));
         builder.append("\nActual text: ").append(safeText(actualNormalizedText));
         if (expectedPhase != null || actualPhase != null) {
@@ -724,6 +937,22 @@ public final class CwFixtureEvaluationResult {
             builder.append("\nFailure reasons: ").append(renderList(failureReasons));
         }
         return builder.toString();
+    }
+
+    private boolean hasDetailedSignalMetrics() {
+        return lastRmsAmplitude > 0.0d
+                || lastToneRmsAmplitude > 0.0d
+                || lastWidebandResidualRmsAmplitude > 0.0d
+                || toneDominanceRatio > 0.0d
+                || narrowbandIsolationRatio > 0.0d
+                || currentThreshold > 0
+                || releaseThreshold > 0
+                || noiseFloorEstimate > 0
+                || signalFloorEstimate > 0
+                || totalToneOnEvents > 0
+                || totalToneOffEvents > 0
+                || frameGapResetCount > 0
+                || worstFrameGapMs > 0L;
     }
 
     private String percent(double value) {

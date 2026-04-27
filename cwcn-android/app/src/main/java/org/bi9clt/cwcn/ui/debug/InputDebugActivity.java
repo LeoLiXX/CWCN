@@ -3,8 +3,10 @@ package org.bi9clt.cwcn.ui.debug;
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -22,9 +24,12 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -38,6 +43,7 @@ import org.bi9clt.cwcn.core.audio.AudioFrame;
 import org.bi9clt.cwcn.core.audio.AudioInputHealthFormatter;
 import org.bi9clt.cwcn.core.audio.AudioInputHealthSnapshot;
 import org.bi9clt.cwcn.core.audio.AudioInputHealthTracker;
+import org.bi9clt.cwcn.core.audio.LocalFileRxAudioSource;
 import org.bi9clt.cwcn.core.audio.MicrophoneRxAudioSource;
 import org.bi9clt.cwcn.core.audio.RxAudioSource;
 import org.bi9clt.cwcn.core.audio.SyntheticFixtureRxAudioSource;
@@ -74,28 +80,36 @@ import org.bi9clt.cwcn.ui.qso.QsoEditorActivity;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.io.File;
 import java.io.IOException;
 
 public final class InputDebugActivity extends AppCompatActivity implements RxAudioSource.Callback {
     private static final int PERMISSION_REQUEST_CODE = 1001;
     private static final int AMPLITUDE_MAX = 32767;
+    private static final long LIVE_UI_REFRESH_INTERVAL_MS = 120L;
     private static final String DEBUG_PREFERENCES = "cwcn_debug_preferences";
     private static final String PREF_PREFERRED_TONE_FREQUENCY_HZ = "preferred_tone_frequency_hz";
+    private static final String PREF_LOCAL_FILE_URI = "local_file_uri";
+    private static final String PREF_LOCAL_FILE_LABEL = "local_file_label";
 
     private ActivityInputDebugBinding binding;
     private Handler mainHandler;
     private MicrophoneRxAudioSource microphoneRxAudioSource;
     private SyntheticFixtureRxAudioSource syntheticFixtureRxAudioSource;
+    private LocalFileRxAudioSource localFileRxAudioSource;
     private RxAudioSource activeRxAudioSource;
     private AudioInputHealthTracker audioInputHealthTracker;
+    private AudioSpectrumAnalyzer audioSpectrumAnalyzer;
     private CwSignalProcessor cwSignalProcessor;
     private CwTimingModel cwTimingModel;
     private CwDecoder cwDecoder;
     private CwInterpreter cwInterpreter;
+    private CwInterpreter qsoInterpreter;
     private QsoStateMachine qsoStateMachine;
     private LocalLogRepository localLogRepository;
 
@@ -116,6 +130,14 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private boolean fixtureReplayInProgress;
     private boolean syncingDraftEditor;
     private boolean draftEditorDirty;
+    private boolean detailedPanelsVisible;
+    private boolean activityResumed;
+    private boolean liveUiRefreshPosted;
+    private long lastLiveUiRefreshAtMs;
+    private AudioSpectrumSnapshot lastSpectrumSnapshot;
+    private final Map<Integer, Integer> stableTextMinLines = new HashMap<>();
+    private final Runnable liveUiRefreshRunnable = this::refreshLiveUiFromPipeline;
+    private ActivityResultLauncher<String[]> localFilePickerLauncher;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -123,18 +145,27 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding = ActivityInputDebugBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         mainHandler = new Handler(Looper.getMainLooper());
+        localFilePickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(),
+                this::handleLocalFilePicked
+        );
         microphoneRxAudioSource = new MicrophoneRxAudioSource(this);
         microphoneRxAudioSource.setCallback(this);
         syntheticFixtureRxAudioSource = new SyntheticFixtureRxAudioSource();
         syntheticFixtureRxAudioSource.setCallback(this);
+        localFileRxAudioSource = new LocalFileRxAudioSource(this);
+        localFileRxAudioSource.setCallback(this);
         audioInputHealthTracker = new AudioInputHealthTracker();
+        audioSpectrumAnalyzer = new AudioSpectrumAnalyzer();
         cwSignalProcessor = new CwSignalProcessor();
         cwTimingModel = new CwTimingModel();
         cwDecoder = new CwDecoder();
-        cwInterpreter = new CwInterpreter();
+        cwInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
+        qsoInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.SEMANTIC_RECOVERY);
         qsoStateMachine = new QsoStateMachine();
         localLogRepository = new LocalLogRepository(this);
         restorePreferredToneFrequency();
+        restoreSelectedLocalFile();
         restorePersistedDraftIfAvailable();
         refreshStoredState();
 
@@ -152,15 +183,26 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     @Override
     protected void onResume() {
         super.onResume();
+        activityResumed = true;
         refreshStoredState();
         refreshUiSnapshot();
     }
 
     @Override
+    protected void onPause() {
+        activityResumed = false;
+        liveUiRefreshPosted = false;
+        mainHandler.removeCallbacks(liveUiRefreshRunnable);
+        super.onPause();
+    }
+
+    @Override
     protected void onDestroy() {
+        mainHandler.removeCallbacks(liveUiRefreshRunnable);
         stopAllSources();
         microphoneRxAudioSource.release();
         syntheticFixtureRxAudioSource.release();
+        localFileRxAudioSource.release();
         super.onDestroy();
     }
 
@@ -244,15 +286,14 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.requestPermissionButton.setOnClickListener(view -> requestMissingPermissions());
         binding.startCaptureButton.setOnClickListener(view -> startSelectedSource());
         binding.stopCaptureButton.setOnClickListener(view -> stopCapture());
+        binding.rxFocusStartCaptureButton.setOnClickListener(view -> startSelectedSource());
+        binding.rxFocusStopCaptureButton.setOnClickListener(view -> stopCapture());
+        binding.toggleDebugDetailsButton.setOnClickListener(view -> toggleDebugDetails());
         binding.applyPreferredToneButton.setOnClickListener(view -> applyPreferredToneFromEditor());
         binding.useFixtureToneButton.setOnClickListener(view -> applySelectedFixtureTone());
+        binding.selectLocalFileButton.setOnClickListener(view -> launchLocalFilePicker());
         binding.applyDraftEditsButton.setOnClickListener(view -> applyDraftEditorEdits());
         binding.resetDraftEditsButton.setOnClickListener(view -> resetDraftEditorEdits());
-        binding.saveDraftButton.setOnClickListener(view -> saveCurrentDraft());
-        binding.confirmLogButton.setOnClickListener(view -> confirmCurrentDraft());
-        binding.openQsoEditorButton.setOnClickListener(view ->
-                startActivity(new Intent(this, QsoEditorActivity.class)));
-        binding.exportAdifButton.setOnClickListener(view -> exportConfirmedLogs());
     }
 
     private void setupPreferredToneControls() {
@@ -268,12 +309,27 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         CwInterpreterSnapshot interpreterSnapshot = cwInterpreter.snapshot();
         QsoDraftSnapshot qsoSnapshot = qsoStateMachine.snapshot();
         binding.fixtureScenarioSpinner.setEnabled(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE);
-        binding.fixtureScenarioLabelText.setAlpha(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE ? 1.0f : 0.55f);
-        binding.fixtureScenarioSpinner.setAlpha(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE ? 1.0f : 0.55f);
+        binding.fixtureScenarioLabelText.setVisibility(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE
+                ? View.VISIBLE
+                : View.GONE);
+        binding.fixtureScenarioSpinner.setVisibility(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE
+                ? View.VISIBLE
+                : View.GONE);
         binding.useFixtureToneButton.setEnabled(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE);
-        binding.useFixtureToneButton.setAlpha(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE ? 1.0f : 0.55f);
+        binding.useFixtureToneButton.setVisibility(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE
+                ? View.VISIBLE
+                : View.GONE);
+        boolean localFileSelected = selectedOption == InputSourceOption.LOCAL_FILE_REPLAY;
+        binding.localFileLabelText.setVisibility(localFileSelected ? View.VISIBLE : View.GONE);
+        binding.localFileStatusText.setVisibility(localFileSelected ? View.VISIBLE : View.GONE);
+        binding.selectLocalFileButton.setVisibility(localFileSelected ? View.VISIBLE : View.GONE);
+        setStableText(binding.localFileStatusText, localFileRxAudioSource.selectionSummary());
+        binding.fixtureEvaluationText.setVisibility(detailedPanelsVisible || fixtureReplayInProgress
+                ? View.VISIBLE
+                : View.GONE);
+        updateDebugPanelVisibility();
         binding.selectedSourceStatusText.setText(renderSelectedSourceStatus(selectedOption, selectedScenario));
-        binding.fixtureEvaluationText.setText(renderFixtureEvaluationStatus());
+        setStableText(binding.fixtureEvaluationText, renderFixtureEvaluationStatus());
         binding.permissionHintText.setText(renderPermissionStatus());
         binding.microphoneStatusText.setText(renderMicrophoneStatus());
         binding.bluetoothStatusText.setText(renderBluetoothStatus());
@@ -285,8 +341,11 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         ));
         binding.frameStatsText.setText(renderFrameStats());
         updateLevelViews(lastPeakAmplitude, lastRmsAmplitude);
-        binding.signalStateText.setText(renderSignalState());
-        binding.signalHealthText.setText(renderSignalHealthSummary());
+        refreshAudioSpectrumView();
+        setStableText(binding.signalStateText, renderSignalState());
+        setStableText(binding.signalHealthText, renderSignalHealthSummary());
+        setStableText(binding.rxFocusStatusText, renderRxFocusStatus(selectedOption, selectedSource));
+        setStableText(binding.rxFocusDecodeText, renderRxFocusDecode(interpreterSnapshot));
         binding.signalEventStatsText.setText(renderSignalEventStats());
         binding.lastSignalEventText.setText(renderLastSignalEvent());
         binding.timingStateText.setText(renderTimingState());
@@ -294,15 +353,15 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.lastTimingEventText.setText(renderLastTimingEvent());
         binding.decoderStateText.setText(renderDecoderState());
         binding.decoderEventStatsText.setText(renderDecoderEventStats());
-        binding.decoderOutputText.setText(renderDecoderOutput());
+        setStableText(binding.decoderOutputText, renderDecoderOutput());
         binding.lastDecoderEventText.setText(renderLastDecoderEvent());
-        binding.interpreterRawText.setText(renderInterpreterRawText(interpreterSnapshot));
-        binding.interpreterNormalizedText.setText(renderInterpreterNormalizedText(interpreterSnapshot));
+        setStableText(binding.interpreterRawText, renderInterpreterRawText(interpreterSnapshot));
+        setStableText(binding.interpreterNormalizedText, renderInterpreterNormalizedText(interpreterSnapshot));
         binding.interpreterCallsignsText.setText(renderInterpreterCallsigns(interpreterSnapshot));
         binding.interpreterHintsText.setText(renderInterpreterHints(interpreterSnapshot));
         binding.lastInterpreterEventText.setText(renderLastInterpreterEvent());
         binding.qsoPhaseText.setText(renderQsoPhase(qsoSnapshot));
-        binding.qsoDraftText.setText(renderQsoDraft(qsoSnapshot));
+        setStableText(binding.qsoDraftText, renderQsoDraft(qsoSnapshot));
         syncDraftEditorFromSnapshot(qsoSnapshot, false);
         binding.qsoEditorStatusText.setText(renderQsoEditorStatus());
         refreshCallsignCandidateButtons(interpreterSnapshot);
@@ -328,12 +387,68 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.startCaptureButton.setEnabled(
                 !selectedOption.implemented() || canStartSelectedSource
         );
+        binding.rxFocusStartCaptureButton.setEnabled(
+                !selectedOption.implemented() || canStartSelectedSource
+        );
         binding.stopCaptureButton.setEnabled(anySourceActive());
+        binding.rxFocusStopCaptureButton.setEnabled(anySourceActive());
         binding.applyDraftEditsButton.setEnabled(draftEditorDirty);
         binding.resetDraftEditsButton.setEnabled(hasManualCorrections(qsoSnapshot));
         binding.saveDraftButton.setEnabled(hasDraftContent(qsoSnapshot) || draftEditorDirty);
         binding.confirmLogButton.setEnabled(hasConfirmableDraft(qsoSnapshot) || hasRemoteCallsignInEditor());
         binding.exportAdifButton.setEnabled(confirmedLogCount > 0);
+    }
+
+    private void toggleDebugDetails() {
+        detailedPanelsVisible = !detailedPanelsVisible;
+        refreshUiSnapshot();
+    }
+
+    private void updateDebugPanelVisibility() {
+        int detailedVisibility = detailedPanelsVisible ? View.VISIBLE : View.GONE;
+        binding.toggleDebugDetailsButton.setText(detailedPanelsVisible
+                ? "Hide Detailed Panels"
+                : "Show Detailed Panels");
+        binding.deviceStatusPanel.setVisibility(detailedVisibility);
+        binding.adifPanel.setVisibility(View.GONE);
+        binding.qsoPanel.setVisibility(View.GONE);
+        binding.interpreterPanel.setVisibility(detailedVisibility);
+        binding.decoderPanel.setVisibility(detailedVisibility);
+        binding.timingPanel.setVisibility(detailedVisibility);
+        binding.capturePanel.setVisibility(detailedVisibility);
+        binding.signalPanel.setVisibility(detailedVisibility);
+        binding.modulePanel.setVisibility(detailedVisibility);
+    }
+
+    private String renderRxFocusStatus(InputSourceOption selectedOption, RxAudioSource selectedSource) {
+        CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
+        String sourceLabel = selectedOption == null ? "(none)" : selectedOption.toString();
+        String captureState = selectedSource == null
+                ? RxAudioSource.State.IDLE.displayName()
+                : selectedSource.state().displayName();
+        return "Source: " + sourceLabel
+                + "\nCapture: " + captureState
+                + "\nInput: peak " + lastPeakAmplitude
+                + " / rms " + Math.round(lastRmsAmplitude)
+                + "\nTone: pref " + snapshot.preferredToneFrequencyHz()
+                + " Hz, tracked " + snapshot.targetToneFrequencyHz()
+                + " Hz, lock " + yesNo(snapshot.targetToneLocked())
+                + "\nFront-end: " + CwFrontEndHealthClassifier.qualityCode(snapshot)
+                + " / " + CwFrontEndHealthClassifier.bottleneckCode(snapshot)
+                + " - " + CwFrontEndHealthClassifier.reason(snapshot)
+                + "\nLevels: tone " + Math.round(snapshot.lastToneRmsAmplitude())
+                + ", residual " + Math.round(snapshot.lastWidebandResidualRmsAmplitude())
+                + ", isolation " + Math.round(snapshot.narrowbandIsolationRatio() * 100.0d)
+                + "%"
+                + "\nEvents: on/off " + snapshot.totalToneOnEvents()
+                + "/" + snapshot.totalToneOffEvents()
+                + ", frame-gap resets " + snapshot.frameGapResetCount();
+    }
+
+    private String renderRxFocusDecode(CwInterpreterSnapshot interpreterSnapshot) {
+        return "Decoded: " + renderDecoderOutput()
+                + "\nNormalized: " + renderInterpreterNormalizedText(interpreterSnapshot)
+                + "\nCallsigns: " + renderInterpreterCallsigns(interpreterSnapshot);
     }
 
     private InputSourceOption selectedInputSource() {
@@ -361,6 +476,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 return syntheticFixtureRxAudioSource;
             case PHONE_MICROPHONE:
                 return microphoneRxAudioSource;
+            case LOCAL_FILE_REPLAY:
+                return localFileRxAudioSource;
             case BLUETOOTH_LINK:
             case USB_EXTERNAL:
             default:
@@ -457,6 +574,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                         .append(renderObservedFrontEndStatus(scenario.expectedFrontEndQualityCode()));
             }
             builder.append("\nNotes: ").append(scenario.notes());
+        }
+        if (option == InputSourceOption.LOCAL_FILE_REPLAY) {
+            builder.append("\n").append(localFileRxAudioSource.selectionSummary());
         }
         if (option == InputSourceOption.PHONE_MICROPHONE) {
             builder.append("\n").append(renderMicrophoneInputHealth());
@@ -581,12 +701,24 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         builder.append("Focus: ");
         if (option == InputSourceOption.PHONE_MICROPHONE) {
             builder.append(renderMicrophoneHealthCoach(snapshot));
+        } else if (option == InputSourceOption.LOCAL_FILE_REPLAY) {
+            builder.append(renderLocalFileHealthCoach(snapshot));
         } else if (option == InputSourceOption.SYNTHETIC_FIXTURE && scenario != null) {
             builder.append(renderFixtureHealthCoach(snapshot, scenario));
         } else {
             builder.append("Select a live source to start front-end observation.");
         }
         return builder.toString();
+    }
+
+    private String renderLocalFileHealthCoach(CwSignalSnapshot snapshot) {
+        if (!localFileRxAudioSource.isAvailable()) {
+            return "Choose a phone-local WAV file first. M4A/AAC is allowed, but WAV PCM is the recommended baseline for reproducible debugging.";
+        }
+        if (!CwFrontEndHealthClassifier.hasFrontEndHistory(snapshot)) {
+            return "Start local replay and compare the tracked tone against the visible spectrum peak before judging downstream decode quality.";
+        }
+        return "Local replay check: " + CwFrontEndHealthClassifier.liveCheckHint(snapshot);
     }
 
     private String renderMicrophoneHealthCoach(CwSignalSnapshot snapshot) {
@@ -748,6 +880,61 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         cwSignalProcessor.setPreferredToneFrequencyHz(savedFrequencyHz);
     }
 
+    private void restoreSelectedLocalFile() {
+        String savedUri = getSharedPreferences(DEBUG_PREFERENCES, MODE_PRIVATE)
+                .getString(PREF_LOCAL_FILE_URI, "");
+        String savedLabel = getSharedPreferences(DEBUG_PREFERENCES, MODE_PRIVATE)
+                .getString(PREF_LOCAL_FILE_LABEL, "");
+        if (savedUri == null || savedUri.trim().isEmpty()) {
+            return;
+        }
+        Uri uri = Uri.parse(savedUri);
+        localFileRxAudioSource.setSelectedFile(uri, savedLabel);
+    }
+
+    private void launchLocalFilePicker() {
+        if (localFilePickerLauncher == null) {
+            Toast.makeText(this, "Local file picker is unavailable right now.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        localFilePickerLauncher.launch(new String[]{
+                "audio/wav",
+                "audio/x-wav",
+                "audio/wave",
+                "audio/*",
+                "application/octet-stream"
+        });
+    }
+
+    private void handleLocalFilePicked(@Nullable Uri uri) {
+        if (uri == null) {
+            binding.footerText.setText("Local file selection was cancelled.");
+            refreshUiSnapshot();
+            return;
+        }
+        tryPersistableReadPermission(uri);
+        String label = localFileRxAudioSource.resolveDisplayName(uri);
+        localFileRxAudioSource.setSelectedFile(uri, label);
+        getSharedPreferences(DEBUG_PREFERENCES, MODE_PRIVATE)
+                .edit()
+                .putString(PREF_LOCAL_FILE_URI, uri.toString())
+                .putString(PREF_LOCAL_FILE_LABEL, label)
+                .apply();
+        binding.footerText.setText("Selected local replay file: " + label);
+        refreshUiSnapshot();
+    }
+
+    private void tryPersistableReadPermission(Uri uri) {
+        if (uri == null) {
+            return;
+        }
+        int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION;
+        try {
+            getContentResolver().takePersistableUriPermission(uri, takeFlags);
+        } catch (SecurityException ignored) {
+        }
+    }
+
     private void applyPreferredToneFromEditor() {
         String rawValue = binding.preferredToneFrequencyEditText.getText() == null
                 ? ""
@@ -815,7 +1002,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private boolean anySourceActive() {
-        return isSourceActive(microphoneRxAudioSource) || isSourceActive(syntheticFixtureRxAudioSource);
+        return isSourceActive(microphoneRxAudioSource)
+                || isSourceActive(syntheticFixtureRxAudioSource)
+                || isSourceActive(localFileRxAudioSource);
     }
 
     private boolean isSourceActive(RxAudioSource source) {
@@ -831,6 +1020,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private void stopAllSources() {
         microphoneRxAudioSource.stop();
         syntheticFixtureRxAudioSource.stop();
+        localFileRxAudioSource.stop();
         activeRxAudioSource = null;
     }
 
@@ -840,6 +1030,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         }
         if (retainedSource != syntheticFixtureRxAudioSource) {
             syntheticFixtureRxAudioSource.stop();
+        }
+        if (retainedSource != localFileRxAudioSource) {
+            localFileRxAudioSource.stop();
         }
     }
 
@@ -862,6 +1055,10 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             requestMissingPermissions();
             return;
         }
+        if (selectedOption == InputSourceOption.LOCAL_FILE_REPLAY && !localFileRxAudioSource.isAvailable()) {
+            launchLocalFilePicker();
+            return;
+        }
 
         if (selectedOption == InputSourceOption.SYNTHETIC_FIXTURE) {
             lastFixtureScenario = selectedFixtureScenario();
@@ -869,17 +1066,22 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             lastFixtureEvaluationResult = null;
             fixtureReplayInProgress = true;
             fixtureEvaluationStatusMessage = "Running fixture " + lastFixtureScenario.displayName() + ".";
+        } else {
+            fixtureReplayInProgress = false;
         }
 
         receivedFrameCount = 0L;
         receivedSampleCount = 0L;
         lastPeakAmplitude = 0;
         lastRmsAmplitude = 0.0d;
+        audioSpectrumAnalyzer.reset();
+        lastSpectrumSnapshot = null;
         audioInputHealthTracker.reset();
         cwSignalProcessor.reset();
         cwTimingModel.reset();
         cwDecoder.reset();
         cwInterpreter.reset();
+        qsoInterpreter.reset();
         qsoStateMachine.reset();
         stopAllSourcesExcept(selectedSource);
         activeRxAudioSource = selectedSource;
@@ -979,11 +1181,14 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         if (receivedFrameCount == 0L) {
             return getString(R.string.capture_frame_empty);
         }
+        String stateLabel = activeRxAudioSource == null
+                ? RxAudioSource.State.IDLE.displayName()
+                : activeRxAudioSource.state().displayName();
         return getString(
                 R.string.capture_frame_stats,
                 receivedFrameCount,
                 receivedSampleCount,
-                microphoneRxAudioSource.state().displayName()
+                stateLabel
         );
     }
 
@@ -1000,6 +1205,37 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         ));
     }
 
+    private void refreshAudioSpectrumView() {
+        binding.rxFocusSpectrumView.setSpectrumSnapshot(lastSpectrumSnapshot);
+        setStableText(binding.rxFocusSpectrumSummaryText, renderAudioSpectrumSummary());
+        binding.audioSpectrumView.setSpectrumSnapshot(lastSpectrumSnapshot);
+        setStableText(binding.audioSpectrumSummaryText, renderAudioSpectrumSummary());
+    }
+
+    private String renderAudioSpectrumSummary() {
+        if (lastSpectrumSnapshot == null) {
+            return "Waiting for live audio. The chart will show the strongest tone peak, preferred tone, tracked tone, and a noise baseline.";
+        }
+        float noise = lastSpectrumSnapshot.noiseFloorMagnitude();
+        float peak = lastSpectrumSnapshot.peakMagnitude();
+        int separation = Math.round(peak - noise);
+        return "Peak "
+                + lastSpectrumSnapshot.peakFrequencyHz()
+                + " Hz"
+                + " | preferred "
+                + lastSpectrumSnapshot.preferredToneHz()
+                + " Hz"
+                + " | tracked "
+                + lastSpectrumSnapshot.trackedToneHz()
+                + " Hz"
+                + "\nNoise baseline "
+                + Math.round(noise)
+                + " | peak level "
+                + Math.round(peak)
+                + " | separation "
+                + String.format(Locale.US, "%+d", separation);
+    }
+
     private String renderSignalState() {
         CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
         int toneErrorHz = CwFrontEndHealthClassifier.trackingErrorHz(snapshot);
@@ -1014,6 +1250,24 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "\nPending Retune Candidate: " + snapshot.pendingRetuneCandidateFrequencyHz()
                 + " Hz"
                 + " (" + snapshot.pendingRetuneCandidateStableScans() + " stable scans)"
+                + "\nPreferred Window Winner: " + snapshot.preferredWindowWinnerFrequencyHz() + " Hz"
+                + " | RMS " + String.format(Locale.US, "%.1f", snapshot.preferredWindowWinnerToneRms())
+                + " | score " + String.format(Locale.US, "%.1f", snapshot.preferredWindowWinnerSelectionScore())
+                + " | " + (snapshot.preferredWindowWinnerLocked() ? "LOCK" : "cand")
+                + "\nWide Scan Winner: " + (snapshot.wideScanWinnerFrequencyHz() > 0
+                ? snapshot.wideScanWinnerFrequencyHz() + " Hz"
+                + " | RMS " + String.format(Locale.US, "%.1f", snapshot.wideScanWinnerToneRms())
+                + " | score " + String.format(Locale.US, "%.1f", snapshot.wideScanWinnerSelectionScore())
+                + " | " + (snapshot.wideScanWinnerLocked() ? "LOCK" : "cand")
+                : "not used")
+                + "\nAcquisition Winner: " + snapshot.acquisitionWinnerFrequencyHz() + " Hz"
+                + " | RMS " + String.format(Locale.US, "%.1f", snapshot.acquisitionWinnerToneRms())
+                + " | score " + String.format(Locale.US, "%.1f", snapshot.acquisitionWinnerSelectionScore())
+                + " | " + snapshot.acquisitionWinnerSource()
+                + "\nFinal Adopted: " + snapshot.finalAdoptedFrequencyHz() + " Hz"
+                + " | RMS " + String.format(Locale.US, "%.1f", snapshot.finalAdoptedToneRms())
+                + " | score " + String.format(Locale.US, "%.1f", snapshot.finalAdoptedSelectionScore())
+                + " | " + snapshot.finalAdoptedSource()
                 + "\nTracking Error: " + String.format(Locale.US, "%+d", toneErrorHz) + " Hz"
                 + "\nAttack Threshold: " + snapshot.currentThreshold()
                 + "\nRelease Threshold: " + snapshot.releaseThreshold()
@@ -1028,6 +1282,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "\nPeak Isolation: " + Math.round(snapshot.peakNarrowbandIsolationRatio() * 100.0d) + "%"
                 + "\nLock Coverage: " + Math.round(snapshot.lockedFrameRatio() * 100.0d) + "%"
                 + " (" + snapshot.lockedFrameCount() + "/" + snapshot.processedFrameCount() + " frames)"
+                + "\nFrame Gap Resets: " + snapshot.frameGapResetCount()
+                + " | Last gap: " + snapshot.lastFrameGapMs() + " ms"
+                + " | Worst gap: " + snapshot.worstFrameGapMs() + " ms"
                 + "\nCurrent Lock Streak: " + snapshot.consecutiveLockedFrames() + " frame(s)"
                 + "\nBest Lock Run: " + snapshot.maxConsecutiveLockedFrames() + " frame(s)"
                 + "\nTone-Active Unlock: " + Math.round(snapshot.toneActiveUnlockedFrameRatio() * 100.0d) + "%"
@@ -1071,6 +1328,12 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + " | Release margin: " + String.format(Locale.US, "%+d", releaseMargin)
                 + "\nPeak isolation: " + Math.round(peakIsolationPercent) + "%"
                 + " | Lock coverage: " + Math.round(lockCoveragePercent) + "%"
+                + "\nStream continuity: resets " + snapshot.frameGapResetCount()
+                + " | last gap " + snapshot.lastFrameGapMs() + " ms"
+                + " | reset threshold " + snapshot.lastFrameGapResetThresholdMs() + " ms"
+                + "\nWorst frame gap: " + snapshot.worstFrameGapMs() + " ms"
+                + " | Last reset at: "
+                + (snapshot.lastFrameGapResetAtMs() >= 0L ? snapshot.lastFrameGapResetAtMs() + " ms" : "none")
                 + "\nRecent window: lock " + Math.round(snapshot.recentLockedFrameRatio() * 100.0d) + "%"
                 + " | search " + Math.round(snapshot.recentSearchFrameRatio() * 100.0d) + "%"
                 + " | active unlock " + Math.round(snapshot.recentActiveUnlockedFrameRatio() * 100.0d) + "%"
@@ -1489,7 +1752,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         } else {
             builder.append("none");
         }
-        builder.append("\nConfirmed logs: ").append(confirmedLogCount);
         if (!qsoStorageStatusMessage.isEmpty()) {
             builder.append("\nLast action: ").append(qsoStorageStatusMessage);
         }
@@ -1497,66 +1759,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private String renderAdifExportStatus() {
-        if (adifExportStatusMessage.isEmpty()) {
-            return "No ADIF file exported yet.";
-        }
-        return adifExportStatusMessage;
-    }
-
-    private void saveCurrentDraft() {
-        applyDraftEditorIfNeeded();
-        QsoDraftSnapshot snapshot = qsoStateMachine.snapshot();
-        if (!hasDraftContent(snapshot)) {
-            Toast.makeText(this, "No draft data to save yet.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        localLogRepository.saveDraft(snapshot);
-        refreshStoredState();
-        qsoStorageStatusMessage = "Draft saved locally.";
-        binding.footerText.setText(qsoStorageStatusMessage);
-        refreshUiSnapshot();
-    }
-
-    private void confirmCurrentDraft() {
-        applyDraftEditorIfNeeded();
-        QsoDraftSnapshot snapshot = qsoStateMachine.snapshot();
-        if (!hasConfirmableDraft(snapshot)) {
-            Toast.makeText(this, "A callsign is required before confirming a log.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        ConfirmedQsoLog log = localLogRepository.confirmDraft(snapshot, System.currentTimeMillis());
-        localLogRepository.clearDraft();
-        refreshStoredState();
-        qsoStorageStatusMessage = "Confirmed log: " + log.remoteCallsign();
-        binding.footerText.setText(qsoStorageStatusMessage);
-        refreshUiSnapshot();
-    }
-
-    private void exportConfirmedLogs() {
-        List<ConfirmedQsoLog> logs = localLogRepository.loadConfirmedLogs();
-        if (logs.isEmpty()) {
-            Toast.makeText(this, "No confirmed logs available for export.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        File targetFile;
-        try {
-            targetFile = CwAdifFileWriter.export(this, logs, BuildConfig.VERSION_NAME);
-        } catch (IOException exception) {
-            Toast.makeText(this, "ADIF export failed.", Toast.LENGTH_SHORT).show();
-            adifExportStatusMessage = "ADIF export failed: " + exception.getMessage();
-            binding.footerText.setText(adifExportStatusMessage);
-            refreshUiSnapshot();
-            return;
-        }
-
-        adifExportStatusMessage = "Exported " + logs.size()
-                + " log(s) to "
-                + targetFile.getAbsolutePath();
-        binding.footerText.setText(adifExportStatusMessage);
-        refreshUiSnapshot();
+        return "QSO/ADIF workflow entries are hidden for now so this screen can stay focused on RX analysis.";
     }
 
     private void restorePersistedDraftIfAvailable() {
@@ -1570,7 +1773,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
     private void refreshStoredState() {
         persistedDraftSnapshot = localLogRepository.loadDraft();
-        confirmedLogCount = localLogRepository.loadConfirmedLogs().size();
         recentFixtureEvaluationResults = localLogRepository.loadRecentFixtureEvaluations(4);
     }
 
@@ -1623,6 +1825,45 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
     private String valueOrEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private void setStableText(TextView textView, CharSequence text) {
+        if (textView == null) {
+            return;
+        }
+        int viewId = textView.getId();
+        Integer existingMinLines = stableTextMinLines.get(viewId);
+        if (existingMinLines != null && existingMinLines > 0) {
+            textView.setMinLines(existingMinLines);
+        }
+        textView.setText(text);
+        textView.post(() -> {
+            if (binding == null) {
+                return;
+            }
+            int measuredLines = Math.max(
+                    Math.max(1, textView.getLineCount()),
+                    estimateMinimumStableLines(text)
+            );
+            Integer previousMaxLines = stableTextMinLines.get(viewId);
+            if (previousMaxLines == null || measuredLines > previousMaxLines) {
+                stableTextMinLines.put(viewId, measuredLines);
+                textView.setMinLines(measuredLines);
+            }
+        });
+    }
+
+    private int estimateMinimumStableLines(CharSequence text) {
+        if (text == null || text.length() == 0) {
+            return 1;
+        }
+        int lineCount = 1;
+        for (int index = 0; index < text.length(); index++) {
+            if (text.charAt(index) == '\n') {
+                lineCount += 1;
+            }
+        }
+        return lineCount;
     }
 
     private int dpToPx(int dp) {
@@ -1731,7 +1972,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             List<CwDecodeEvent> decodeEvents = cwDecoder.process(timingEvent);
             for (CwDecodeEvent decodeEvent : decodeEvents) {
                 cwInterpreter.process(decodeEvent);
-                qsoStateMachine.process(cwInterpreter.snapshot(), decodeEvent.timestampMs());
+                qsoInterpreter.process(decodeEvent);
+                qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
             }
         }
     }
@@ -1743,6 +1985,18 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         lastPeakAmplitude = frame.peakAmplitude();
         lastRmsAmplitude = frame.rmsAmplitude();
         audioInputHealthTracker.process(frame);
+        CwSignalSnapshot signalSnapshotBeforeProcess = cwSignalProcessor.snapshot();
+        lastSpectrumSnapshot = audioSpectrumAnalyzer.process(
+                frame,
+                signalSnapshotBeforeProcess.preferredToneFrequencyHz(),
+                signalSnapshotBeforeProcess.targetToneFrequencyHz(),
+                signalSnapshotBeforeProcess.preferredWindowWinnerFrequencyHz(),
+                signalSnapshotBeforeProcess.wideScanWinnerFrequencyHz(),
+                signalSnapshotBeforeProcess.acquisitionWinnerFrequencyHz(),
+                signalSnapshotBeforeProcess.finalAdoptedFrequencyHz(),
+                signalSnapshotBeforeProcess.acquisitionWinnerSource(),
+                signalSnapshotBeforeProcess.finalAdoptedSource()
+        );
         List<CwToneEvent> toneEvents = cwSignalProcessor.process(frame);
         for (CwToneEvent toneEvent : toneEvents) {
             List<CwTimingEvent> timingEvents = cwTimingModel.process(toneEvent);
@@ -1750,50 +2004,72 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 List<CwDecodeEvent> decodeEvents = cwDecoder.process(timingEvent);
                 for (CwDecodeEvent decodeEvent : decodeEvents) {
                     cwInterpreter.process(decodeEvent);
-                    qsoStateMachine.process(cwInterpreter.snapshot(), decodeEvent.timestampMs());
+                    qsoInterpreter.process(decodeEvent);
+                    qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
                 }
             }
         }
-        mainHandler.post(() -> {
-            CwInterpreterSnapshot interpreterSnapshot = cwInterpreter.snapshot();
-            QsoDraftSnapshot qsoSnapshot = qsoStateMachine.snapshot();
-            binding.frameStatsText.setText(renderFrameStats());
-            updateLevelViews(lastPeakAmplitude, lastRmsAmplitude);
-            binding.signalStateText.setText(renderSignalState());
-            binding.signalHealthText.setText(renderSignalHealthSummary());
-            binding.signalEventStatsText.setText(renderSignalEventStats());
-            binding.lastSignalEventText.setText(renderLastSignalEvent());
-            binding.timingStateText.setText(renderTimingState());
-            binding.timingEventStatsText.setText(renderTimingEventStats());
-            binding.lastTimingEventText.setText(renderLastTimingEvent());
-            binding.decoderStateText.setText(renderDecoderState());
-            binding.decoderEventStatsText.setText(renderDecoderEventStats());
-            binding.decoderOutputText.setText(renderDecoderOutput());
-            binding.lastDecoderEventText.setText(renderLastDecoderEvent());
-            binding.interpreterRawText.setText(renderInterpreterRawText(interpreterSnapshot));
-            binding.interpreterNormalizedText.setText(renderInterpreterNormalizedText(interpreterSnapshot));
-            binding.interpreterCallsignsText.setText(renderInterpreterCallsigns(interpreterSnapshot));
-            binding.interpreterHintsText.setText(renderInterpreterHints(interpreterSnapshot));
-            binding.lastInterpreterEventText.setText(renderLastInterpreterEvent());
-            binding.qsoPhaseText.setText(renderQsoPhase(qsoSnapshot));
-            binding.qsoDraftText.setText(renderQsoDraft(qsoSnapshot));
-            binding.fixtureEvaluationText.setText(renderFixtureEvaluationStatus());
-            syncDraftEditorFromSnapshot(qsoSnapshot, false);
-            binding.qsoEditorStatusText.setText(renderQsoEditorStatus());
-            refreshCallsignCandidateButtons(interpreterSnapshot);
-            binding.callsignCandidateStatusText.setText(renderCallsignCandidateStatus(interpreterSnapshot));
-            binding.qsoReadinessText.setText(renderQsoReadiness(qsoSnapshot));
-            binding.lastQsoEventText.setText(renderLastQsoEvent(qsoSnapshot));
-            binding.qsoStorageStatusText.setText(renderQsoStorageStatus());
-            binding.adifFieldMapText.setText(renderAdifFieldMap());
-            binding.adifPreviewText.setText(renderAdifPreview());
-            binding.adifExportStatusText.setText(renderAdifExportStatus());
-            binding.applyDraftEditsButton.setEnabled(draftEditorDirty);
-            binding.resetDraftEditsButton.setEnabled(hasManualCorrections(qsoSnapshot));
-            binding.saveDraftButton.setEnabled(hasDraftContent(qsoSnapshot) || draftEditorDirty);
-            binding.confirmLogButton.setEnabled(hasConfirmableDraft(qsoSnapshot) || hasRemoteCallsignInEditor());
-            binding.exportAdifButton.setEnabled(confirmedLogCount > 0);
-        });
+        scheduleLiveUiRefresh();
+    }
+
+    private void scheduleLiveUiRefresh() {
+        if (!activityResumed || liveUiRefreshPosted || mainHandler == null) {
+            return;
+        }
+        long nowMs = SystemClock.elapsedRealtime();
+        long delayMs = Math.max(0L, LIVE_UI_REFRESH_INTERVAL_MS - (nowMs - lastLiveUiRefreshAtMs));
+        liveUiRefreshPosted = true;
+        mainHandler.postDelayed(liveUiRefreshRunnable, delayMs);
+    }
+
+    private void refreshLiveUiFromPipeline() {
+        liveUiRefreshPosted = false;
+        if (!activityResumed || binding == null) {
+            return;
+        }
+        lastLiveUiRefreshAtMs = SystemClock.elapsedRealtime();
+        CwInterpreterSnapshot interpreterSnapshot = cwInterpreter.snapshot();
+        QsoDraftSnapshot qsoSnapshot = qsoStateMachine.snapshot();
+        binding.frameStatsText.setText(renderFrameStats());
+        updateLevelViews(lastPeakAmplitude, lastRmsAmplitude);
+        refreshAudioSpectrumView();
+        setStableText(binding.signalStateText, renderSignalState());
+        setStableText(binding.signalHealthText, renderSignalHealthSummary());
+        setStableText(
+                binding.rxFocusStatusText,
+                renderRxFocusStatus(selectedInputSource(), sourceForOption(selectedInputSource()))
+        );
+        setStableText(binding.rxFocusDecodeText, renderRxFocusDecode(interpreterSnapshot));
+        binding.signalEventStatsText.setText(renderSignalEventStats());
+        binding.lastSignalEventText.setText(renderLastSignalEvent());
+        binding.timingStateText.setText(renderTimingState());
+        binding.timingEventStatsText.setText(renderTimingEventStats());
+        binding.lastTimingEventText.setText(renderLastTimingEvent());
+        binding.decoderStateText.setText(renderDecoderState());
+        binding.decoderEventStatsText.setText(renderDecoderEventStats());
+        setStableText(binding.decoderOutputText, renderDecoderOutput());
+        binding.lastDecoderEventText.setText(renderLastDecoderEvent());
+        setStableText(binding.interpreterRawText, renderInterpreterRawText(interpreterSnapshot));
+        setStableText(binding.interpreterNormalizedText, renderInterpreterNormalizedText(interpreterSnapshot));
+        binding.interpreterCallsignsText.setText(renderInterpreterCallsigns(interpreterSnapshot));
+        binding.interpreterHintsText.setText(renderInterpreterHints(interpreterSnapshot));
+        binding.lastInterpreterEventText.setText(renderLastInterpreterEvent());
+        binding.qsoPhaseText.setText(renderQsoPhase(qsoSnapshot));
+        setStableText(binding.qsoDraftText, renderQsoDraft(qsoSnapshot));
+        setStableText(binding.fixtureEvaluationText, renderFixtureEvaluationStatus());
+        syncDraftEditorFromSnapshot(qsoSnapshot, false);
+        binding.qsoEditorStatusText.setText(renderQsoEditorStatus());
+        refreshCallsignCandidateButtons(interpreterSnapshot);
+        binding.callsignCandidateStatusText.setText(renderCallsignCandidateStatus(interpreterSnapshot));
+        binding.qsoReadinessText.setText(renderQsoReadiness(qsoSnapshot));
+        binding.lastQsoEventText.setText(renderLastQsoEvent(qsoSnapshot));
+        binding.qsoStorageStatusText.setText(renderQsoStorageStatus());
+        binding.adifFieldMapText.setText(renderAdifFieldMap());
+        binding.adifPreviewText.setText(renderAdifPreview());
+        binding.adifExportStatusText.setText(renderAdifExportStatus());
+        binding.applyDraftEditsButton.setEnabled(draftEditorDirty);
+        binding.resetDraftEditsButton.setEnabled(hasManualCorrections(qsoSnapshot));
+        binding.rxFocusStopCaptureButton.setEnabled(anySourceActive());
     }
 
     @Override

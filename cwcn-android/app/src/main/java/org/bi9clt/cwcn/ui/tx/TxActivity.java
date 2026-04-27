@@ -1,6 +1,8 @@
 package org.bi9clt.cwcn.ui.tx;
 
 import android.app.PendingIntent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -8,11 +10,15 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
@@ -21,12 +27,22 @@ import androidx.core.content.ContextCompat;
 
 import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
+import org.bi9clt.cwcn.core.rig.MockUsbSerialBenchScenario;
+import org.bi9clt.cwcn.core.rig.RigCapability;
 import org.bi9clt.cwcn.core.rig.RigControlAdapter;
+import org.bi9clt.cwcn.core.rig.RigProfile;
+import org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatter;
+import org.bi9clt.cwcn.core.rig.RigProfileFamilies;
+import org.bi9clt.cwcn.core.rig.RigProfileSettings;
 import org.bi9clt.cwcn.core.rig.RigRegistry;
+import org.bi9clt.cwcn.core.rig.RigSelectionStore;
 import org.bi9clt.cwcn.core.rig.SerialKeyerTxOutput;
 import org.bi9clt.cwcn.core.rig.UsbSerialDeviceOption;
 import org.bi9clt.cwcn.core.rig.UsbSerialKeyerRigControlAdapter;
 import org.bi9clt.cwcn.core.tx.CwTxBackend;
+import org.bi9clt.cwcn.core.tx.CwTxBenchLogBuffer;
+import org.bi9clt.cwcn.core.tx.CwTxBenchReportFormatter;
+import org.bi9clt.cwcn.core.tx.CwTxBenchSummaryFormatter;
 import org.bi9clt.cwcn.core.tx.CwTxEngine;
 import org.bi9clt.cwcn.core.tx.CwTxPlan;
 import org.bi9clt.cwcn.core.tx.CwTxPlaybackSnapshot;
@@ -34,10 +50,13 @@ import org.bi9clt.cwcn.core.tx.CwTxPreset;
 import org.bi9clt.cwcn.core.tx.CwTxRouteAdvisor;
 import org.bi9clt.cwcn.core.tx.CwTxState;
 import org.bi9clt.cwcn.core.tx.LocalSidetoneTxBackend;
+import org.bi9clt.cwcn.core.tx.RigKeyingTxBackend;
 import org.bi9clt.cwcn.core.tx.RigTextTxBackend;
 import org.bi9clt.cwcn.databinding.ActivityTxBinding;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Locale;
 
 public final class TxActivity extends AppCompatActivity {
@@ -48,20 +67,29 @@ public final class TxActivity extends AppCompatActivity {
     private static final String DEFAULT_TX_TEXT = "CQ CQ DE BI9CLT";
     private static final int DEFAULT_WPM = 18;
     private static final int DEFAULT_TONE_FREQUENCY_HZ = 650;
+    private static final int BENCH_LOG_LIMIT = 24;
 
     private ActivityTxBinding binding;
     private CwTxEngine txEngine;
     private LocalLogRepository localLogRepository;
+    private RigSelectionStore rigSelectionStore;
     private AudioTrackTxAudioOutput txAudioOutput;
     private ArrayList<TxBackendOption> backendOptions;
+    private CwTxBenchLogBuffer benchLogBuffer;
 
     private CwTxPlan currentPlan;
     private CwTxPlaybackSnapshot lastPlaybackSnapshot;
     private boolean syncingFields;
     private boolean syncingUsbDeviceSelection;
     private boolean syncingUsbKeyLineSelection;
+    private boolean syncingMockUsbScenarioSelection;
     private BroadcastReceiver usbRouteReceiver;
     private ArrayAdapter<UsbSerialDeviceOption> usbDeviceAdapter;
+    private ArrayAdapter<MockUsbSerialBenchScenario> mockUsbScenarioAdapter;
+    private String lastLoggedBackendId;
+    private String lastLoggedUsbDiagnosticCode;
+    private CwTxState lastLoggedPlaybackState;
+    private String lastSignificantUsbDiagnosticSummary;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -70,8 +98,10 @@ public final class TxActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
         txEngine = new CwTxEngine();
         localLogRepository = new LocalLogRepository(this);
+        rigSelectionStore = new RigSelectionStore(this);
         txAudioOutput = new AudioTrackTxAudioOutput();
         backendOptions = buildBackendOptions();
+        benchLogBuffer = new CwTxBenchLogBuffer(BENCH_LOG_LIMIT);
         restoreUsbRoutePreferences();
         registerUsbPermissionReceiver();
         setupBackendSelector();
@@ -79,7 +109,9 @@ public final class TxActivity extends AppCompatActivity {
         setupUsbRouteControls();
         setupDefaults();
         setupActions();
+        renderBenchLog();
         rebuildPlanPreview();
+        logBenchEvent("SESSION", "TX console opened.");
     }
 
     @Override
@@ -95,11 +127,12 @@ public final class TxActivity extends AppCompatActivity {
 
     private void setupDefaults() {
         String defaultCallsign = resolveDefaultStationCallsign();
+        RigProfileSettings profileSettings = selectedRigProfileSettings();
         syncingFields = true;
         binding.stationCallsignEditText.setText(defaultCallsign);
         binding.txTextEditText.setText(DEFAULT_TX_TEXT);
-        binding.wpmEditText.setText(String.valueOf(DEFAULT_WPM));
-        binding.toneFrequencyEditText.setText(String.valueOf(DEFAULT_TONE_FREQUENCY_HZ));
+        binding.wpmEditText.setText(String.valueOf(profileSettings.defaultWpm()));
+        binding.toneFrequencyEditText.setText(String.valueOf(profileSettings.defaultToneFrequencyHz()));
         syncingFields = false;
 
         TextWatcher watcher = new SimpleTextWatcher() {
@@ -114,9 +147,12 @@ public final class TxActivity extends AppCompatActivity {
         binding.txTextEditText.addTextChangedListener(watcher);
         binding.wpmEditText.addTextChangedListener(watcher);
         binding.toneFrequencyEditText.addTextChangedListener(watcher);
+
+        setupDismissKeyboardActions();
     }
 
     private void setupActions() {
+        binding.txScrollView.setOnClickListener(view -> dismissKeyboardAndClearNumericFocus());
         binding.backButton.setOnClickListener(view -> finish());
         binding.rebuildPreviewButton.setOnClickListener(view -> rebuildPlanPreview());
         binding.applyPresetButton.setOnClickListener(view -> applySelectedPreset());
@@ -127,6 +163,23 @@ public final class TxActivity extends AppCompatActivity {
         binding.loadUsbDitTestButton.setOnClickListener(view -> applyUsbBenchPreset(CwTxPreset.BENCH_DIT, 12));
         binding.loadUsbPatternTestButton.setOnClickListener(view -> applyUsbBenchPreset(CwTxPreset.BENCH_PATTERN, 15));
         binding.releaseUsbKeyLineButton.setOnClickListener(view -> releaseSelectedUsbKeyLine());
+        binding.copyBenchReportButton.setOnClickListener(view -> copyBenchReport());
+        binding.clearBenchLogButton.setOnClickListener(view -> clearBenchLog());
+    }
+
+    private void setupDismissKeyboardActions() {
+        TextView.OnEditorActionListener doneListener = (view, actionId, event) -> {
+            boolean enterPressed = event != null
+                    && event.getAction() == KeyEvent.ACTION_DOWN
+                    && event.getKeyCode() == KeyEvent.KEYCODE_ENTER;
+            if (actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
+                dismissKeyboardAndClearNumericFocus();
+                return true;
+            }
+            return false;
+        };
+        binding.wpmEditText.setOnEditorActionListener(doneListener);
+        binding.toneFrequencyEditText.setOnEditorActionListener(doneListener);
     }
 
     private void setupBackendSelector() {
@@ -137,12 +190,13 @@ public final class TxActivity extends AppCompatActivity {
         );
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         binding.backendSpinner.setAdapter(adapter);
-        binding.backendSpinner.setSelection(0);
         binding.backendSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 stopAllBackends();
                 lastPlaybackSnapshot = null;
+                lastLoggedPlaybackState = null;
+                maybeLogBackendSelection(backendOptions.get(position).backend());
                 rebuildPlanPreview();
             }
 
@@ -151,6 +205,7 @@ public final class TxActivity extends AppCompatActivity {
                 rebuildPlanPreview();
             }
         });
+        binding.backendSpinner.setSelection(resolvePreferredBackendSelectionIndex(), false);
     }
 
     private void setupPresetSelector() {
@@ -188,6 +243,45 @@ public final class TxActivity extends AppCompatActivity {
                 if (adapter.selectDevice(selectedDeviceName)) {
                     persistUsbDeviceName(selectedDeviceName);
                     lastPlaybackSnapshot = null;
+                    lastLoggedPlaybackState = null;
+                    logBenchEvent(
+                            "USB",
+                            option.isAuto()
+                                    ? "Device selector switched to Auto target mode."
+                                    : "Locked target selected: " + option.deviceName()
+                    );
+                    rebuildPlanPreview();
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+
+        mockUsbScenarioAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                new ArrayList<>()
+        );
+        mockUsbScenarioAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.mockUsbScenarioSpinner.setAdapter(mockUsbScenarioAdapter);
+        binding.mockUsbScenarioSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (syncingMockUsbScenarioSelection) {
+                    return;
+                }
+                UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
+                Object item = parent.getItemAtPosition(position);
+                if (adapter == null || !(item instanceof MockUsbSerialBenchScenario)) {
+                    return;
+                }
+                MockUsbSerialBenchScenario scenario = (MockUsbSerialBenchScenario) item;
+                if (adapter.selectMockBenchScenario(scenario)) {
+                    lastPlaybackSnapshot = null;
+                    lastLoggedPlaybackState = null;
+                    logBenchEvent("MOCK", "Mock USB scenario switched to " + scenario.displayName() + ".");
                     rebuildPlanPreview();
                 }
             }
@@ -218,6 +312,8 @@ public final class TxActivity extends AppCompatActivity {
                 if (adapter.setKeyLine((SerialKeyerTxOutput.KeyLine) item)) {
                     persistUsbKeyLine((SerialKeyerTxOutput.KeyLine) item);
                     lastPlaybackSnapshot = null;
+                    lastLoggedPlaybackState = null;
+                    logBenchEvent("USB", "Key line changed to " + item + ".");
                     rebuildPlanPreview();
                 } else {
                     Toast.makeText(TxActivity.this, "Unable to change USB key line while TX is active.", Toast.LENGTH_SHORT).show();
@@ -232,43 +328,52 @@ public final class TxActivity extends AppCompatActivity {
     }
 
     private void rebuildPlanPreview() {
-        CwTxBackend backend = selectedBackend();
-        currentPlan = txEngine.buildPlan(
-                binding.txTextEditText.getText() == null ? null : binding.txTextEditText.getText().toString(),
-                parsedPositiveInt(binding.wpmEditText.getText(), DEFAULT_WPM),
-                parsedPositiveInt(binding.toneFrequencyEditText.getText(), DEFAULT_TONE_FREQUENCY_HZ)
-        );
-        binding.normalizedText.setText(currentPlan.normalizedText().isEmpty()
-                ? "(empty)"
-                : currentPlan.normalizedText());
-        binding.morsePreviewText.setText(currentPlan.morsePreview().isEmpty()
-                ? "(no supported Morse symbols)"
-                : currentPlan.morsePreview());
-        binding.planSummaryText.setText(renderPlanSummary(currentPlan));
-        binding.backendSummaryText.setText(renderBackendSummary(backend));
-        binding.routeChecklistText.setText(CwTxRouteAdvisor.buildChecklist(backend, currentPlan));
-        refreshRouteControls(backend);
-        if (lastPlaybackSnapshot == null || !backend.isRunning()) {
-            binding.txStatusText.setText(renderIdleStatus(backend));
-            binding.txProgressText.setText("Progress: 0%");
-        }
-        boolean editableWpm = backend.usesWpm();
-        boolean editableTone = backend.usesToneFrequency();
-        binding.wpmEditText.setEnabled(editableWpm);
-        binding.wpmEditText.setAlpha(editableWpm ? 1.0f : 0.55f);
-        binding.toneFrequencyEditText.setEnabled(editableTone);
-        binding.toneFrequencyEditText.setAlpha(editableTone ? 1.0f : 0.55f);
-        refreshButtons();
+        preserveScrollPosition(() -> {
+            CwTxBackend backend = selectedBackend();
+            currentPlan = txEngine.buildPlan(
+                    binding.txTextEditText.getText() == null ? null : binding.txTextEditText.getText().toString(),
+                    parsedPositiveInt(binding.wpmEditText.getText(), DEFAULT_WPM),
+                    parsedPositiveInt(binding.toneFrequencyEditText.getText(), DEFAULT_TONE_FREQUENCY_HZ)
+            );
+            binding.normalizedText.setText(currentPlan.normalizedText().isEmpty()
+                    ? "(empty)"
+                    : currentPlan.normalizedText());
+            binding.morsePreviewText.setText(currentPlan.morsePreview().isEmpty()
+                    ? "(no supported Morse symbols)"
+                    : currentPlan.morsePreview());
+            binding.planSummaryText.setText(renderPlanSummary(currentPlan));
+            binding.pinnedRigSummaryText.setText(renderPinnedRigSummary());
+            binding.backendSummaryText.setText(renderBackendSummary(backend));
+            binding.routeChecklistText.setText(CwTxRouteAdvisor.buildChecklist(backend, currentPlan));
+            refreshRouteControls(backend);
+            renderBenchSummary(backend);
+            if (lastPlaybackSnapshot == null || !backend.isRunning()) {
+                binding.txStatusText.setText(renderIdleStatus(backend));
+                binding.txProgressText.setText("Progress: 0%");
+            }
+            boolean editableWpm = backend.usesWpm();
+            boolean editableTone = backend.usesToneFrequency();
+            binding.wpmEditText.setEnabled(editableWpm);
+            binding.wpmEditText.setAlpha(editableWpm ? 1.0f : 0.55f);
+            binding.toneFrequencyEditText.setEnabled(editableTone);
+            binding.toneFrequencyEditText.setAlpha(editableTone ? 1.0f : 0.55f);
+            refreshButtons();
+        });
     }
 
     private void startTx() {
         CwTxBackend backend = selectedBackend();
         rebuildPlanPreview();
         if (currentPlan == null || currentPlan.elements().isEmpty()) {
+            logBenchEvent("TX", "Start blocked because the current plan is empty.");
             Toast.makeText(this, "Nothing to send yet.", Toast.LENGTH_SHORT).show();
             return;
         }
         if (!backend.isReady()) {
+            logBenchEvent(
+                    "TX",
+                    "Start blocked for " + backend.displayName() + ": " + backend.describeAvailability()
+            );
             Toast.makeText(
                     this,
                     backend.describeAvailability() + "\nNext: " + renderBackendRecoveryHint(backend),
@@ -279,13 +384,23 @@ public final class TxActivity extends AppCompatActivity {
             return;
         }
         if (backend.isRunning()) {
+            logBenchEvent("TX", "Start ignored because the backend is already running.");
             Toast.makeText(this, "TX is already running.", Toast.LENGTH_SHORT).show();
             return;
         }
+        lastLoggedPlaybackState = null;
+        logBenchEvent(
+                "TX",
+                "Start requested on " + backend.displayName() + " using " + currentPlan.elements().size() + " elements."
+        );
         boolean started = backend.start(currentPlan, snapshot ->
                 runOnUiThread(() -> applyPlaybackSnapshot(snapshot)));
         if (!started) {
             String recoveryHint = renderBackendRecoveryHint(backend);
+            logBenchEvent(
+                "TX",
+                "Start failed on " + backend.displayName() + ". Next: " + recoveryHint
+            );
             binding.txStatusText.setText(
                     "TX start failed.\nReason: backend rejected the request.\nNext: " + recoveryHint
             );
@@ -295,16 +410,29 @@ public final class TxActivity extends AppCompatActivity {
     }
 
     private void stopTx() {
-        selectedBackend().stop();
-        binding.txStatusText.setText(renderIdleStatus(selectedBackend()));
+        CwTxBackend backend = selectedBackend();
+        boolean wasRunning = backend.isRunning();
+        backend.stop();
+        lastLoggedPlaybackState = null;
+        logBenchEvent(
+                "TX",
+                wasRunning
+                        ? "Stop requested for " + backend.displayName() + "."
+                        : "Stop pressed while " + backend.displayName() + " was already idle."
+        );
+        binding.txStatusText.setText(renderIdleStatus(backend));
         refreshButtons();
     }
 
     private void applyPlaybackSnapshot(CwTxPlaybackSnapshot snapshot) {
-        lastPlaybackSnapshot = snapshot;
-        binding.txStatusText.setText(renderTxStatus(snapshot));
-        binding.txProgressText.setText(renderTxProgress(snapshot));
-        refreshButtons();
+        preserveScrollPosition(() -> {
+            lastPlaybackSnapshot = snapshot;
+            maybeLogPlaybackSnapshot(snapshot);
+            binding.txStatusText.setText(renderTxStatus(snapshot));
+            binding.txProgressText.setText(renderTxProgress(snapshot));
+            renderBenchSummary(selectedBackend());
+            refreshButtons();
+        });
     }
 
     private void refreshButtons() {
@@ -338,14 +466,41 @@ public final class TxActivity extends AppCompatActivity {
                 + "\nProgress snapshots: " + yesNo(backend.supportsProgressSnapshots());
     }
 
+    private String renderPinnedRigSummary() {
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
+        String preferredBackendId = preferredBackendIdForProfile(profile);
+        TxBackendOption preferredOption = findBackendOptionById(preferredBackendId);
+        CwTxBackend activeBackend = selectedBackend();
+        StringBuilder builder = new StringBuilder(
+                RigProfileConfigurationFormatter.renderCompactSummary(profile, settings)
+        );
+        builder.append("\nTX preferred route: ")
+                .append(preferredOption == null
+                        ? renderMissingPreferredBackendLabel(profile)
+                        : preferredOption.backend().displayName());
+        builder.append("\nTX active route: ")
+                .append(activeBackend == null ? "(none)" : activeBackend.displayName());
+        if (preferredOption != null
+                && activeBackend != null
+                && !preferredOption.backend().id().equals(activeBackend.id())) {
+            builder.append("\nTX note: this console is temporarily using a different backend than the pinned rig.");
+        } else if (preferredOption == null && profile != null) {
+            builder.append("\nTX note: this pinned rig does not expose a ready text-to-CW backend here yet.");
+        }
+        return builder.toString();
+    }
+
     private String renderTxStatus(CwTxPlaybackSnapshot snapshot) {
         if (snapshot == null) {
             return renderIdleStatus(selectedBackend());
         }
+        CwTxBackend backend = selectedBackend();
+        String activeLabel = isDedicatedKeyingBackend(backend) ? "Keying line active" : "Tone active";
         return "State: " + snapshot.state().displayName()
                 + "\nStatus: " + snapshot.statusMessage()
                 + "\nCurrent element: " + (snapshot.currentElementLabel().isEmpty() ? "-" : snapshot.currentElementLabel())
-                + "\nTone active: " + yesNo(snapshot.toneActive())
+                + "\n" + activeLabel + ": " + yesNo(snapshot.toneActive())
                 + "\nElapsed: " + formatMs(snapshot.elapsedMs()) + " / " + formatMs(snapshot.totalDurationMs());
     }
 
@@ -391,6 +546,9 @@ public final class TxActivity extends AppCompatActivity {
 
     private String renderIdleStatus(CwTxBackend backend) {
         if (backend.isReady()) {
+            if (isDedicatedKeyingBackend(backend)) {
+                return "TX idle. Dedicated keying route is armed. Build a short plan and press Start TX. This route does not generate phone sidetone; rely on the radio's monitor/sidetone.";
+            }
             return "TX idle. Build a plan and press Start TX.";
         }
         return "TX idle.\nSelected backend is not ready yet.\nReason: "
@@ -399,16 +557,24 @@ public final class TxActivity extends AppCompatActivity {
                 + renderBackendRecoveryHint(backend);
     }
 
+    private boolean isDedicatedKeyingBackend(CwTxBackend backend) {
+        return backend != null && backend.id() != null && backend.id().startsWith("rig-key:");
+    }
+
     private void refreshRouteControls(CwTxBackend backend) {
         UsbSerialKeyerRigControlAdapter usbAdapter = selectedUsbSerialAdapter();
         boolean usbVisible = backend != null && usbAdapter != null;
         binding.usbRoutePanel.setVisibility(usbVisible ? View.VISIBLE : View.GONE);
         if (!usbVisible) {
+            lastLoggedUsbDiagnosticCode = null;
+            binding.mockUsbScenarioPanel.setVisibility(View.GONE);
             return;
         }
         java.util.List<UsbSerialDeviceOption> deviceOptions = refreshUsbDeviceSelection(usbAdapter);
         binding.usbDeviceText.setText(renderUsbRouteSummary(usbAdapter));
         syncUsbKeyLineSelection(usbAdapter);
+        syncMockUsbScenarioSelection(usbAdapter);
+        maybeLogUsbDiagnosticStage(usbAdapter);
         boolean hasCandidateDevices = hasRealUsbDeviceOption(deviceOptions);
         boolean hasTargetDevice = usbAdapter.hasTargetDevice();
         boolean needsPermission = hasTargetDevice && !usbAdapter.isReady();
@@ -524,8 +690,34 @@ public final class TxActivity extends AppCompatActivity {
         if ("rig-text:audio-vox-text".equals(backend.id())) {
             return "Connect the audio path, enable VOX, then start with a short preset at conservative volume.";
         }
+        if ("rig-key:generic-cat".equals(backend.id())) {
+            RigProfile pinnedProfile = rigSelectionStore == null ? null : rigSelectionStore.selectedProfile();
+            if (RigProfileFamilies.isYaesuFamily(pinnedProfile)) {
+                return "Pin the Yaesu serial CAT profile, confirm the detected serial port and baud rate in Rig Setup, validate CAT probe success, then retry a very short VVV or DIT send.";
+            }
+            if (RigProfileFamilies.isIcomFamily(pinnedProfile)) {
+                return "Pin the Icom CI-V profile, confirm the serial port, baud rate, and CI-V address in Rig Setup, validate probe success, then retry a very short send.";
+            }
+            if (RigProfileFamilies.isKenwoodFamily(pinnedProfile)) {
+                return "Pin the Kenwood serial CAT profile, confirm serial readiness in Rig Setup, validate the probe response, then retry a very short send.";
+            }
+            return "Open Rig Setup, pin the matching serial CAT profile, validate probe readiness, then retry a very short keyed CW send.";
+        }
+        if ("rig-text:hamlib-rigctld".equals(backend.id())) {
+            RigProfile pinnedProfile = rigSelectionStore == null ? null : rigSelectionStore.selectedProfile();
+            if (RigProfileFamilies.isYaesuFamily(pinnedProfile)) {
+                return "Pin the Yaesu FT-family rigctld profile, confirm host/port reachability, verify rigctld is already bound to the radio, then retry a very short DIT or VVV send_morse test.";
+            }
+            if (RigProfileFamilies.isIcomFamily(pinnedProfile)) {
+                return "Pin the Icom-family rigctld profile, confirm host/port reachability, verify rigctld is already bound to the CI-V radio, then retry a very short DIT or VVV send_morse test.";
+            }
+            if (RigProfileFamilies.isKenwoodFamily(pinnedProfile)) {
+                return "Pin the Kenwood-family rigctld profile, confirm host/port reachability, verify rigctld is already bound to the radio, then retry a very short DIT or VVV send_morse test.";
+            }
+            return "Pin a Hamlib rigctld network profile in Rig Setup, confirm host/port reachability, then retry a short CQ or DIT-length send_morse test.";
+        }
         UsbSerialKeyerRigControlAdapter usbAdapter = selectedUsbSerialAdapter();
-        if ("rig-text:usb-serial-keyer".equals(backend.id()) && usbAdapter != null) {
+        if (usbAdapter != null) {
             return renderUsbRecoveryHint(usbAdapter);
         }
         return "Review the route checklist and current availability before retrying.";
@@ -566,18 +758,46 @@ public final class TxActivity extends AppCompatActivity {
         syncingUsbKeyLineSelection = false;
     }
 
+    private void syncMockUsbScenarioSelection(UsbSerialKeyerRigControlAdapter adapter) {
+        boolean mockVisible = adapter != null && adapter.supportsMockBenchScenarios();
+        binding.mockUsbScenarioPanel.setVisibility(mockVisible ? View.VISIBLE : View.GONE);
+        if (!mockVisible) {
+            return;
+        }
+        java.util.List<MockUsbSerialBenchScenario> scenarios = adapter.availableMockBenchScenarios();
+        syncingMockUsbScenarioSelection = true;
+        mockUsbScenarioAdapter.clear();
+        mockUsbScenarioAdapter.addAll(scenarios);
+        mockUsbScenarioAdapter.notifyDataSetChanged();
+        MockUsbSerialBenchScenario selectedScenario = adapter.selectedMockBenchScenario();
+        int selectionIndex = 0;
+        if (selectedScenario != null) {
+            selectionIndex = scenarios.indexOf(selectedScenario);
+            if (selectionIndex < 0) {
+                selectionIndex = 0;
+            }
+        }
+        if (!scenarios.isEmpty()) {
+            binding.mockUsbScenarioSpinner.setSelection(selectionIndex, false);
+        }
+        syncingMockUsbScenarioSelection = false;
+    }
+
     private void requestUsbPermissionForSelectedBackend() {
         UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
         if (adapter == null) {
+            logBenchEvent("USB", "Permission request ignored because USB serial backend is not selected.");
             Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
             return;
         }
         if (!adapter.hasTargetDevice()) {
+            logBenchEvent("USB", "Permission request blocked: " + adapter.describeAvailability());
             Toast.makeText(this, adapter.describeAvailability(), Toast.LENGTH_SHORT).show();
             rebuildPlanPreview();
             return;
         }
         if (adapter.isReady()) {
+            logBenchEvent("USB", "Permission request skipped because the backend is already ready.");
             Toast.makeText(this, "USB backend already has permission and is ready.", Toast.LENGTH_SHORT).show();
             rebuildPlanPreview();
             return;
@@ -586,12 +806,23 @@ public final class TxActivity extends AppCompatActivity {
                 this,
                 0,
                 new Intent(ACTION_USB_PERMISSION).setPackage(getPackageName()),
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                        ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+                        : PendingIntent.FLAG_UPDATE_CURRENT
         );
         boolean requested = adapter.requestUsbPermission(permissionIntent);
         if (!requested) {
+            logBenchEvent("USB", "Permission request failed: " + adapter.describeAvailability());
             Toast.makeText(this, adapter.describeAvailability(), Toast.LENGTH_SHORT).show();
             rebuildPlanPreview();
+            return;
+        }
+        logBenchEvent("USB", "Permission request sent for the current target device.");
+        if (adapter.supportsMockBenchScenarios()) {
+            lastPlaybackSnapshot = null;
+            lastLoggedPlaybackState = null;
+            rebuildPlanPreview();
+            Toast.makeText(this, "Mock USB permission flow completed immediately.", Toast.LENGTH_SHORT).show();
             return;
         }
         Toast.makeText(this, "USB permission request sent. Approve it on the device if prompted.", Toast.LENGTH_SHORT).show();
@@ -600,11 +831,14 @@ public final class TxActivity extends AppCompatActivity {
     private void refreshSelectedUsbBackend() {
         UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
         if (adapter == null) {
+            logBenchEvent("USB", "Refresh ignored because USB serial backend is not selected.");
             Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
             return;
         }
+        logBenchEvent("USB", "Manual USB route refresh requested.");
         adapter.refreshRouteState();
         lastPlaybackSnapshot = null;
+        lastLoggedPlaybackState = null;
         rebuildPlanPreview();
         Toast.makeText(this, "USB device inventory and route state refreshed.", Toast.LENGTH_SHORT).show();
     }
@@ -612,6 +846,7 @@ public final class TxActivity extends AppCompatActivity {
     private void releaseSelectedUsbKeyLine() {
         UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
         if (adapter == null) {
+            logBenchEvent("USB", "Release Key Line ignored because USB serial backend is not selected.");
             Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -619,7 +854,14 @@ public final class TxActivity extends AppCompatActivity {
         boolean released = adapter.keyUp();
         adapter.refreshRouteState();
         lastPlaybackSnapshot = null;
+        lastLoggedPlaybackState = null;
         rebuildPlanPreview();
+        logBenchEvent(
+                "USB",
+                released
+                        ? "Key line released and USB route state refreshed."
+                        : "Release requested, but no open key line was active. Route state was still refreshed."
+        );
         Toast.makeText(
                 this,
                 released
@@ -632,6 +874,7 @@ public final class TxActivity extends AppCompatActivity {
     private void applyUsbBenchPreset(CwTxPreset preset, int recommendedWpm) {
         UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
         if (adapter == null) {
+            logBenchEvent("USB", "Bench preset ignored because USB serial backend is not selected.");
             Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -640,7 +883,12 @@ public final class TxActivity extends AppCompatActivity {
         binding.wpmEditText.setText(String.valueOf(recommendedWpm));
         syncingFields = false;
         lastPlaybackSnapshot = null;
+        lastLoggedPlaybackState = null;
         rebuildPlanPreview();
+        logBenchEvent(
+                "USB",
+                "Loaded bench preset " + preset.name() + " at " + recommendedWpm + " WPM."
+        );
         Toast.makeText(
                 this,
                 "Loaded a short USB bench macro. Confirm wiring first, then start TX.",
@@ -658,6 +906,12 @@ public final class TxActivity extends AppCompatActivity {
                 }
                 if (ACTION_USB_PERMISSION.equals(action)) {
                     boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                    logBenchEvent(
+                            "USB",
+                            granted
+                                    ? "USB permission granted by the system dialog."
+                                    : "USB permission denied by the system dialog."
+                    );
                     Toast.makeText(
                             TxActivity.this,
                             granted
@@ -669,10 +923,12 @@ public final class TxActivity extends AppCompatActivity {
                     return;
                 }
                 if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
+                    logBenchEvent("USB", "USB device attached: " + renderNullableDeviceName(extractUsbDeviceName(intent)) + ".");
                     handleUsbRouteChange(extractUsbDeviceName(intent), false);
                     return;
                 }
                 if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+                    logBenchEvent("USB", "USB device detached: " + renderNullableDeviceName(extractUsbDeviceName(intent)) + ".");
                     handleUsbRouteChange(extractUsbDeviceName(intent), true);
                 }
             }
@@ -694,12 +950,17 @@ public final class TxActivity extends AppCompatActivity {
             adapter.refreshRouteState();
         }
         lastPlaybackSnapshot = null;
+        lastLoggedPlaybackState = null;
         rebuildPlanPreview();
         if (selectedUsbSerialAdapter() == null) {
             return;
         }
         if (detached && adapter != null && adapter.isPreferredDeviceMissing()) {
             String preferred = adapter.preferredDeviceName();
+            logBenchEvent(
+                    "USB",
+                    "Locked target became unavailable: " + renderNullableDeviceName(preferred) + "."
+            );
             Toast.makeText(
                     this,
                     "Selected USB keyer is no longer attached: "
@@ -729,19 +990,93 @@ public final class TxActivity extends AppCompatActivity {
         if (adapter == null) {
             return;
         }
+        RigProfile pinnedProfile = rigSelectionStore.selectedProfile();
+        RigProfileSettings profileSettings = rigSelectionStore.loadSettings(pinnedProfile);
         String storedDeviceName = getSharedPreferences(PREFS_TX_CONSOLE, MODE_PRIVATE)
                 .getString(PREF_USB_DEVICE_NAME, null);
         String storedKeyLine = getSharedPreferences(PREFS_TX_CONSOLE, MODE_PRIVATE)
                 .getString(PREF_USB_KEY_LINE, null);
-        if (storedDeviceName != null && !storedDeviceName.trim().isEmpty()) {
-            adapter.selectDevice(storedDeviceName);
+        String preferredDeviceName = storedDeviceName;
+        if ((preferredDeviceName == null || preferredDeviceName.trim().isEmpty())
+                && pinnedProfile != null
+                && pinnedProfile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
+            preferredDeviceName = profileSettings.usbPreferredDeviceName();
         }
-        if (storedKeyLine != null && !storedKeyLine.trim().isEmpty()) {
+        String preferredKeyLineName = storedKeyLine;
+        if ((preferredKeyLineName == null || preferredKeyLineName.trim().isEmpty())
+                && pinnedProfile != null
+                && pinnedProfile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
+            preferredKeyLineName = profileSettings.usbKeyLine().name();
+        }
+        if (preferredDeviceName != null && !preferredDeviceName.trim().isEmpty()) {
+            adapter.selectDevice(preferredDeviceName);
+        }
+        if (preferredKeyLineName != null && !preferredKeyLineName.trim().isEmpty()) {
             try {
-                adapter.setKeyLine(SerialKeyerTxOutput.KeyLine.valueOf(storedKeyLine));
+                adapter.setKeyLine(SerialKeyerTxOutput.KeyLine.valueOf(preferredKeyLineName));
             } catch (IllegalArgumentException ignored) {
             }
         }
+    }
+
+    private RigProfileSettings selectedRigProfileSettings() {
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        return rigSelectionStore.loadSettings(profile);
+    }
+
+    private int resolvePreferredBackendSelectionIndex() {
+        String preferredBackendId = preferredBackendIdForProfile(rigSelectionStore.selectedProfile());
+        int preferredIndex = findBackendSelectionIndex(preferredBackendId);
+        return preferredIndex >= 0 ? preferredIndex : 0;
+    }
+
+    private int findBackendSelectionIndex(String backendId) {
+        if (backendId == null || backendId.trim().isEmpty()) {
+            return -1;
+        }
+        for (int index = 0; index < backendOptions.size(); index++) {
+            if (backendId.equals(backendOptions.get(index).backend().id())) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    @Nullable
+    private TxBackendOption findBackendOptionById(String backendId) {
+        int index = findBackendSelectionIndex(backendId);
+        if (index < 0) {
+            return null;
+        }
+        return backendOptions.get(index);
+    }
+
+    @Nullable
+    private String preferredBackendIdForProfile(@Nullable RigProfile profile) {
+        if (profile == null || profile.adapterId() == null || profile.adapterId().trim().isEmpty()) {
+            return null;
+        }
+        String adapterId = profile.adapterId().trim();
+        String rigTextBackendId = "rig-text:" + adapterId;
+        if (findBackendSelectionIndex(rigTextBackendId) >= 0) {
+            return rigTextBackendId;
+        }
+        String rigKeyBackendId = "rig-key:" + adapterId;
+        if (findBackendSelectionIndex(rigKeyBackendId) >= 0) {
+            return rigKeyBackendId;
+        }
+        return rigTextBackendId;
+    }
+
+    private String renderMissingPreferredBackendLabel(@Nullable RigProfile profile) {
+        if (profile == null) {
+            return "Local Sidetone (no rig pinned)";
+        }
+        String preferredBackendId = preferredBackendIdForProfile(profile);
+        if (preferredBackendId == null) {
+            return "Local Sidetone";
+        }
+        return "Unavailable for " + profile.displayName();
     }
 
     private void persistUsbDeviceName(String deviceName) {
@@ -807,7 +1142,9 @@ public final class TxActivity extends AppCompatActivity {
         binding.txTextEditText.setText(preset.render(normalizedStationCallsign()));
         syncingFields = false;
         lastPlaybackSnapshot = null;
+        lastLoggedPlaybackState = null;
         rebuildPlanPreview();
+        logBenchEvent("TX", "Loaded preset " + preset.name() + ".");
     }
 
     private String normalizedStationCallsign() {
@@ -836,6 +1173,10 @@ public final class TxActivity extends AppCompatActivity {
         for (RigControlAdapter adapter : RigRegistry.defaultAdapters(this)) {
             if (adapter.supportsTextToCw()) {
                 options.add(new TxBackendOption(new RigTextTxBackend(adapter)));
+                continue;
+            }
+            if (adapter.supportsPttControl() || "generic-cat".equals(adapter.id())) {
+                options.add(new TxBackendOption(new RigKeyingTxBackend(adapter)));
             }
         }
         return options;
@@ -845,6 +1186,212 @@ public final class TxActivity extends AppCompatActivity {
         for (TxBackendOption option : backendOptions) {
             option.backend().stop();
         }
+    }
+
+    private void maybeLogBackendSelection(CwTxBackend backend) {
+        if (backend == null || backend.id().equals(lastLoggedBackendId)) {
+            return;
+        }
+        lastLoggedBackendId = backend.id();
+        lastLoggedUsbDiagnosticCode = null;
+        if (!backend.id().startsWith("rig-text:usb-serial-keyer")) {
+            lastSignificantUsbDiagnosticSummary = null;
+        }
+        logBenchEvent("BACKEND", "Selected " + backend.displayName() + " (" + backend.id() + ").");
+    }
+
+    private void maybeLogUsbDiagnosticStage(UsbSerialKeyerRigControlAdapter adapter) {
+        if (adapter == null) {
+            lastLoggedUsbDiagnosticCode = null;
+            return;
+        }
+        String diagnosticCode = adapter.diagnosticStageCode();
+        if (diagnosticCode.equals(lastLoggedUsbDiagnosticCode)) {
+            return;
+        }
+        lastLoggedUsbDiagnosticCode = diagnosticCode;
+        captureSignificantUsbDiagnostic(adapter, diagnosticCode);
+        logBenchEvent(
+                "USB",
+                "Diagnostic stage -> "
+                        + adapter.diagnosticStageLabel()
+                        + " ("
+                        + diagnosticCode
+                        + "). Next: "
+                        + renderUsbRecoveryHint(adapter)
+        );
+    }
+
+    private void maybeLogPlaybackSnapshot(CwTxPlaybackSnapshot snapshot) {
+        if (snapshot == null || snapshot.state() == null || snapshot.state() == lastLoggedPlaybackState) {
+            return;
+        }
+        lastLoggedPlaybackState = snapshot.state();
+        if (snapshot.state() == CwTxState.PLAYING) {
+            logBenchEvent("TX", "Playback started. " + snapshot.statusMessage());
+            return;
+        }
+        if (snapshot.state() == CwTxState.COMPLETED) {
+            logBenchEvent("TX", "Playback completed. " + snapshot.statusMessage());
+            return;
+        }
+        if (snapshot.state() == CwTxState.ERROR) {
+            logBenchEvent("TX", "Playback error. " + snapshot.statusMessage());
+            return;
+        }
+        if (snapshot.state() == CwTxState.STOPPED) {
+            logBenchEvent("TX", "Playback stopped. " + snapshot.statusMessage());
+            return;
+        }
+        logBenchEvent("TX", "Playback state -> " + snapshot.state().displayName() + ".");
+    }
+
+    private void clearBenchLog() {
+        benchLogBuffer.clear();
+        lastLoggedUsbDiagnosticCode = null;
+        lastLoggedPlaybackState = null;
+        lastSignificantUsbDiagnosticSummary = null;
+        renderBenchLog();
+        renderBenchSummary(selectedBackend());
+        Toast.makeText(this, "Bench log cleared.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void copyBenchReport() {
+        ClipboardManager clipboardManager = ContextCompat.getSystemService(this, ClipboardManager.class);
+        if (clipboardManager == null) {
+            Toast.makeText(this, "Clipboard is unavailable on this device.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String report = buildBenchReport();
+        clipboardManager.setPrimaryClip(ClipData.newPlainText("CWCN TX Bench Report", report));
+        logBenchEvent("SESSION", "Copied the current TX bench report to the clipboard.");
+        Toast.makeText(this, "Bench report copied.", Toast.LENGTH_SHORT).show();
+    }
+
+    private String buildBenchReport() {
+        CwTxBackend backend = selectedBackend();
+        UsbSerialKeyerRigControlAdapter usbAdapter = selectedUsbSerialAdapter();
+        String usbSummary = usbAdapter == null
+                ? "USB serial route is not selected."
+                : renderUsbRouteSummary(usbAdapter);
+        String txStatus = binding.txStatusText.getText() == null
+                ? null
+                : binding.txStatusText.getText().toString();
+        String txProgress = binding.txProgressText.getText() == null
+                ? null
+                : binding.txProgressText.getText().toString();
+        return CwTxBenchReportFormatter.format(
+                buildBenchSummary(backend),
+                buildRecentUsbIssueSummary(usbAdapter),
+                renderBackendSummary(backend),
+                currentPlan == null ? null : renderPlanSummary(currentPlan),
+                usbSummary,
+                txStatus,
+                txProgress,
+                benchLogBuffer.renderMultiline()
+        );
+    }
+
+    private void renderBenchSummary(CwTxBackend backend) {
+        binding.benchSummaryText.setText(buildBenchSummary(backend));
+    }
+
+    private String buildBenchSummary(CwTxBackend backend) {
+        UsbSerialKeyerRigControlAdapter usbAdapter = selectedUsbSerialAdapter();
+        return CwTxBenchSummaryFormatter.format(
+                backend == null ? null : backend.id(),
+                backend == null ? null : backend.displayName(),
+                backend != null && backend.isReady(),
+                backend != null && backend.isRunning(),
+                backend == null ? null : backend.describeAvailability(),
+                usbAdapter == null ? null : usbAdapter.diagnosticStageCode(),
+                buildRecentUsbIssueSummary(usbAdapter),
+                lastPlaybackSnapshot == null ? null : lastPlaybackSnapshot.state(),
+                backend == null ? null : renderBackendRecoveryHint(backend)
+        );
+    }
+
+    private void captureSignificantUsbDiagnostic(
+            UsbSerialKeyerRigControlAdapter adapter,
+            String diagnosticCode
+    ) {
+        if (adapter == null || diagnosticCode == null || diagnosticCode.trim().isEmpty()) {
+            return;
+        }
+        if ("usb-serial-ready".equals(diagnosticCode)) {
+            return;
+        }
+        lastSignificantUsbDiagnosticSummary =
+                currentBenchTimestamp()
+                        + " - "
+                        + adapter.diagnosticStageLabel()
+                        + " ("
+                        + diagnosticCode
+                        + "). Next: "
+                        + renderUsbRecoveryHint(adapter);
+    }
+
+    private String buildRecentUsbIssueSummary(@Nullable UsbSerialKeyerRigControlAdapter adapter) {
+        if (adapter == null) {
+            return null;
+        }
+        if (!"usb-serial-ready".equals(adapter.diagnosticStageCode())) {
+            return null;
+        }
+        if (lastSignificantUsbDiagnosticSummary == null
+                || lastSignificantUsbDiagnosticSummary.trim().isEmpty()) {
+            return null;
+        }
+        return lastSignificantUsbDiagnosticSummary;
+    }
+
+    private void logBenchEvent(String category, String detail) {
+        benchLogBuffer.append(currentBenchTimestamp(), category, detail);
+        renderBenchLog();
+    }
+
+    private void renderBenchLog() {
+        binding.benchLogText.setText(benchLogBuffer.renderMultiline());
+    }
+
+    private void dismissKeyboardAndClearNumericFocus() {
+        clearFocusSafely(binding.wpmEditText);
+        clearFocusSafely(binding.toneFrequencyEditText);
+        binding.txScrollView.requestFocus();
+        InputMethodManager imm = ContextCompat.getSystemService(this, InputMethodManager.class);
+        if (imm != null) {
+            View tokenView = getCurrentFocus();
+            if (tokenView == null) {
+                tokenView = binding.txScrollView;
+            }
+            imm.hideSoftInputFromWindow(tokenView.getWindowToken(), 0);
+        }
+    }
+
+    private void clearFocusSafely(View view) {
+        if (view != null && view.hasFocus()) {
+            view.clearFocus();
+        }
+    }
+
+    private void preserveScrollPosition(Runnable update) {
+        if (binding == null || binding.txScrollView == null) {
+            update.run();
+            return;
+        }
+        int scrollY = binding.txScrollView.getScrollY();
+        update.run();
+        binding.txScrollView.post(() -> binding.txScrollView.scrollTo(0, scrollY));
+    }
+
+    private String currentBenchTimestamp() {
+        return new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
+    }
+
+    private String renderNullableDeviceName(String deviceName) {
+        return deviceName == null || deviceName.trim().isEmpty()
+                ? "(unknown device)"
+                : deviceName;
     }
 
     private abstract static class SimpleTextWatcher implements TextWatcher {

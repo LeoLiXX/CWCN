@@ -10,6 +10,7 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 public final class RigTextTxBackendTest {
     @Test
@@ -33,7 +34,7 @@ public final class RigTextTxBackendTest {
         boolean started = backend.start(plan, snapshots::add);
 
         assertTrue(started);
-        assertFalse(snapshots.isEmpty());
+        waitFor(() -> hasLastState(snapshots, CwTxState.COMPLETED));
         assertEquals(CwTxState.COMPLETED, snapshots.get(snapshots.size() - 1).state());
         assertEquals(plan.totalDurationMs(), snapshots.get(snapshots.size() - 1).elapsedMs());
     }
@@ -47,8 +48,10 @@ public final class RigTextTxBackendTest {
         boolean started = backend.start(plan, snapshots::add);
 
         assertTrue(started);
-        assertFalse(snapshots.isEmpty());
+        waitFor(() -> hasLastState(snapshots, CwTxState.ERROR));
         assertEquals(CwTxState.ERROR, snapshots.get(snapshots.size() - 1).state());
+        assertTrue(snapshots.get(snapshots.size() - 1).statusMessage().contains("Rig adapter rejected"));
+        assertTrue(snapshots.get(snapshots.size() - 1).statusMessage().contains("Ready"));
     }
 
     @Test
@@ -57,6 +60,24 @@ public final class RigTextTxBackendTest {
 
         assertTrue(backend.usesWpm());
         assertFalse(backend.usesToneFrequency());
+        assertTrue(backend.supportsProgressSnapshots());
+    }
+
+    private void waitFor(BooleanSupplier condition) {
+        long deadline = System.currentTimeMillis() + 1000L;
+        while (!condition.getAsBoolean() && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(10L);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        assertTrue(condition.getAsBoolean());
+    }
+
+    private boolean hasLastState(List<CwTxPlaybackSnapshot> snapshots, CwTxState state) {
+        return !snapshots.isEmpty() && snapshots.get(snapshots.size() - 1).state() == state;
     }
 
     private static final class FakeRigControlAdapter implements RigControlAdapter {

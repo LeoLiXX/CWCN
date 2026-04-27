@@ -57,8 +57,8 @@ public final class SerialCatProbe {
                     true,
                     "Serial CAT responded. First reply: " + response + " Start with configuration validation first; TX-side native Yaesu CAT work is still in progress."
             );
-        } catch (IOException exception) {
-            return new ProbeResult(false, "Serial CAT probe failed: " + exception.getMessage());
+        } catch (IOException | RuntimeException exception) {
+            return new ProbeResult(false, "Serial CAT probe failed: " + safeMessage(exception));
         }
     }
 
@@ -92,8 +92,8 @@ public final class SerialCatProbe {
                     true,
                     "CI-V responded. First reply: " + toHex(response) + " Start with read/probe validation first; native Icom TX work is still in progress."
             );
-        } catch (IOException exception) {
-            return new ProbeResult(false, "Serial CAT probe failed: " + exception.getMessage());
+        } catch (IOException | RuntimeException exception) {
+            return new ProbeResult(false, "Serial CAT probe failed: " + safeMessage(exception));
         }
     }
 
@@ -118,9 +118,16 @@ public final class SerialCatProbe {
                     true,
                     "Kenwood-style CAT responded. First reply: " + response + " Start with read/probe validation first; native Kenwood TX work is still in progress."
             );
-        } catch (IOException exception) {
-            return new ProbeResult(false, "Serial CAT probe failed: " + exception.getMessage());
+        } catch (IOException | RuntimeException exception) {
+            return new ProbeResult(false, "Serial CAT probe failed: " + safeMessage(exception));
         }
+    }
+
+    private static String safeMessage(Throwable throwable) {
+        if (throwable == null || throwable.getMessage() == null || throwable.getMessage().trim().isEmpty()) {
+            return throwable == null ? "unknown failure" : throwable.getClass().getSimpleName();
+        }
+        return throwable.getMessage().trim();
     }
 
     private static String firstNonEmpty(String... values) {

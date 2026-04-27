@@ -9,6 +9,25 @@ import static org.junit.Assert.assertTrue;
 
 public final class SerialCatProbeTest {
     @Test
+    public void usbSerialDriverDiscoveryMethodsStayPublicForReflection() throws Exception {
+        assertTrue(java.lang.reflect.Modifier.isPublic(
+                CdcAcmSerialDriver.class.getMethod("getSupportedDevices").getModifiers()
+        ));
+        assertTrue(java.lang.reflect.Modifier.isPublic(
+                Cp21xxSerialDriver.class.getMethod("getSupportedDevices").getModifiers()
+        ));
+        assertTrue(java.lang.reflect.Modifier.isPublic(
+                FtdiSerialDriver.class.getMethod("getSupportedDevices").getModifiers()
+        ));
+        assertTrue(java.lang.reflect.Modifier.isPublic(
+                ProlificSerialDriver.class.getMethod("getSupportedDevices").getModifiers()
+        ));
+        assertTrue(java.lang.reflect.Modifier.isPublic(
+                Ch34xSerialDriver.class.getMethod("getSupportedDevices").getModifiers()
+        ));
+    }
+
+    @Test
     public void yaesuProbeReturnsSuccessWhenFaResponds() {
         SerialCatProbe.ProbeResult result = SerialCatProbe.probeConfiguration(
                 RigProfileCatalog.findById("yaesu-cat-serial-generic"),
@@ -136,6 +155,46 @@ public final class SerialCatProbeTest {
         assertTrue(result.message().contains("Kenwood-style CAT responded"));
     }
 
+    @Test
+    public void probeReturnsFailureWhenSessionFactoryThrowsRuntime() {
+        SerialCatProbe.ProbeResult result = SerialCatProbe.probeConfiguration(
+                RigProfileCatalog.findById("yaesu-cat-serial-generic"),
+                new RigProfileSettings(
+                        18,
+                        650,
+                        SerialKeyerTxOutput.KeyLine.RTS,
+                        null,
+                        CatProtocolFamily.YAESU_STYLE,
+                        38400,
+                        "USB0",
+                        null,
+                        CatProtocolFamily.HAMLIB_RIGCTLD,
+                        null,
+                        4532,
+                        null
+                ),
+                new SerialCatSessionFactory() {
+                    @Override
+                    public String describeAvailability(String portHint) {
+                        return "fake";
+                    }
+
+                    @Override
+                    public boolean requestPermission(String portHint, android.app.PendingIntent pendingIntent) {
+                        return true;
+                    }
+
+                    @Override
+                    public SerialCatSession openSession(String portHint, int baudRate) {
+                        throw new RuntimeException("boom");
+                    }
+                }
+        );
+
+        assertFalse(result.success());
+        assertTrue(result.message().contains("boom"));
+    }
+
     private static final class FakeSerialCatSessionFactory implements SerialCatSessionFactory {
         private final byte[] response;
 
@@ -164,6 +223,10 @@ public final class SerialCatProbeTest {
                 @Override
                 public String describeAvailability() {
                     return "fake session";
+                }
+
+                @Override
+                public void send(byte[] command, int timeoutMs) {
                 }
 
                 @Override

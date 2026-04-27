@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="432"
+    android:viewportHeight="432">
+
+    <path
+        android:fillColor="@color/cwcn_icon_teal"
+        android:pathData="M94,64h44c8.84,0 16,7.16 16,16v6c0,8.84 -7.16,16 -16,16H94c-8.84,0 -16,-7.16 -16,-16v-6c0,-8.84 7.16,-16 16,-16z" />
+    <path
+        android:fillColor="@color/cwcn_icon_teal"
+        android:pathData="M171,64h90c8.84,0 16,7.16 16,16v6c0,8.84 -7.16,16 -16,16h-90c-8.84,0 -16,-7.16 -16,-16v-6c0,-8.84 7.16,-16 16,-16z" />
+    <path
+        android:fillColor="@color/cwcn_icon_teal"
+        android:pathData="M294,64h44c8.84,0 16,7.16 16,16v6c0,8.84 -7.16,16 -16,16h-44c-8.84,0 -16,-7.16 -16,-16v-6c0,-8.84 7.16,-16 16,-16z" />
+
+    <path
+        android:pathData="M183,140c-47,0 -86,38 -86,86s39,86 86,86c22,0 42,-7 58,-21"
+        android:strokeColor="@color/cwcn_icon_brass_light"
+        android:strokeWidth="30"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <path
+        android:pathData="M228,148l24,136 33,-88 33,88 24,-136"
+        android:strokeColor="@color/cwcn_icon_teal"
+        android:strokeWidth="28"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <path
+        android:pathData="M118,342H314"
+        android:strokeColor="#22F3F7F8"
+        android:strokeWidth="12"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+</vector>

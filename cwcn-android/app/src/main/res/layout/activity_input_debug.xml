@@ -71,6 +71,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/inputControlsPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -110,6 +111,37 @@
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bootstrap_field_background"
                 android:padding="12dp" />
+
+            <TextView
+                android:id="@+id/localFileLabelText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Local Replay File"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/localFileStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:lineSpacingExtra="3dp"
+                android:padding="12dp"
+                android:text="No file selected."
+                android:textColor="@color/cwcn_body"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/selectLocalFileButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Choose Local Audio File"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/preferredToneLabelText"
@@ -174,6 +206,13 @@
                 android:textColor="@color/cwcn_body"
                 android:textSize="13sp" />
 
+            <Button
+                android:id="@+id/toggleDebugDetailsButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Show Detailed Panels" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -198,6 +237,95 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/rxFocusPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="RX Focus"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/rxFocusStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:lineSpacingExtra="3dp"
+                android:padding="12dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/rxFocusDecodeText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/rxFocusSpectrumLabelText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Spectrum Preview"
+                android:textColor="@color/cwcn_body"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <org.bi9clt.cwcn.ui.debug.AudioSpectrumView
+                android:id="@+id/rxFocusSpectrumView"
+                android:layout_width="match_parent"
+                android:layout_height="144dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:padding="8dp" />
+
+            <TextView
+                android:id="@+id/rxFocusSpectrumSummaryText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/rxFocusStartCaptureButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/action_start_capture" />
+
+                <Button
+                    android:id="@+id/rxFocusStopCaptureButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:text="@string/action_stop_capture" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/deviceStatusPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -251,6 +379,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/adifPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -302,6 +431,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/qsoPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -550,6 +680,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/interpreterPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -609,6 +740,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/decoderPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -660,6 +792,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/timingPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -702,6 +835,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/capturePanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -767,6 +901,33 @@
                 android:max="100"
                 android:progress="0" />
 
+            <TextView
+                android:id="@+id/audioSpectrumLabelText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Audio Spectrum"
+                android:textColor="@color/cwcn_body"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <org.bi9clt.cwcn.ui.debug.AudioSpectrumView
+                android:id="@+id/audioSpectrumView"
+                android:layout_width="match_parent"
+                android:layout_height="180dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:padding="8dp" />
+
+            <TextView
+                android:id="@+id/audioSpectrumSummaryText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="13sp" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -791,6 +952,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/signalPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -844,6 +1006,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/modulePanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"

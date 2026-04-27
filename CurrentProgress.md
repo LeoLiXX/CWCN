@@ -4081,3 +4081,275 @@ using the same serial session/probe seam.
 3. The next concrete implementation branch should be:
 - family-specific native PTT/CW control for `Yaesu`
 - then mirror that pattern into `Icom`
+
+## 2026-04-24 Yaesu Native Serial CAT Control Follow-Up
+
+- Continued directly from the shared native serial adapter seam instead of widening the schema again.
+- [SerialCatRigControlAdapter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatRigControlAdapter.java) now attaches the first real family-specific native serial control behavior:
+- `Yaesu-style CAT` minimal TX/PTT control first
+- current command flow:
+- `KSxxx;` for key speed
+- `KPxx;` for key pitch
+- `TX1;` to assert CAT TX
+- `TX0;` to release CAT TX
+- `Icom CI-V` and `Kenwood-style CAT` remain probe-first for now.
+- `Rig Setup` now includes a short smoke-test entry for this path:
+- `Pulse Serial CAT TX/PTT`
+- [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java)
+- [activity_rig_setup.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_rig_setup.xml)
+- This does not expose full text TX yet.
+- It is intentionally a short, safer bench step so a future `FT-710` validation can confirm:
+- serial CAT link opens
+- Yaesu CAT TX asserts
+- Yaesu CAT TX releases cleanly
+- Updated bench instructions:
+- [YaesuSerialCatBenchChecklist.md](/D:/Workshop/CWCN/YaesuSerialCatBenchChecklist.md)
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.SerialCatRigControlAdapterTest --tests org.bi9clt.cwcn.core.rig.SerialCatProbeTest assembleDebug`
+
+### Suggested next step
+
+1. When hardware is in hand, use `Generic Yaesu Serial CAT` in `Rig Setup`.
+2. Run:
+- serial probe first
+- then the short `Pulse Serial CAT TX/PTT`
+3. If that is stable on a real `FT-710`, mirror the same control-layer pattern into `Icom` next.
+
+## 2026-04-24 Icom Native CI-V Control Follow-Up
+
+- Mirrored the same “probe first, then very short control smoke test” pattern into `Icom CI-V`.
+- [SerialCatRigControlAdapter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatRigControlAdapter.java) now supports minimal `Icom CI-V` PTT control in addition to the already landed `Yaesu-style CAT` branch.
+- Current `Icom` scope is intentionally small:
+- CI-V PTT assert
+- CI-V PTT release
+- short pulse smoke test
+- It does **not** claim native Icom text-to-CW is complete.
+- `Rig Setup` now enables the existing `Pulse Serial CAT TX/PTT` step for `Icom CI-V` as well, once a `CI-V address` is present.
+- Updated:
+- [IcomCivBenchChecklist.md](/D:/Workshop/CWCN/IcomCivBenchChecklist.md)
+
+### Important note
+
+- The current Icom pulse branch uses the common CI-V `1C 00` PTT on/off framing assumption.
+- Treat that as a strong first implementation candidate, but still confirm it on real hardware before building more native Icom TX behavior on top.
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.SerialCatRigControlAdapterTest --tests org.bi9clt.cwcn.core.rig.SerialCatProbeTest assembleDebug`
+
+### Suggested next step
+
+1. When an Icom rig is available, validate:
+- transceiver-ID probe
+- short CI-V PTT pulse
+2. If that works cleanly, keep `Icom` at the same control maturity as `Yaesu`.
+3. After that, the next major decision is whether to:
+- deepen native text TX
+- or continue expanding family/model compatibility first
+
+## 2026-04-24 Developer Mode Frame
+
+- Started the first explicit split between:
+- normal user flow
+- engineering / bench / debug flow
+- Added a global developer-mode preference:
+- [DeveloperModeStore.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/app/DeveloperModeStore.java)
+- [HomeActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/home/HomeActivity.java) and [activity_home.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_home.xml) now:
+- expose a global `Developer Mode` toggle
+- keep `QSO Editor`, `Logbook`, and `Rig Setup` in the normal path
+- fold `TX Console` and `Debug Tools` into a dedicated developer section
+- [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java) and [activity_rig_setup.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_rig_setup.xml) now:
+- expose the same global mode switch
+- hide developer-only quick actions and probe/pulse controls when developer mode is off
+- keep profile selection and saved rig configuration visible in normal mode
+- This is intentionally only the first frame.
+- It does not redesign the full end-user operating UX yet.
+- What it does do is stop forcing raw engineering entry points into the default path.
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+
+### Suggested next step
+
+1. Keep using this as the first boundary:
+- normal user path
+- developer bench path
+2. After Yaesu real-device feedback arrives, decide which current developer controls deserve promotion into the normal rig flow.
+
+## 2026-04-24 Rig Setup User-Flow Pass
+
+- Continued the UI split by pushing `Rig Setup` one step closer to a real user-facing connection flow.
+- [activity_rig_setup.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_rig_setup.xml) now includes a dedicated `Connection Guide` panel.
+- [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java) now renders a profile-aware guide that explains:
+- what the selected path is for
+- what transport it uses
+- what the next normal setup step is
+- which tools are still hidden behind developer mode
+- Also tightened the normal/developer boundary inside `Rig Setup`:
+- `Back Home` stays visible in normal mode
+- developer quick actions stay behind developer mode
+- protocol-family spinners and serial port hint are now treated as advanced fields and are folded away in normal mode
+- Meanwhile the normal path still keeps the practical fields that a real setup likely needs:
+- saved rig path
+- default CW values
+- baud
+- host/port
+- CI-V address when applicable
+- Home wording was nudged in the same direction:
+- [activity_home.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_home.xml) now presents the rig entry more explicitly as `Connect Radio`.
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+
+### Suggested next step
+
+1. Hold this structure through the first Yaesu hardware pass.
+2. After that feedback, decide whether the next user-flow step should be:
+- a simplified `Connect Radio` wizard
+- or a first real non-debug operating screen
+
+## 2026-04-24 First Formal Operate Screen
+
+- Added the first explicit non-debug user-facing operating screen:
+- [OperateActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/operate/OperateActivity.java)
+- [activity_operate.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_operate.xml)
+- This screen is intentionally simple and practical:
+- show current operating draft status
+- show the pinned rig path / radio-path summary
+- show the next user-facing action
+- provide direct normal-flow buttons for:
+- `Connect Radio`
+- `Open QSO Editor`
+- `Open Logbook`
+- keep `TX Console` and `Debug Tools` only as developer support when developer mode is enabled
+- [HomeActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/home/HomeActivity.java) and [activity_home.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_home.xml) now expose this as:
+- `Start Operating`
+- [AndroidManifest.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/AndroidManifest.xml) now registers the new activity.
+
+### Why this matters
+
+- You now have a real user screen to test on-device without giving up the existing developer tools.
+- This is the first place where we can validate:
+- whether the app reads clearly in a normal user flow
+- whether the current rig-connection state is understandable outside debug pages
+- whether the previous connection work feels coherent when entered from a formal screen
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+
+### Suggested next step
+
+1. Use this `Operate` screen together with tonight's Yaesu hardware pass.
+2. Note which information still feels too technical or too hidden.
+3. After that, refine either:
+- the `Operate` screen
+- or the `Connect Radio` path
+based on real-device feedback instead of guesswork.
+
+## 2026-04-24 Splash Screen Polish
+
+- Promoted the new launcher entry from a plain temporary page into a more formal splash experience.
+- [SplashActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/splash/SplashActivity.java) now:
+- shows the current build channel directly
+- cancels its delayed auto-navigation cleanly
+- avoids the earlier fragile `onPause -> navigating` shortcut
+- stages a small entrance animation for the brand card, metadata block, and CTA
+- [activity_splash.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/layout/activity_splash.xml) was redesigned into a more intentional branded entry screen with:
+- layered background glow
+- centered branded card
+- separate build metadata block
+- full-width primary entry button
+- Added dedicated splash resources:
+- [splash_window_background.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/drawable/splash_window_background.xml)
+- [splash_panel_background.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/drawable/splash_panel_background.xml)
+- [splash_orb_primary.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/drawable/splash_orb_primary.xml)
+- [splash_orb_secondary.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/drawable/splash_orb_secondary.xml)
+- Added a dedicated splash theme through:
+- [themes.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/values/themes.xml)
+- [themes.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/values-night/themes.xml)
+- [themes.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/res/values-v31/themes.xml)
+- [AndroidManifest.xml](/D:/Workshop/CWCN/cwcn-android/app/src/main/AndroidManifest.xml) now applies that theme only to `SplashActivity`, which should reduce launcher flash and make app start feel more deliberate.
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+
+### Suggested next step
+
+1. Keep this entrance stable for tonight's Yaesu bench pass.
+2. Collect real-device feedback on whether the new user-facing path feels coherent:
+- Splash
+- Home
+- Operate
+- Rig Setup
+3. After that feedback, decide whether the next UX polish should focus on:
+- `Operate`
+- `Rig Setup`
+- or a first lighter-weight production TX entry
+
+## 2026-04-25 FT-710 Native USB Serial Widening
+
+- Real-device bench feedback showed a strong mismatch:
+- the same phone + cable + `FT-710` path could already work in `FT8CN`
+- but CWCN native serial CAT still reported `No CDC/ACM serial CAT device is attached.`
+- That narrowed the issue away from:
+- OTG
+- power-only cable
+- total radio-side USB failure
+- and toward CWCN's own Android USB serial detection being too narrow.
+- [AndroidUsbSerialCatSessionFactory.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/AndroidUsbSerialCatSessionFactory.java) is no longer limited to the earlier hard-coded `CDC/ACM only` path.
+- It now:
+- probes `CP210x` devices first
+- then falls back to `CDC/ACM`
+- keeps the existing permission / open-session seam used by native serial CAT probe and PTT pulse actions
+- Added a minimal internal USB serial support layer for this purpose:
+- [UsbSerialMiniSupport.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/UsbSerialMiniSupport.java)
+- [UsbSerialMiniProbe.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/UsbSerialMiniProbe.java)
+- [UsbSerialMiniDrivers.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/UsbSerialMiniDrivers.java)
+- [AndroidUsbProbedSerialCatSession.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/AndroidUsbProbedSerialCatSession.java)
+- This round is intentionally focused on the `FT-710` clue first:
+- `CP2105`
+- plus keeping `CDC/ACM` fallback
+- rather than importing every FT8CN driver at once.
+- Practical expected change on the next phone bench:
+- CWCN should now be able to see and request permission for more Yaesu/bridge USB serial cases that previously looked like "no CDC/ACM device".
+
+### Verification
+
+- `.\gradlew.bat assembleDebug`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.SerialCatProbeTest --tests org.bi9clt.cwcn.core.rig.SerialCatRigControlAdapterTest`
+
+### Suggested next step
+
+1. Install the new `cwcn-debug.apk`.
+2. Re-run the same `Generic Yaesu Serial CAT` bench path on the same phone and cable.
+3. Watch whether the status now changes from:
+- `No CDC/ACM serial CAT device is attached`
+- to:
+- permission available / permission missing
+- probe opened but no readable response
+- or an actual Yaesu reply
+
+## 2026-04-25 FT-710 Permission Crash Hardening
+
+- After widening native USB serial detection for `CP210x`, real-device feedback exposed a second issue:
+- pressing `Request Serial CAT USB Permission` could still make the app become unresponsive / repeatedly stop
+- The immediate goal of this round was not deeper CAT behavior yet, but crash-proofing the permission/probe path first
+- [UsbSerialMiniProbe.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/UsbSerialMiniProbe.java) now instantiates the mini drivers directly instead of relying on the earlier reflective constructor path
+- [AndroidUsbSerialCatSessionFactory.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/AndroidUsbSerialCatSessionFactory.java) now converts probe/open runtime failures into safe availability text or `IOException` results and logs those failures for later diagnosis
+- [RigSetupActivity.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/ui/rig/RigSetupActivity.java) now hardens all serial-CAT worker actions so failures should land in the status area instead of killing the whole app
+- [SerialCatProbe.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatProbe.java) and [SerialCatRigControlAdapter.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/rig/SerialCatRigControlAdapter.java) now also fall back to readable failure messages when the session layer throws runtime exceptions
+- Added regression coverage in:
+- [SerialCatProbeTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/rig/SerialCatProbeTest.java)
+- [SerialCatRigControlAdapterTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/rig/SerialCatRigControlAdapterTest.java)
+
+### Verification
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.rig.SerialCatProbeTest --tests org.bi9clt.cwcn.core.rig.SerialCatRigControlAdapterTest assembleDebug`
+- Fresh APK built:
+- [cwcn-debug.apk](/D:/Workshop/CWCN/cwcn-android/app/build/outputs/apk/debug/cwcn-debug.apk)

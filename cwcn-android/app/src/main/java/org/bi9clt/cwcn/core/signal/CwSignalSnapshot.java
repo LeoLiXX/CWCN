@@ -29,8 +29,31 @@ public final class CwSignalSnapshot {
     private final int maxConsecutiveToneActiveUnlockedFrames;
     private final int pendingRetuneCandidateFrequencyHz;
     private final int pendingRetuneCandidateStableScans;
+    private final int preferredWindowWinnerFrequencyHz;
+    private final int wideScanWinnerFrequencyHz;
+    private final int acquisitionWinnerFrequencyHz;
+    private final int finalAdoptedFrequencyHz;
+    private final double preferredWindowWinnerToneRms;
+    private final double wideScanWinnerToneRms;
+    private final double acquisitionWinnerToneRms;
+    private final double finalAdoptedToneRms;
+    private final double preferredWindowWinnerSelectionScore;
+    private final double wideScanWinnerSelectionScore;
+    private final double acquisitionWinnerSelectionScore;
+    private final double finalAdoptedSelectionScore;
+    private final boolean preferredWindowWinnerLocked;
+    private final boolean wideScanWinnerLocked;
+    private final boolean acquisitionWinnerLocked;
+    private final boolean finalAdoptedLocked;
+    private final String acquisitionWinnerSource;
+    private final String finalAdoptedSource;
     private final int totalToneOnEvents;
     private final int totalToneOffEvents;
+    private final int frameGapResetCount;
+    private final long lastFrameGapMs;
+    private final long lastFrameGapResetThresholdMs;
+    private final long worstFrameGapMs;
+    private final long lastFrameGapResetAtMs;
     private final CwToneEvent lastEvent;
 
     public CwSignalSnapshot(
@@ -62,8 +85,31 @@ public final class CwSignalSnapshot {
             int maxConsecutiveToneActiveUnlockedFrames,
             int pendingRetuneCandidateFrequencyHz,
             int pendingRetuneCandidateStableScans,
+            int preferredWindowWinnerFrequencyHz,
+            int wideScanWinnerFrequencyHz,
+            int acquisitionWinnerFrequencyHz,
+            int finalAdoptedFrequencyHz,
+            double preferredWindowWinnerToneRms,
+            double wideScanWinnerToneRms,
+            double acquisitionWinnerToneRms,
+            double finalAdoptedToneRms,
+            double preferredWindowWinnerSelectionScore,
+            double wideScanWinnerSelectionScore,
+            double acquisitionWinnerSelectionScore,
+            double finalAdoptedSelectionScore,
+            boolean preferredWindowWinnerLocked,
+            boolean wideScanWinnerLocked,
+            boolean acquisitionWinnerLocked,
+            boolean finalAdoptedLocked,
+            String acquisitionWinnerSource,
+            String finalAdoptedSource,
             int totalToneOnEvents,
             int totalToneOffEvents,
+            int frameGapResetCount,
+            long lastFrameGapMs,
+            long lastFrameGapResetThresholdMs,
+            long worstFrameGapMs,
+            long lastFrameGapResetAtMs,
             CwToneEvent lastEvent
     ) {
         this.recentHistoryFrameCount = recentHistoryFrameCount;
@@ -98,8 +144,31 @@ public final class CwSignalSnapshot {
         this.maxConsecutiveToneActiveUnlockedFrames = maxConsecutiveToneActiveUnlockedFrames;
         this.pendingRetuneCandidateFrequencyHz = pendingRetuneCandidateFrequencyHz;
         this.pendingRetuneCandidateStableScans = pendingRetuneCandidateStableScans;
+        this.preferredWindowWinnerFrequencyHz = preferredWindowWinnerFrequencyHz;
+        this.wideScanWinnerFrequencyHz = wideScanWinnerFrequencyHz;
+        this.acquisitionWinnerFrequencyHz = acquisitionWinnerFrequencyHz;
+        this.finalAdoptedFrequencyHz = finalAdoptedFrequencyHz;
+        this.preferredWindowWinnerToneRms = preferredWindowWinnerToneRms;
+        this.wideScanWinnerToneRms = wideScanWinnerToneRms;
+        this.acquisitionWinnerToneRms = acquisitionWinnerToneRms;
+        this.finalAdoptedToneRms = finalAdoptedToneRms;
+        this.preferredWindowWinnerSelectionScore = preferredWindowWinnerSelectionScore;
+        this.wideScanWinnerSelectionScore = wideScanWinnerSelectionScore;
+        this.acquisitionWinnerSelectionScore = acquisitionWinnerSelectionScore;
+        this.finalAdoptedSelectionScore = finalAdoptedSelectionScore;
+        this.preferredWindowWinnerLocked = preferredWindowWinnerLocked;
+        this.wideScanWinnerLocked = wideScanWinnerLocked;
+        this.acquisitionWinnerLocked = acquisitionWinnerLocked;
+        this.finalAdoptedLocked = finalAdoptedLocked;
+        this.acquisitionWinnerSource = acquisitionWinnerSource == null ? "NONE" : acquisitionWinnerSource;
+        this.finalAdoptedSource = finalAdoptedSource == null ? "NONE" : finalAdoptedSource;
         this.totalToneOnEvents = totalToneOnEvents;
         this.totalToneOffEvents = totalToneOffEvents;
+        this.frameGapResetCount = frameGapResetCount;
+        this.lastFrameGapMs = lastFrameGapMs;
+        this.lastFrameGapResetThresholdMs = lastFrameGapResetThresholdMs;
+        this.worstFrameGapMs = worstFrameGapMs;
+        this.lastFrameGapResetAtMs = lastFrameGapResetAtMs;
         this.lastEvent = lastEvent;
     }
 
@@ -215,6 +284,78 @@ public final class CwSignalSnapshot {
         return pendingRetuneCandidateStableScans;
     }
 
+    public int preferredWindowWinnerFrequencyHz() {
+        return preferredWindowWinnerFrequencyHz;
+    }
+
+    public int wideScanWinnerFrequencyHz() {
+        return wideScanWinnerFrequencyHz;
+    }
+
+    public int acquisitionWinnerFrequencyHz() {
+        return acquisitionWinnerFrequencyHz;
+    }
+
+    public int finalAdoptedFrequencyHz() {
+        return finalAdoptedFrequencyHz;
+    }
+
+    public double preferredWindowWinnerToneRms() {
+        return preferredWindowWinnerToneRms;
+    }
+
+    public double wideScanWinnerToneRms() {
+        return wideScanWinnerToneRms;
+    }
+
+    public double acquisitionWinnerToneRms() {
+        return acquisitionWinnerToneRms;
+    }
+
+    public double finalAdoptedToneRms() {
+        return finalAdoptedToneRms;
+    }
+
+    public double preferredWindowWinnerSelectionScore() {
+        return preferredWindowWinnerSelectionScore;
+    }
+
+    public double wideScanWinnerSelectionScore() {
+        return wideScanWinnerSelectionScore;
+    }
+
+    public double acquisitionWinnerSelectionScore() {
+        return acquisitionWinnerSelectionScore;
+    }
+
+    public double finalAdoptedSelectionScore() {
+        return finalAdoptedSelectionScore;
+    }
+
+    public boolean preferredWindowWinnerLocked() {
+        return preferredWindowWinnerLocked;
+    }
+
+    public boolean wideScanWinnerLocked() {
+        return wideScanWinnerLocked;
+    }
+
+    public boolean acquisitionWinnerLocked() {
+        return acquisitionWinnerLocked;
+    }
+
+    public boolean finalAdoptedLocked() {
+        return finalAdoptedLocked;
+    }
+
+    public String acquisitionWinnerSource() {
+        return acquisitionWinnerSource;
+    }
+
+    public String finalAdoptedSource() {
+        return finalAdoptedSource;
+    }
+
     public double lockedFrameRatio() {
         if (processedFrameCount <= 0) {
             return 0.0d;
@@ -283,6 +424,26 @@ public final class CwSignalSnapshot {
 
     public int totalToneOffEvents() {
         return totalToneOffEvents;
+    }
+
+    public int frameGapResetCount() {
+        return frameGapResetCount;
+    }
+
+    public long lastFrameGapMs() {
+        return lastFrameGapMs;
+    }
+
+    public long lastFrameGapResetThresholdMs() {
+        return lastFrameGapResetThresholdMs;
+    }
+
+    public long worstFrameGapMs() {
+        return worstFrameGapMs;
+    }
+
+    public long lastFrameGapResetAtMs() {
+        return lastFrameGapResetAtMs;
     }
 
     public CwToneEvent lastEvent() {

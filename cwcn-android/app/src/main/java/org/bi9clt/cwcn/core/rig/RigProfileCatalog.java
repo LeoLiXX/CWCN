@@ -111,7 +111,7 @@ public final class RigProfileCatalog {
                     "FT-series and compatible serial CAT rigs",
                     RigTransport.TransportKind.USB_SERIAL,
                     "generic-cat",
-                    RigSupportLevel.PLANNED,
+                    RigSupportLevel.BENCH_READY,
                     EnumSet.of(
                             RigCapability.PTT_CONTROL,
                             RigCapability.SERIAL_CAT,
@@ -221,7 +221,7 @@ public final class RigProfileCatalog {
                     "CI-V capable serial rigs and bridges",
                     RigTransport.TransportKind.USB_SERIAL,
                     "generic-cat",
-                    RigSupportLevel.PLANNED,
+                    RigSupportLevel.BENCH_READY,
                     EnumSet.of(
                             RigCapability.PTT_CONTROL,
                             RigCapability.SERIAL_CAT,
@@ -257,7 +257,7 @@ public final class RigProfileCatalog {
                     "TS-series and compatible serial CAT rigs",
                     RigTransport.TransportKind.USB_SERIAL,
                     "generic-cat",
-                    RigSupportLevel.PLANNED,
+                    RigSupportLevel.BENCH_READY,
                     EnumSet.of(
                             RigCapability.PTT_CONTROL,
                             RigCapability.SERIAL_CAT,

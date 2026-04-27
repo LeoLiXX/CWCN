@@ -24,6 +24,7 @@ public final class CwTxRunnerTest {
         assertEquals(plan.totalDurationMs(), snapshots.get(snapshots.size() - 1).elapsedMs());
         assertTrue(audioOutput.events.contains("tone:700:60"));
         assertTrue(audioOutput.events.contains("silence:180"));
+        assertTrue(audioOutput.events.contains("finish"));
     }
 
     @Test
@@ -55,6 +56,11 @@ public final class CwTxRunnerTest {
         @Override
         public void playSilence(int durationMs) {
             events.add("silence:" + durationMs);
+        }
+
+        @Override
+        public void finish() {
+            events.add("finish");
         }
 
         @Override

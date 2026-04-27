@@ -145,7 +145,20 @@ public final class CwFixtureEvaluator {
                 signalSnapshot == null ? 0.0d : signalSnapshot.toneActiveUnlockedFrameRatio(),
                 signalSnapshot == null ? 0 : signalSnapshot.maxConsecutiveToneActiveUnlockedFrames(),
                 signalSnapshot == null ? 0 : signalSnapshot.preferredToneFrequencyHz(),
-                signalSnapshot == null ? 0 : signalSnapshot.targetToneFrequencyHz()
+                signalSnapshot == null ? 0 : signalSnapshot.targetToneFrequencyHz(),
+                signalSnapshot == null ? 0.0d : signalSnapshot.lastRmsAmplitude(),
+                signalSnapshot == null ? 0.0d : signalSnapshot.lastToneRmsAmplitude(),
+                signalSnapshot == null ? 0.0d : signalSnapshot.lastWidebandResidualRmsAmplitude(),
+                signalSnapshot == null ? 0.0d : signalSnapshot.toneDominanceRatio(),
+                signalSnapshot == null ? 0.0d : signalSnapshot.narrowbandIsolationRatio(),
+                signalSnapshot == null ? 0 : signalSnapshot.currentThreshold(),
+                signalSnapshot == null ? 0 : signalSnapshot.releaseThreshold(),
+                signalSnapshot == null ? 0 : signalSnapshot.noiseFloorEstimate(),
+                signalSnapshot == null ? 0 : signalSnapshot.signalFloorEstimate(),
+                signalSnapshot == null ? 0 : signalSnapshot.totalToneOnEvents(),
+                signalSnapshot == null ? 0 : signalSnapshot.totalToneOffEvents(),
+                signalSnapshot == null ? 0 : signalSnapshot.frameGapResetCount(),
+                signalSnapshot == null ? 0L : signalSnapshot.worstFrameGapMs()
         );
     }
 

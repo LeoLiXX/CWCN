@@ -11,6 +11,11 @@ public enum InputSourceOption {
             true,
             "Capture live microphone audio through AudioRecord for on-device decoding."
     ),
+    LOCAL_FILE_REPLAY(
+            "Local File Replay",
+            true,
+            "Replay a phone-local WAV or compatible M4A/AAC file through the same decode chain without live microphone noise."
+    ),
     BLUETOOTH_LINK(
             "Bluetooth Link",
             false,

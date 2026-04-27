@@ -19,6 +19,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
     private static final int CHANNEL_COUNT = 1;
     private static final int FRAME_SIZE_SAMPLES = 256;
     private static final int PCM_16_MAX = 32767;
+    private static final int CLIPPING_SAMPLE_THRESHOLD = 32700;
     private static final Map<Character, String> MORSE_MAP = buildMorseMap();
 
     private volatile Callback callback;
@@ -134,17 +135,21 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
 
     private AudioFrame buildFrame(short[] samples, long startedAtMs, int sampleOffset) {
         int peak = 0;
+        int clippedSampleCount = 0;
         double sumSquares = 0.0d;
         for (short sample : samples) {
             int absolute = Math.abs((int) sample);
             if (absolute > peak) {
                 peak = absolute;
             }
+            if (absolute >= CLIPPING_SAMPLE_THRESHOLD) {
+                clippedSampleCount += 1;
+            }
             sumSquares += (double) sample * sample;
         }
         double rms = samples.length == 0 ? 0.0d : Math.sqrt(sumSquares / samples.length);
         long capturedAtMs = startedAtMs + Math.round(sampleOffset * 1000.0d / SAMPLE_RATE_HZ);
-        return new AudioFrame(samples, SAMPLE_RATE_HZ, CHANNEL_COUNT, peak, rms, capturedAtMs);
+        return new AudioFrame(samples, SAMPLE_RATE_HZ, CHANNEL_COUNT, peak, rms, clippedSampleCount, capturedAtMs);
     }
 
     private short[] renderWaveform(CwFixtureScenario scenario) {
@@ -161,7 +166,13 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         int absoluteIndex = 0;
         for (Segment segment : segments) {
             for (int i = 0; i < segment.sampleCount; i++) {
-                double toneFrequencyHz = instantaneousToneFrequencyHz(scenario, absoluteIndex, totalSamples);
+                double toneFrequencyHz = instantaneousToneFrequencyHz(
+                        scenario,
+                        segment,
+                        i,
+                        absoluteIndex,
+                        totalSamples
+                );
                 double tonePhaseStep = 2.0d * Math.PI * toneFrequencyHz / SAMPLE_RATE_HZ;
                 double toneComponent = 0.0d;
                 if (segment.toneOn) {
@@ -306,7 +317,13 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
                             symbol == '-' ? dotMs * 3.0d : dotMs,
                             symbol == '.'
                     );
-                    segments.add(new Segment(true, toneSamples));
+                    segments.add(new Segment(
+                            true,
+                            toneSamples,
+                            partTimingProfile != null && partTimingProfile.hasToneOverride(),
+                            effectiveToneFrequencyHz(scenario, partTimingProfile),
+                            effectiveEndToneFrequencyHz(scenario, partTimingProfile)
+                    ));
                     if (symbolIndex < morse.length() - 1) {
                         appendGap(
                                 segments,
@@ -455,7 +472,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
                 return;
             }
         }
-        segments.add(new Segment(false, sampleCount));
+        segments.add(new Segment(false, sampleCount, false, 0.0d, 0.0d));
     }
 
     private int adjustToneSamples(
@@ -521,7 +538,47 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         return 1.0d - (scenario.qsbDepth() * fade);
     }
 
-    private double instantaneousToneFrequencyHz(CwFixtureScenario scenario, int sampleIndex, int totalSamples) {
+    private double effectiveToneFrequencyHz(
+            CwFixtureScenario scenario,
+            PartTimingProfile partTimingProfile
+    ) {
+        if (partTimingProfile != null && partTimingProfile.toneFrequencyOverrideHz() != null) {
+            return partTimingProfile.toneFrequencyOverrideHz();
+        }
+        return scenario.toneFrequencyHz();
+    }
+
+    private double effectiveEndToneFrequencyHz(
+            CwFixtureScenario scenario,
+            PartTimingProfile partTimingProfile
+    ) {
+        if (partTimingProfile != null && partTimingProfile.endToneFrequencyOverrideHz() != null) {
+            return partTimingProfile.endToneFrequencyOverrideHz();
+        }
+        return scenario.toneFrequencyHz();
+    }
+
+    private double instantaneousToneFrequencyHz(
+            CwFixtureScenario scenario,
+            Segment segment,
+            int segmentSampleIndex,
+            int sampleIndex,
+            int totalSamples
+    ) {
+        if (segment != null && segment.hasToneFrequencyOverride()) {
+            if (Math.abs(segment.endToneFrequencyHz - segment.startToneFrequencyHz) < 0.0001d || segment.sampleCount <= 1) {
+                return segment.startToneFrequencyHz;
+            }
+            double segmentProgress = Math.max(
+                    0.0d,
+                    Math.min(1.0d, segmentSampleIndex / (double) (segment.sampleCount - 1))
+            );
+            return Math.max(
+                    1.0d,
+                    segment.startToneFrequencyHz
+                            + ((segment.endToneFrequencyHz - segment.startToneFrequencyHz) * segmentProgress)
+            );
+        }
         if (Math.abs(scenario.toneDriftHz()) < 0.0001d || totalSamples <= 1) {
             return scenario.toneFrequencyHz();
         }
@@ -735,10 +792,26 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
     private static final class Segment {
         private final boolean toneOn;
         private int sampleCount;
+        private final boolean useToneFrequencyOverride;
+        private final double startToneFrequencyHz;
+        private final double endToneFrequencyHz;
 
-        private Segment(boolean toneOn, int sampleCount) {
+        private Segment(
+                boolean toneOn,
+                int sampleCount,
+                boolean useToneFrequencyOverride,
+                double startToneFrequencyHz,
+                double endToneFrequencyHz
+        ) {
             this.toneOn = toneOn;
             this.sampleCount = sampleCount;
+            this.useToneFrequencyOverride = useToneFrequencyOverride;
+            this.startToneFrequencyHz = startToneFrequencyHz;
+            this.endToneFrequencyHz = endToneFrequencyHz;
+        }
+
+        private boolean hasToneFrequencyOverride() {
+            return toneOn && useToneFrequencyOverride && startToneFrequencyHz > 0.0d;
         }
     }
 

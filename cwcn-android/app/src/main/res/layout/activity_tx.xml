@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/txScrollView"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/cwcn_screen_background">
+    android:background="@color/cwcn_screen_background"
+    android:descendantFocusability="beforeDescendants"
+    android:focusableInTouchMode="true">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -57,6 +60,17 @@
                 android:background="@drawable/bootstrap_field_background"
                 android:padding="12dp" />
 
+            <TextView
+                android:id="@+id/pinnedRigSummaryText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:lineSpacingExtra="3dp"
+                android:padding="12dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="13sp" />
+
             <LinearLayout
                 android:id="@+id/usbRoutePanel"
                 android:layout_width="match_parent"
@@ -106,6 +120,30 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:text="Refresh USB Devices" />
+
+                <LinearLayout
+                    android:id="@+id/mockUsbScenarioPanel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Mock bench scenario"
+                        android:textColor="@color/cwcn_subtitle"
+                        android:textSize="12sp" />
+
+                    <Spinner
+                        android:id="@+id/mockUsbScenarioSpinner"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:padding="12dp" />
+                </LinearLayout>
 
                 <TextView
                     android:layout_width="match_parent"
@@ -222,6 +260,7 @@
                     android:layout_weight="1"
                     android:background="@drawable/bootstrap_field_background"
                     android:hint="WPM"
+                    android:imeOptions="actionDone"
                     android:inputType="number"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -236,6 +275,7 @@
                     android:layout_weight="1"
                     android:background="@drawable/bootstrap_field_background"
                     android:hint="Tone Hz"
+                    android:imeOptions="actionDone"
                     android:inputType="number"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -367,6 +407,76 @@
                 android:layout_marginTop="10dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_subtitle"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Bench Log"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/copyBenchReportButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="12dp"
+                    android:text="Copy Report" />
+
+                <Button
+                    android:id="@+id/clearBenchLogButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Clear Log" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Compact session timeline for USB permission, route changes, diagnostic stage shifts, and TX outcomes during bench validation."
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/benchSummaryText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:lineSpacingExtra="3dp"
+                android:padding="12dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/benchLogText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="3dp"
+                android:padding="12dp"
+                android:textColor="@color/cwcn_body"
+                android:textIsSelectable="true"
                 android:textSize="13sp" />
         </LinearLayout>
 

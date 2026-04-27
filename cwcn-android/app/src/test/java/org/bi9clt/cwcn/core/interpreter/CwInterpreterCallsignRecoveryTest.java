@@ -586,6 +586,47 @@ public final class CwInterpreterCallsignRecoveryTest {
         assertTrue(snapshot.phraseHints().contains("73 closing"));
     }
 
+    @Test
+    public void repeatedSelfCallDoesNotLeavePartialRepeatAsPrimaryCallsign() {
+        CwInterpreterSnapshot snapshot = runSequence("CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K");
+
+        assertEquals("BI9CLT", snapshot.primaryCallsignCandidate());
+        assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
+        assertFalse(snapshot.callsignCandidates().contains("BI9CLTBI9C"));
+    }
+
+    @Test
+    public void missingWordGapBetweenRepeatedCallsignsIsRecoveredInNormalizedText() {
+        CwInterpreterSnapshot snapshot = runSequence("CQ CQ CQ DE BI9CLTBI9CLT PSE K");
+
+        assertTrue(snapshot.normalizedText().contains("CQ CQ CQ DE BI9CLT BI9CLT PLEASE K"));
+        assertEquals("BI9CLT", snapshot.primaryCallsignCandidate());
+        assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
+        assertFalse(snapshot.callsignCandidates().contains("BI9CLTBI9CLT"));
+    }
+
+    @Test
+    public void partialRepeatTailAfterCleanCallsignIsSuppressed() {
+        CwInterpreterSnapshot snapshot = runSequence("CQ CQ CQ DE BI9CLTBI9C PSE K");
+
+        assertEquals("BI9CLT", snapshot.primaryCallsignCandidate());
+        assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
+        assertFalse(snapshot.callsignCandidates().contains("BI9CLTBI9C"));
+    }
+
+    @Test
+    public void repeatedSelfCallMajorityBeatsNearMissAndPollutedCandidates() {
+        CwInterpreterSnapshot snapshot = runSequence(
+                "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K "
+                        + "NQ CQ CQ DE BI9CLT BI9CLT GI9CLT PSE K "
+                        + "CQ CQ CQ DE BI9GLTBI9C BI9CLT BI9CLA PSE K"
+        );
+
+        assertEquals("BI9CLT", snapshot.primaryCallsignCandidate());
+        assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
+        assertFalse(snapshot.callsignCandidates().contains("BI9GLTBI9C"));
+    }
+
     private CwInterpreterSnapshot runSequence(String... messages) {
         CwInterpreter interpreter = new CwInterpreter();
         long timestampMs = 1000L;

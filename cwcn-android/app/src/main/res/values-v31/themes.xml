@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.CWCN.Splash" parent="Theme.CWCN">
+        <item name="android:windowBackground">@drawable/splash_window_background</item>
+        <item name="android:windowSplashScreenBackground">@color/cwcn_screen_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+    </style>
+</resources>

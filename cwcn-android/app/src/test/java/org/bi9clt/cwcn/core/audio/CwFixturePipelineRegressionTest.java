@@ -56,6 +56,56 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
+    public void weakBroadbandNoiseFixtureKeepsEnoughLockForFieldTesting() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("weak_broadband_noise_report");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 35);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 3000.0d);
+        assertTrue(summary, bundle.signalSnapshot.peakNarrowbandIsolationRatio() >= 0.50d);
+        assertTrue(summary, bundle.signalSnapshot.lockedFrameRatio() >= 0.12d);
+        assertTrue(summary, result.textTokenRecall() >= 0.35d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+    }
+
+    @Test
+    public void nearFrequencyNarrowbandNoiseFixtureAvoidsWrongToneLock() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("near_frequency_narrowband_noise_report");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertNotEquals(summary, "WRONG", result.frontEndQualityCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 35);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 4000.0d);
+        assertTrue(summary, result.textTokenRecall() >= 0.40d);
+        assertTrue(summary, result.qsoSemanticScore() >= 0.50d);
+    }
+
+    @Test
+    public void agcPumpingVolumeFixtureKeepsThresholdRecoveryObservable() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("agc_pumping_volume_report");
+        CwFixtureEvaluationResult result = bundle.result;
+
+        assertNotNull(result);
+        String summary = renderDebugSummary(result, bundle);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 30);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 3000.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 8);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 8);
+        assertTrue(summary, result.textTokenRecall() >= 0.30d);
+        assertTrue(summary, result.qsoSemanticScore() >= 0.50d);
+    }
+
+    @Test
     public void nearbyInterfererFixtureNowEndsWithHealthyFrontEndGrade() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("nearby_interferer_directed_report");
         CwFixtureEvaluationResult result = bundle.result;
@@ -87,7 +137,7 @@ public final class CwFixturePipelineRegressionTest {
     }
 
     @Test
-    public void driftingNearbyInterfererFixtureStillTracksTheTargetTone() {
+    public void driftingNearbyInterfererFixtureCanDecodeWhileEndingOnOffTargetCarrier() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("drifting_nearby_interferer_directed_report");
         CwFixtureEvaluationResult result = bundle.result;
 
@@ -95,10 +145,11 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 35);
+        assertEquals(summary, "WRONG", result.frontEndQualityCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) >= 40);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 4000.0d);
-        assertTrue(summary, result.textTokenRecall() >= 0.20d);
-        assertTrue(summary, result.qsoSemanticScore() >= 0.50d);
+        assertTrue(summary, result.textTokenRecall() >= 0.75d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
     }
 
     @Test
