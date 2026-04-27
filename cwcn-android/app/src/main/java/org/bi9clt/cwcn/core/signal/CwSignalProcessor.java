@@ -35,7 +35,6 @@ public final class CwSignalProcessor {
     private static final double LOCKED_SIGNAL_BLEND = 0.82d;
     private static final double UNLOCKED_SIGNAL_BLEND_FLOOR = 0.18d;
     private static final double UNLOCKED_TONE_GAIN = 1.18d;
-    private static final double LOCKED_TARGET_SWITCH_MARGIN = 1.12d;
     private static final int MIN_TRACKED_TONE_RMS = 120;
     private static final int MIN_THRESHOLD = 220;
     private static final int BASE_MARGIN = 140;
@@ -433,10 +432,9 @@ public final class CwSignalProcessor {
         signalFloorEstimate = Math.max(0.0d, noiseFloorEstimate);
         consecutiveLockedFrames = 0;
         consecutiveToneActiveUnlockedFrames = 0;
-        pendingRetuneCandidateFrequencyHz = preferredToneFrequencyHz;
+        pendingRetuneCandidateFrequencyHz = targetToneFrequencyHz;
         pendingRetuneCandidateStableScans = 0;
         lockLossFrames = 0;
-        targetToneFrequencyHz = preferredToneFrequencyHz;
     }
 
     private long estimateFrameDurationMs(AudioFrame frame) {
@@ -720,8 +718,7 @@ public final class CwSignalProcessor {
         }
         if (!targetToneLocked && !toneActive && !isTrackedToneMemoryActive(frame.capturedAtMs())) {
             trackingState = TrackingState.SEARCH;
-            targetToneFrequencyHz = preferredToneFrequencyHz;
-            pendingRetuneCandidateFrequencyHz = preferredToneFrequencyHz;
+            pendingRetuneCandidateFrequencyHz = targetToneFrequencyHz;
             pendingRetuneCandidateStableScans = 0;
             lockLossFrames = 0;
             rememberFinalAdoptedEstimate(null, AcquisitionWinnerSource.SEARCH_FALLBACK);
@@ -780,7 +777,7 @@ public final class CwSignalProcessor {
                 trackingState = TrackingState.CANDIDATE;
                 return;
             }
-            clearTrackingTarget(false);
+            clearTrackingTarget();
             return;
         }
 
@@ -804,12 +801,12 @@ public final class CwSignalProcessor {
             rememberFinalAdoptedEstimate(null, AcquisitionWinnerSource.SEARCH_FALLBACK);
             return;
         }
-        clearTrackingTarget(false);
+        clearTrackingTarget();
     }
 
     private void adoptCandidate(ToneFrequencyEstimate estimate) {
         if (estimate == null) {
-            clearTrackingTarget(false);
+            clearTrackingTarget();
             return;
         }
         targetToneFrequencyHz = estimate.frequencyHz;
@@ -824,15 +821,10 @@ public final class CwSignalProcessor {
         }
     }
 
-    private void clearTrackingTarget(boolean recenterToPreferred) {
+    private void clearTrackingTarget() {
         trackingState = TrackingState.SEARCH;
         targetToneLocked = false;
-        if (recenterToPreferred) {
-            targetToneFrequencyHz = preferredToneFrequencyHz;
-            pendingRetuneCandidateFrequencyHz = preferredToneFrequencyHz;
-        } else {
-            pendingRetuneCandidateFrequencyHz = targetToneFrequencyHz;
-        }
+        pendingRetuneCandidateFrequencyHz = targetToneFrequencyHz;
         pendingRetuneCandidateStableScans = 0;
         lockLossFrames = 0;
         rememberFinalAdoptedEstimate(null, AcquisitionWinnerSource.SEARCH_FALLBACK);
@@ -844,11 +836,11 @@ public final class CwSignalProcessor {
             ToneFrequencyEstimate acquisitionWinner
     ) {
         lastPreferredWindowWinnerFrequencyHz = preferredWindowEstimate == null
-                ? preferredToneFrequencyHz
+                ? 0
                 : preferredWindowEstimate.frequencyHz;
         lastWideScanWinnerFrequencyHz = wideEstimate == null ? 0 : wideEstimate.frequencyHz;
         lastAcquisitionWinnerFrequencyHz = acquisitionWinner == null
-                ? preferredToneFrequencyHz
+                ? 0
                 : acquisitionWinner.frequencyHz;
         lastPreferredWindowWinnerToneRms = preferredWindowEstimate == null ? 0.0d : preferredWindowEstimate.toneRmsAmplitude;
         lastWideScanWinnerToneRms = wideEstimate == null ? 0.0d : wideEstimate.toneRmsAmplitude;
@@ -1330,99 +1322,6 @@ public final class CwSignalProcessor {
                 locked,
                 selectionScore
         );
-    }
-
-    private ToneFrequencyEstimate chooseRetunedEstimate(
-            ToneFrequencyEstimate currentTrackedEstimate,
-            ToneFrequencyEstimate scannedEstimate,
-            int previousTargetToneFrequencyHz,
-            boolean wasLocked
-    ) {
-        if (scannedEstimate == null) {
-            return currentTrackedEstimate;
-        }
-        if (!wasLocked || currentTrackedEstimate == null) {
-            return scannedEstimate;
-        }
-        if (scannedEstimate.frequencyHz == previousTargetToneFrequencyHz) {
-            return scannedEstimate;
-        }
-        if (!isCurrentTargetRetainable(currentTrackedEstimate)) {
-            return scannedEstimate;
-        }
-        if (!scannedEstimate.locked) {
-            return currentTrackedEstimate;
-        }
-        if (scannedEstimate.selectionScore <= (currentTrackedEstimate.selectionScore * LOCKED_TARGET_SWITCH_MARGIN)) {
-            return currentTrackedEstimate;
-        }
-        int scannedPreferredDistanceHz = Math.abs(scannedEstimate.frequencyHz - preferredToneFrequencyHz);
-        int currentPreferredDistanceHz = Math.abs(currentTrackedEstimate.frequencyHz - preferredToneFrequencyHz);
-        if (scannedPreferredDistanceHz > currentPreferredDistanceHz + 20
-                && scannedEstimate.selectionScore <= (currentTrackedEstimate.selectionScore * 1.35d)) {
-            return currentTrackedEstimate;
-        }
-        return scannedEstimate;
-    }
-
-    private boolean isCurrentTargetRetainable(ToneFrequencyEstimate estimate) {
-        if (estimate == null) {
-            return false;
-        }
-        if (estimate.locked) {
-            return true;
-        }
-        return toneActive
-                && estimate.toneRmsAmplitude >= MIN_TRACKED_TONE_RMS
-                && estimate.dominanceRatio >= ACTIVE_TONE_LOCK_DOMINANCE_RATIO
-                && (estimate.isolationRatio >= ACTIVE_TONE_LOCK_ISOLATION_RATIO
-                || estimate.localContrastRatio >= ACTIVE_TONE_LOCK_LOCAL_CONTRAST_RATIO);
-    }
-
-    private ToneFrequencyEstimate stabilizeRetuneCandidate(
-            ToneFrequencyEstimate adoptedEstimate,
-            ToneFrequencyEstimate currentTrackedEstimate,
-            int previousTargetToneFrequencyHz,
-            boolean wasLocked
-    ) {
-        if (adoptedEstimate == null || !adoptedEstimate.locked) {
-            pendingRetuneCandidateFrequencyHz = preferredToneFrequencyHz;
-            pendingRetuneCandidateStableScans = 0;
-            return adoptedEstimate;
-        }
-        if (shouldAcceptRetuneCandidateImmediately(adoptedEstimate, currentTrackedEstimate, previousTargetToneFrequencyHz, wasLocked)) {
-            pendingRetuneCandidateFrequencyHz = adoptedEstimate.frequencyHz;
-            pendingRetuneCandidateStableScans = CANDIDATE_STABILITY_ACCEPT_SCANS;
-            return adoptedEstimate;
-        }
-        if (Math.abs(adoptedEstimate.frequencyHz - pendingRetuneCandidateFrequencyHz) <= CANDIDATE_STABILITY_CLUSTER_WINDOW_HZ) {
-            pendingRetuneCandidateStableScans += 1;
-        } else {
-            pendingRetuneCandidateFrequencyHz = adoptedEstimate.frequencyHz;
-            pendingRetuneCandidateStableScans = 1;
-        }
-        if (pendingRetuneCandidateStableScans >= CANDIDATE_STABILITY_ACCEPT_SCANS) {
-            return adoptedEstimate;
-        }
-        return currentTrackedEstimate != null ? currentTrackedEstimate : adoptedEstimate;
-    }
-
-    private boolean shouldAcceptRetuneCandidateImmediately(
-            ToneFrequencyEstimate adoptedEstimate,
-            ToneFrequencyEstimate currentTrackedEstimate,
-            int previousTargetToneFrequencyHz,
-            boolean wasLocked
-    ) {
-        if (!wasLocked) {
-            return Math.abs(adoptedEstimate.frequencyHz - preferredToneFrequencyHz) <= PREFERRED_WEIGHT_FULL_BIAS_WINDOW_HZ;
-        }
-        if (Math.abs(adoptedEstimate.frequencyHz - previousTargetToneFrequencyHz) <= CONTINUITY_WEIGHT_FULL_BIAS_WINDOW_HZ) {
-            return true;
-        }
-        if (currentTrackedEstimate == null || !isCurrentTargetRetainable(currentTrackedEstimate)) {
-            return true;
-        }
-        return false;
     }
 
     private double effectiveDetectionLevel(double frameRms, ToneFrequencyEstimate toneEstimate) {

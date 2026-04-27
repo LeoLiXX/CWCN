@@ -537,7 +537,7 @@ public final class CwSignalProcessorTest {
     }
 
     @Test
-    public void trackedToneFallsBackToPreferredAfterLongIdleStretch() {
+    public void trackedToneDoesNotSnapBackToPreferredAfterLongIdleStretch() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(600);
 
@@ -546,7 +546,7 @@ public final class CwSignalProcessorTest {
         processFramesCollecting(processor, 70, 0.0d, 0.0d, 18);
 
         CwSignalSnapshot snapshot = processor.snapshot();
-        assertEquals(600, snapshot.targetToneFrequencyHz());
+        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 780) <= 20);
         assertTrue(!snapshot.targetToneLocked());
     }
 

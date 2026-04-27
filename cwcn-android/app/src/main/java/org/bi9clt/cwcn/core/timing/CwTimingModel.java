@@ -7,11 +7,14 @@ import java.util.List;
 
 public final class CwTimingModel {
     private static final long DEFAULT_DOT_MS = 80L;
-    private static final long MIN_DOT_MS = 35L;
+    private static final long MIN_DOT_MS = 28L;
     private static final long MAX_DOT_MS = 220L;
     private static final double STARTUP_DASH_RATIO = 1.65d;
     private static final double DOT_SMOOTHING = 0.17d;
     private static final double GAP_SMOOTHING = 0.16d;
+    private static final double FAST_DOT_SMOOTHING = 0.30d;
+    private static final double FAST_GAP_SMOOTHING = 0.24d;
+    private static final long FAST_DOT_THRESHOLD_MS = 55L;
     private static final double INTRA_GAP_MAX_RATIO = 1.8d;
     private static final double LETTER_GAP_MAX_RATIO = 4.35d;
     private static final double WORD_GAP_MAX_RATIO = 10.0d;
@@ -128,13 +131,13 @@ public final class CwTimingModel {
         double normalizedDuration = toneDurationMs;
         double ratioToDot = toneDurationMs / Math.max(1.0d, dotEstimateMs);
         if (ratioToDot > 1.9d && ratioToDot < 5.2d) {
-            dashEstimateMs = smoothEstimate(dashEstimateMs, toneDurationMs, DOT_SMOOTHING);
+            dashEstimateMs = smoothEstimate(dashEstimateMs, toneDurationMs, toneSmoothing(toneDurationMs));
             normalizedDuration = dashEstimateMs / 3.0d;
         } else {
             dashEstimateMs = smoothEstimate(dashEstimateMs, dotEstimateMs * 3.0d, 0.05d);
         }
 
-        dotEstimateMs = smoothEstimate(dotEstimateMs, normalizedDuration, DOT_SMOOTHING);
+        dotEstimateMs = smoothEstimate(dotEstimateMs, normalizedDuration, toneSmoothing(normalizedDuration));
         dotEstimateMs = clampDot(dotEstimateMs);
     }
 
@@ -151,7 +154,9 @@ public final class CwTimingModel {
 
         // Keep some default bias for stability, but lean harder toward the observed first element
         // so faster on-air starts do not begin with an overly slow dot estimate.
-        double bootstrapDot = (inferredDot * 0.65d) + (DEFAULT_DOT_MS * 0.35d);
+        double defaultBias = inferredDot <= FAST_DOT_THRESHOLD_MS ? 0.15d : 0.35d;
+        double observedBias = 1.0d - defaultBias;
+        double bootstrapDot = (inferredDot * observedBias) + (DEFAULT_DOT_MS * defaultBias);
         dotEstimateMs = clampDot(bootstrapDot);
         intraGapEstimateMs = dotEstimateMs;
         dashEstimateMs = Math.max(dashEstimateMs, dotEstimateMs * 3.0d);
@@ -162,18 +167,18 @@ public final class CwTimingModel {
             return;
         }
         if (classification == CwTimingEvent.Classification.INTRA_SYMBOL_GAP) {
-            intraGapEstimateMs = smoothEstimate(intraGapEstimateMs, gapDurationMs, GAP_SMOOTHING);
+            intraGapEstimateMs = smoothEstimate(intraGapEstimateMs, gapDurationMs, gapSmoothing(gapDurationMs));
             if (initialized) {
-                dotEstimateMs = clampDot(smoothEstimate(dotEstimateMs, gapDurationMs, GAP_SMOOTHING * 0.7d));
+                dotEstimateMs = clampDot(smoothEstimate(dotEstimateMs, gapDurationMs, gapDotSmoothing(gapDurationMs)));
             }
             return;
         }
 
         if (classification == CwTimingEvent.Classification.LETTER_GAP) {
             double inferredDot = gapDurationMs / 3.0d;
-            intraGapEstimateMs = smoothEstimate(intraGapEstimateMs, inferredDot, GAP_SMOOTHING * 0.6d);
+            intraGapEstimateMs = smoothEstimate(intraGapEstimateMs, inferredDot, gapSmoothing(inferredDot) * 0.75d);
             if (initialized) {
-                dotEstimateMs = clampDot(smoothEstimate(dotEstimateMs, inferredDot, GAP_SMOOTHING * 0.5d));
+                dotEstimateMs = clampDot(smoothEstimate(dotEstimateMs, inferredDot, gapDotSmoothing(inferredDot) * 0.8d));
             }
         }
     }
@@ -205,6 +210,18 @@ public final class CwTimingModel {
 
     private double smoothEstimate(double currentValue, double newValue, double smoothing) {
         return currentValue + ((newValue - currentValue) * smoothing);
+    }
+
+    private double toneSmoothing(double observedDurationMs) {
+        return observedDurationMs <= FAST_DOT_THRESHOLD_MS ? FAST_DOT_SMOOTHING : DOT_SMOOTHING;
+    }
+
+    private double gapSmoothing(double observedDurationMs) {
+        return observedDurationMs <= FAST_DOT_THRESHOLD_MS ? FAST_GAP_SMOOTHING : GAP_SMOOTHING;
+    }
+
+    private double gapDotSmoothing(double inferredDotMs) {
+        return inferredDotMs <= FAST_DOT_THRESHOLD_MS ? FAST_GAP_SMOOTHING * 0.85d : GAP_SMOOTHING * 0.7d;
     }
 
     private double clampDot(double candidate) {

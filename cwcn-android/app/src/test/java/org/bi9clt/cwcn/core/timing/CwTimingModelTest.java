@@ -65,9 +65,24 @@ public final class CwTimingModelTest {
 
         assertEquals(1, events.size());
         assertEquals(CwTimingEvent.Classification.DIT, events.get(0).classification());
-        assertTrue(events.get(0).dotEstimateMs() >= 48L);
-        assertTrue(events.get(0).dotEstimateMs() <= 60L);
-        assertTrue(model.snapshot().estimatedWpm() >= 20);
+        assertTrue(events.get(0).dotEstimateMs() >= 42L);
+        assertTrue(events.get(0).dotEstimateMs() <= 50L);
+        assertTrue(model.snapshot().estimatedWpm() >= 24);
+    }
+
+    @Test
+    public void repeatedFast30WpmDotsConvergeTowardHighSpeedInsteadOfStayingSlow() {
+        CwTimingModel model = new CwTimingModel();
+
+        model.process(toneOff(40L, 40L));
+        model.process(toneOn(80L));
+        model.process(toneOff(120L, 40L));
+        model.process(toneOn(160L));
+        model.process(toneOff(200L, 40L));
+
+        CwTimingSnapshot snapshot = model.snapshot();
+        assertTrue("dot=" + snapshot.dotEstimateMs(), snapshot.dotEstimateMs() <= 46L);
+        assertTrue("wpm=" + snapshot.estimatedWpm(), snapshot.estimatedWpm() >= 26);
     }
 
     private CwToneEvent toneOff(long timestampMs, long durationMs) {
