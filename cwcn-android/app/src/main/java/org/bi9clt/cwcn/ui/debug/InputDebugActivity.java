@@ -73,7 +73,7 @@ import org.bi9clt.cwcn.core.signal.CwSignalProcessor;
 import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 import org.bi9clt.cwcn.core.signal.CwToneEvent;
 import org.bi9clt.cwcn.core.timing.CwTimingEvent;
-import org.bi9clt.cwcn.core.timing.CwTimingModel;
+import org.bi9clt.cwcn.core.timing.CwHybridTimingModel;
 import org.bi9clt.cwcn.core.timing.CwTimingSnapshot;
 import org.bi9clt.cwcn.databinding.ActivityInputDebugBinding;
 import org.bi9clt.cwcn.ui.qso.QsoEditorActivity;
@@ -92,6 +92,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private static final int PERMISSION_REQUEST_CODE = 1001;
     private static final int AMPLITUDE_MAX = 32767;
     private static final long LIVE_UI_REFRESH_INTERVAL_MS = 120L;
+    private static final double LIVE_CHARACTER_FLUSH_GAP_RATIO = 3.35d;
     private static final String DEBUG_PREFERENCES = "cwcn_debug_preferences";
     private static final String PREF_PREFERRED_TONE_FREQUENCY_HZ = "preferred_tone_frequency_hz";
     private static final String PREF_LOCAL_FILE_URI = "local_file_uri";
@@ -106,7 +107,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private AudioInputHealthTracker audioInputHealthTracker;
     private AudioSpectrumAnalyzer audioSpectrumAnalyzer;
     private CwSignalProcessor cwSignalProcessor;
-    private CwTimingModel cwTimingModel;
+    private CwHybridTimingModel cwTimingModel;
     private CwDecoder cwDecoder;
     private CwInterpreter cwInterpreter;
     private CwInterpreter qsoInterpreter;
@@ -158,7 +159,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         audioInputHealthTracker = new AudioInputHealthTracker();
         audioSpectrumAnalyzer = new AudioSpectrumAnalyzer();
         cwSignalProcessor = new CwSignalProcessor();
-        cwTimingModel = new CwTimingModel();
+        cwTimingModel = new CwHybridTimingModel();
         cwDecoder = new CwDecoder();
         cwInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
         qsoInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.SEMANTIC_RECOVERY);
@@ -329,7 +330,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 : View.GONE);
         updateDebugPanelVisibility();
         binding.selectedSourceStatusText.setText(renderSelectedSourceStatus(selectedOption, selectedScenario));
-        setStableText(binding.fixtureEvaluationText, renderFixtureEvaluationStatus());
+        binding.fixtureEvaluationText.setText(renderFixtureEvaluationStatus());
         binding.permissionHintText.setText(renderPermissionStatus());
         binding.microphoneStatusText.setText(renderMicrophoneStatus());
         binding.bluetoothStatusText.setText(renderBluetoothStatus());
@@ -668,6 +669,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + CwFrontEndHealthClassifier.recentTrendLabel(snapshot)
                 + "\nMic history: "
                 + renderRecentFrontEndHistory(snapshot)
+                + "\nMic active leaders: "
+                + cwSignalProcessor.debugActiveLeaderCompactSummary()
                 + "\nMic release view: active unlock "
                 + Math.round(snapshot.toneActiveUnlockedFrameRatio() * 100.0d)
                 + "%, worst gap "
@@ -1247,27 +1250,61 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + " (" + CwFrontEndHealthClassifier.bottleneckLabel(snapshot) + ")"
                 + "\nPreferred Tone: " + snapshot.preferredToneFrequencyHz() + " Hz"
                 + "\nTracked Tone: " + snapshot.targetToneFrequencyHz() + " Hz"
+                + "\nEffective Tracked: " + renderDisplayToneWithRaw(
+                snapshot.effectiveTrackedToneFrequencyHz(),
+                snapshot.targetToneFrequencyHz()
+        )
+                + "\nPrevious Target Before Scan: " + snapshot.previousTargetBeforeScanFrequencyHz() + " Hz"
+                + " | RMS " + String.format(Locale.US, "%.1f", snapshot.previousTargetBeforeScanToneRms())
+                + " | score " + String.format(Locale.US, "%.1f", snapshot.previousTargetBeforeScanSelectionScore())
+                + " | " + (snapshot.previousTargetBeforeScanLocked() ? "LOCK" : "cand")
                 + "\nPending Retune Candidate: " + snapshot.pendingRetuneCandidateFrequencyHz()
                 + " Hz"
                 + " (" + snapshot.pendingRetuneCandidateStableScans() + " stable scans)"
                 + "\nPreferred Window Winner: " + snapshot.preferredWindowWinnerFrequencyHz() + " Hz"
                 + " | RMS " + String.format(Locale.US, "%.1f", snapshot.preferredWindowWinnerToneRms())
                 + " | score " + String.format(Locale.US, "%.1f", snapshot.preferredWindowWinnerSelectionScore())
+                + " | conf " + Math.round(snapshot.preferredWindowWinnerConfidence() * 100.0d) + "%"
                 + " | " + (snapshot.preferredWindowWinnerLocked() ? "LOCK" : "cand")
+                + "\nPreferred Runner-Up: " + (snapshot.preferredWindowRunnerUpFrequencyHz() > 0
+                ? snapshot.preferredWindowRunnerUpFrequencyHz() + " Hz"
+                + " | score " + String.format(Locale.US, "%.1f", snapshot.preferredWindowRunnerUpSelectionScore())
+                : "not captured")
+                + "\nPreferred Top Candidates: " + snapshot.preferredWindowTopCandidatesSummary()
                 + "\nWide Scan Winner: " + (snapshot.wideScanWinnerFrequencyHz() > 0
                 ? snapshot.wideScanWinnerFrequencyHz() + " Hz"
                 + " | RMS " + String.format(Locale.US, "%.1f", snapshot.wideScanWinnerToneRms())
                 + " | score " + String.format(Locale.US, "%.1f", snapshot.wideScanWinnerSelectionScore())
+                + " | conf " + Math.round(snapshot.wideScanWinnerConfidence() * 100.0d) + "%"
                 + " | " + (snapshot.wideScanWinnerLocked() ? "LOCK" : "cand")
                 : "not used")
-                + "\nAcquisition Winner: " + snapshot.acquisitionWinnerFrequencyHz() + " Hz"
+                + "\nWide Runner-Up: " + (snapshot.wideScanRunnerUpFrequencyHz() > 0
+                ? snapshot.wideScanRunnerUpFrequencyHz() + " Hz"
+                + " | score " + String.format(Locale.US, "%.1f", snapshot.wideScanRunnerUpSelectionScore())
+                : "not captured")
+                + "\nWide Top Candidates: " + snapshot.wideScanTopCandidatesSummary()
+                + "\nAcquisition Winner: " + renderDisplayToneWithRaw(
+                snapshot.effectiveAcquisitionWinnerFrequencyHz(),
+                snapshot.acquisitionWinnerFrequencyHz()
+        )
                 + " | RMS " + String.format(Locale.US, "%.1f", snapshot.acquisitionWinnerToneRms())
                 + " | score " + String.format(Locale.US, "%.1f", snapshot.acquisitionWinnerSelectionScore())
+                + " | conf " + Math.round(snapshot.acquisitionWinnerConfidence() * 100.0d) + "%"
                 + " | " + snapshot.acquisitionWinnerSource()
-                + "\nFinal Adopted: " + snapshot.finalAdoptedFrequencyHz() + " Hz"
+                + "\nAcquisition Runner-Up: " + (snapshot.acquisitionRunnerUpFrequencyHz() > 0
+                ? snapshot.acquisitionRunnerUpFrequencyHz() + " Hz"
+                + " | score " + String.format(Locale.US, "%.1f", snapshot.acquisitionRunnerUpSelectionScore())
+                : "not captured")
+                + "\nAcquisition Decision: " + snapshot.acquisitionDecisionDetail()
+                + "\nFinal Adopted: " + renderDisplayToneWithRaw(
+                snapshot.effectiveFinalAdoptedFrequencyHz(),
+                snapshot.finalAdoptedFrequencyHz()
+        )
                 + " | RMS " + String.format(Locale.US, "%.1f", snapshot.finalAdoptedToneRms())
                 + " | score " + String.format(Locale.US, "%.1f", snapshot.finalAdoptedSelectionScore())
+                + " | conf " + Math.round(snapshot.finalAdoptedConfidence() * 100.0d) + "%"
                 + " | " + snapshot.finalAdoptedSource()
+                + "\nFinal Adoption Detail: " + snapshot.finalAdoptionDetail()
                 + "\nTracking Error: " + String.format(Locale.US, "%+d", toneErrorHz) + " Hz"
                 + "\nAttack Threshold: " + snapshot.currentThreshold()
                 + "\nRelease Threshold: " + snapshot.releaseThreshold()
@@ -1291,6 +1328,16 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + " (" + snapshot.toneActiveUnlockedFrameCount() + "/" + snapshot.toneActiveFrameCount() + " active frames)"
                 + "\nCurrent Active Unlock Gap: " + snapshot.consecutiveToneActiveUnlockedFrames() + " frame(s)"
                 + "\nWorst Active Unlock Gap: " + snapshot.maxConsecutiveToneActiveUnlockedFrames() + " frame(s)";
+    }
+
+    private String renderDisplayToneWithRaw(int displayFrequencyHz, int rawFrequencyHz) {
+        if (displayFrequencyHz <= 0) {
+            return rawFrequencyHz + " Hz";
+        }
+        if (rawFrequencyHz <= 0 || displayFrequencyHz == rawFrequencyHz) {
+            return displayFrequencyHz + " Hz";
+        }
+        return displayFrequencyHz + " Hz (raw " + rawFrequencyHz + " Hz)";
     }
 
     private String renderSignalEventStats() {
@@ -1364,7 +1411,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
     private String renderTimingState() {
         CwTimingSnapshot snapshot = cwTimingModel.snapshot();
-        return "Dot Estimate: " + snapshot.dotEstimateMs() + " ms"
+        return "Timing Strategy: " + cwTimingModel.debugStrategySummary()
+                + "\nDot Estimate: " + snapshot.dotEstimateMs() + " ms"
                 + "\nDash Estimate: " + snapshot.dashEstimateMs() + " ms"
                 + "\nIntra Gap Estimate: " + snapshot.intraGapEstimateMs() + " ms"
                 + "\nEstimated WPM: " + snapshot.estimatedWpm();
@@ -1976,6 +2024,12 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
             }
         }
+        List<CwDecodeEvent> trailingDecodeEvents = cwDecoder.flushPendingCharacter(timestampMs);
+        for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
+            cwInterpreter.process(decodeEvent);
+            qsoInterpreter.process(decodeEvent);
+            qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
+        }
     }
 
     @Override
@@ -2009,7 +2063,53 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 }
             }
         }
+        maybeFlushPendingCharacterDuringSilence(frame);
         scheduleLiveUiRefresh();
+    }
+
+    private void maybeFlushPendingCharacterDuringSilence(AudioFrame frame) {
+        if (frame == null || cwDecoder == null || cwTimingModel == null || cwSignalProcessor == null) {
+            return;
+        }
+        if (!cwDecoder.hasPendingCharacter()) {
+            return;
+        }
+
+        CwSignalSnapshot signalSnapshot = cwSignalProcessor.snapshot();
+        if (signalSnapshot.toneActive()) {
+            return;
+        }
+        CwToneEvent lastSignalEvent = signalSnapshot.lastEvent();
+        if (lastSignalEvent == null || lastSignalEvent.type() != CwToneEvent.Type.TONE_OFF) {
+            return;
+        }
+
+        long frameDurationMs = Math.max(
+                1L,
+                Math.round(frame.sampleCount() * 1000.0d / frame.sampleRateHz())
+        );
+        long flushTimestampMs = frame.capturedAtMs() + frameDurationMs;
+        long silentGapMs = Math.max(0L, flushTimestampMs - lastSignalEvent.timestampMs());
+        long minFlushGapMs = minimumLiveCharacterFlushGapMs();
+        if (silentGapMs < minFlushGapMs) {
+            return;
+        }
+
+        List<CwDecodeEvent> trailingDecodeEvents = cwDecoder.flushPendingCharacter(flushTimestampMs);
+        for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
+            cwInterpreter.process(decodeEvent);
+            qsoInterpreter.process(decodeEvent);
+            qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
+        }
+    }
+
+    private long minimumLiveCharacterFlushGapMs() {
+        CwTimingSnapshot timingSnapshot = cwTimingModel.snapshot();
+        long dotEstimateMs = Math.max(1L, timingSnapshot.dotEstimateMs());
+        return Math.max(
+                1L,
+                Math.round(dotEstimateMs * LIVE_CHARACTER_FLUSH_GAP_RATIO)
+        );
     }
 
     private void scheduleLiveUiRefresh() {
@@ -2056,7 +2156,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.lastInterpreterEventText.setText(renderLastInterpreterEvent());
         binding.qsoPhaseText.setText(renderQsoPhase(qsoSnapshot));
         setStableText(binding.qsoDraftText, renderQsoDraft(qsoSnapshot));
-        setStableText(binding.fixtureEvaluationText, renderFixtureEvaluationStatus());
+        binding.fixtureEvaluationText.setText(renderFixtureEvaluationStatus());
         syncDraftEditorFromSnapshot(qsoSnapshot, false);
         binding.qsoEditorStatusText.setText(renderQsoEditorStatus());
         refreshCallsignCandidateButtons(interpreterSnapshot);

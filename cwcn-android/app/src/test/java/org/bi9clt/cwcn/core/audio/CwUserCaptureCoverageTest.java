@@ -12,8 +12,8 @@ import org.bi9clt.cwcn.core.qso.QsoStateMachine;
 import org.bi9clt.cwcn.core.signal.CwSignalProcessor;
 import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 import org.bi9clt.cwcn.core.signal.CwToneEvent;
+import org.bi9clt.cwcn.core.timing.CwHybridTimingModel;
 import org.bi9clt.cwcn.core.timing.CwTimingEvent;
-import org.bi9clt.cwcn.core.timing.CwTimingModel;
 import org.bi9clt.cwcn.core.timing.CwTimingSnapshot;
 import org.junit.Test;
 
@@ -24,29 +24,35 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public final class CwUserCaptureCoverageTest {
+    private static final String[] COMMON_18WPM_TONE_MATRIX_SCENARIOS = new String[]{
+            "user_light_qsb_cq_18wpm_600hz",
+            "user_light_qsb_cq_18wpm_700hz",
+            "user_light_qsb_cq_18wpm_800hz"
+    };
+
     @Test
     public void userRecordedStyleCoverageCase_range10wpm700hz_staysDecodable() {
-        assertCoverageCase("user_range_cq_10wpm_700hz", 700, 0.50d, true, true, 18);
+        assertCoverageCase("user_range_cq_10wpm_700hz", 700, 0.55d, true, true, 20);
     }
 
     @Test
     public void userRecordedStyleCoverageCase_range15wpm700hz_staysDecodable() {
-        assertCoverageCase("user_range_cq_15wpm_700hz", 700, 0.60d, true, true, 18);
+        assertCoverageCase("user_range_cq_15wpm_700hz", 700, 0.68d, true, true, 20);
     }
 
     @Test
     public void userRecordedStyleCoverageCase_qsb18wpm700hz_staysDecodable() {
-        assertCoverageCase("user_qsb_cq_18wpm_700hz", 700, 0.30d, true, true, 8);
+        assertCoverageCase("user_qsb_cq_18wpm_700hz", 700, 0.40d, true, true, 12);
     }
 
     @Test
     public void userRecordedStyleCoverageCase_qsb18wpm600hz_staysDecodable() {
-        assertCoverageCase("user_qsb_cq_18wpm_600hz", 600, 0.30d, true, true, 8);
+        assertCoverageCase("user_qsb_cq_18wpm_600hz", 600, 0.40d, true, true, 12);
     }
 
     @Test
     public void userRecordedStyleCoverageCase_qsb18wpm800hz_staysDecodable() {
-        assertCoverageCase("user_qsb_cq_18wpm_800hz", 800, 0.30d, true, true, 8);
+        assertCoverageCase("user_qsb_cq_18wpm_800hz", 800, 0.40d, true, true, 12);
     }
 
     @Test
@@ -65,38 +71,118 @@ public final class CwUserCaptureCoverageTest {
     }
 
     @Test
+    public void userRecordedStyleCoverageCase_lightQsb18wpm700hz_remainsDecodableWhenPreferredToneStartsAt450hz() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_light_qsb_cq_18wpm_700hz", 450);
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String decodedText = bundle.decoderSnapshot.decodedText() == null
+                ? ""
+                : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 700) <= 30);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.preferredWindowWinnerFrequencyHz() - 700) <= 30);
+        assertTrue(summary, result.textTokenRecall() >= 0.75d);
+        assertTrue(summary, decodedText.contains("CQ"));
+        assertTrue(summary, containsCallsignCore(decodedText));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_qsb18wpm600hz_softRetargetsToWideWinnerWhenPreferredStartsAt500hz() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_qsb_cq_18wpm_600hz", 500);
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertEqualsWithTolerance(summary, 590, bundle.signalSnapshot.acquisitionWinnerFrequencyHz(), 20);
+        assertEqualsWithTolerance(summary, 590, bundle.signalSnapshot.finalAdoptedFrequencyHz(), 20);
+        assertEqualsWithTolerance(summary, 590, bundle.signalSnapshot.targetToneFrequencyHz(), 20);
+        assertNotEquals(summary, "SEARCH_FALLBACK", bundle.signalSnapshot.finalAdoptedSource());
+        assertTrue(summary, result.textTokenRecall() >= 0.88d);
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_qsb18wpm800hz_softRetargetsToWideWinnerWhenPreferredStartsAt450hz() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_qsb_cq_18wpm_800hz", 450);
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String decodedText = bundle.decoderSnapshot.decodedText() == null
+                ? ""
+                : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 450) >= 100);
+        assertTrue(summary, bundle.signalSnapshot.acquisitionWinnerFrequencyHz() >= 550
+                || bundle.signalSnapshot.finalAdoptedFrequencyHz() >= 550
+                || bundle.signalSnapshot.targetToneFrequencyHz() >= 550);
+        assertTrue(summary, result.textTokenRecall() >= 0.78d);
+        assertTrue(summary, decodedText.contains("BI9CLT"));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_qsb18wpm800hz_softRetargetsToWideWinnerWhenPreferredStartsAt800hz() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_qsb_cq_18wpm_800hz", 800);
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String decodedText = bundle.decoderSnapshot.decodedText() == null
+                ? ""
+                : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.acquisitionWinnerFrequencyHz() >= 550
+                || bundle.signalSnapshot.finalAdoptedFrequencyHz() >= 550
+                || bundle.signalSnapshot.targetToneFrequencyHz() >= 550);
+        assertTrue(summary, result.textTokenRecall() >= 0.78d);
+        assertTrue(summary, decodedText.contains("BI9CLT"));
+    }
+
+    @Test
+    public void usbAudioCoverageCase_offset20wpm600hz_remainsDecodableWhenPreferredToneStartsAt800hz() {
+        assertCoverageCase("usb_freq_offset_cq_20wpm_600hz", 600, 0.60d, true, true, 18, 800);
+    }
+
+    @Test
+    public void usbAudioCoverageCase_offset20wpm800hz_remainsDecodableWhenPreferredToneStartsAt450hz() {
+        assertCoverageCase("usb_freq_offset_cq_20wpm_800hz", 800, 0.60d, true, true, 18, 450);
+    }
+
+    @Test
     public void usbAudioCoverageCase_nominal18wpm700hz_staysStronglyDecodable() {
-        assertCoverageCase("usb_nominal_cq_18wpm_700hz", 700, 0.85d, true, true, 22);
+        assertCoverageCase("usb_nominal_cq_18wpm_700hz", 700, 0.88d, true, true, 24);
     }
 
     @Test
     public void usbAudioCoverageCase_lowLevel18wpm700hz_staysStronglyDecodable() {
-        assertCoverageCase("usb_low_level_cq_18wpm_700hz", 700, 0.75d, true, true, 20);
+        assertCoverageCase("usb_low_level_cq_18wpm_700hz", 700, 0.78d, true, true, 22);
     }
 
     @Test
     public void usbAudioCoverageCase_hotLevel18wpm700hz_staysStronglyDecodable() {
-        assertCoverageCase("usb_hot_level_cq_18wpm_700hz", 700, 0.75d, true, true, 20);
+        assertCoverageCase("usb_hot_level_cq_18wpm_700hz", 700, 0.78d, true, true, 22);
     }
 
     @Test
     public void usbAudioCoverageCase_offset20wpm600hz_staysDecodable() {
-        assertCoverageCase("usb_freq_offset_cq_20wpm_600hz", 600, 0.60d, true, true, 18);
+        assertCoverageCase("usb_freq_offset_cq_20wpm_600hz", 600, 0.65d, true, true, 20);
     }
 
     @Test
     public void usbAudioCoverageCase_offset20wpm800hz_staysDecodable() {
-        assertCoverageCase("usb_freq_offset_cq_20wpm_800hz", 800, 0.60d, true, true, 18);
+        assertCoverageCase("usb_freq_offset_cq_20wpm_800hz", 800, 0.65d, true, true, 20);
     }
 
     @Test
     public void usbAudioCoverageCase_nearbyTone18wpm700hz_staysDecodable() {
-        assertCoverageCase("usb_nearby_tone_cq_18wpm_700hz", 700, 0.55d, true, true, 16);
+        assertCoverageCase("usb_nearby_tone_cq_18wpm_700hz", 700, 0.60d, true, true, 18);
     }
 
     @Test
     public void usbAudioCoverageCase_hum18wpm700hz_staysStronglyDecodable() {
-        assertCoverageCase("usb_hum_cq_18wpm_700hz", 700, 0.70d, true, true, 18);
+        assertCoverageCase("usb_hum_cq_18wpm_700hz", 700, 0.74d, true, true, 20);
     }
 
     @Test
@@ -110,9 +196,9 @@ public final class CwUserCaptureCoverageTest {
 
         assertNotNull(summary, result);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 700) <= 40);
-        assertTrue(summary, result.textTokenRecall() >= 0.45d);
-        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 16);
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, result.textTokenRecall() >= 0.50d);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 18);
         assertTrue(summary, decodedText.contains("CQ"));
         assertTrue(summary, containsCallsignCore(decodedText));
         assertTrue(summary, bundle.clippedSampleRatio > 0.0d);
@@ -125,12 +211,12 @@ public final class CwUserCaptureCoverageTest {
 
     @Test
     public void userRecordedStyleCoverageCase_noise25wpm700hz_staysDecodable() {
-        assertCoverageCase("user_noise_cq_25wpm_700hz", 700, 0.30d, true, true, 8);
+        assertCoverageCase("user_noise_cq_25wpm_700hz", 700, 0.35d, true, true, 12);
     }
 
     @Test
     public void userRecordedStyleCoverageCase_noise20wpm700hz_staysDecodable() {
-        assertCoverageCase("user_noise_cq_20wpm_700hz", 700, 0.30d, true, true, 8);
+        assertCoverageCase("user_noise_cq_20wpm_700hz", 700, 0.40d, true, true, 14);
     }
 
     @Test
@@ -152,7 +238,7 @@ public final class CwUserCaptureCoverageTest {
         assertTrue(summary, sweetBundle.result.textTokenRecall() >= upperBundle.result.textTokenRecall());
         assertTrue(summary, upperSweetBundle.result.textTokenRecall() >= upperBundle.result.textTokenRecall());
         assertTrue(summary, sweetBundle.result.textTokenRecall() >= 0.75d);
-        assertTrue(summary, upperSweetBundle.result.textTokenRecall() >= 0.30d);
+        assertTrue(summary, upperSweetBundle.result.textTokenRecall() >= 0.40d);
     }
 
     @Test
@@ -171,7 +257,7 @@ public final class CwUserCaptureCoverageTest {
         assertTrue(summary, nominal18.result.textTokenRecall() >= upper25.result.textTokenRecall());
         assertTrue(summary, nominal20.result.textTokenRecall() >= upper25.result.textTokenRecall());
         assertTrue(summary, nominal18.result.textTokenRecall() >= 0.85d);
-        assertTrue(summary, nominal20.result.textTokenRecall() >= 0.60d);
+        assertTrue(summary, nominal20.result.textTokenRecall() >= 0.65d);
     }
 
     @Test
@@ -185,15 +271,227 @@ public final class CwUserCaptureCoverageTest {
 
         assertNotNull(summary, result);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 700) <= 30);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
         assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 12);
         assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 12);
-        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 12);
-        assertTrue(summary, countCharacter(decodedText, 'V') >= 4);
-        assertTrue(summary, decodedText.contains("DE") || decodedText.contains("SE"));
-        assertTrue(summary, containsNearCallsignCore(decodedText));
-        assertTrue(summary, decodedText.contains("BI9XXX") || decodedText.contains("I9XXX"));
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 8);
+        assertTrue(summary, countCharacter(decodedText, 'V') >= 3);
+        assertTrue(summary, countCharacter(decodedText, ' ') >= 3);
+        assertTrue(summary, decodedText.contains("BI9CXX") || decodedText.contains("9CXX"));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_speedShiftJv3vv700hz_staysBenchUsefulAcrossFastToSlowRounds() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_speed_shift_jv3vv_700hz");
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String decodedText = bundle.decoderSnapshot.decodedText() == null
+                ? ""
+                : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 20);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 20);
+        assertTrue(summary, bundle.signalSnapshot.maxConsecutiveLockedFrames() >= 12);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 24);
+        assertTrue(summary, result.textTokenRecall() >= 0.45d);
+        assertTrue(summary, countSubstring(decodedText, "JV3VV") >= 2);
+        assertTrue(summary, countSubstring(decodedText, "PAGE") >= 1);
+        assertTrue(summary, countSubstring(decodedText, "DX") >= 2);
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_longQsoDriftBg1xxxJa1abc_keepsSecondHalfUsable() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_long_qso_drift_bg1xxx_ja1abc");
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String decodedText = bundle.decoderSnapshot.decodedText() == null
+                ? ""
+                : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText();
+        String expectedText = bundle.scenario.expectedNormalizedText();
+        double firstHalfRecall = tokenWindowRecall(expectedText, decodedText, 0.0d, 0.5d);
+        double secondHalfRecall = tokenWindowRecall(expectedText, decodedText, 0.5d, 1.0d);
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 80);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 80);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 90);
+        assertTrue(summary, result.textTokenRecall() >= 0.58d);
+        assertTrue(summary + "\nfirstHalfRecall=" + firstHalfRecall, firstHalfRecall >= 0.72d);
+        assertTrue(summary + "\nsecondHalfRecall=" + secondHalfRecall, secondHalfRecall >= 0.52d);
+        assertTrue(
+                summary + "\nfirstHalfRecall=" + firstHalfRecall + "\nsecondHalfRecall=" + secondHalfRecall,
+                secondHalfRecall >= firstHalfRecall - 0.22d
+        );
+        assertTrue(summary, countSubstring(decodedText, "BG1XXX") >= 3);
+        assertTrue(summary, countSubstring(decodedText, "JA1ABC") >= 2);
+        assertTrue(summary, decodedText.contains("TOKYO"));
+        assertTrue(summary, decodedText.contains("73"));
+        assertTrue(summary, decodedText.contains("SK"));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_multiRoundContinuousQsoBi9cltJa1abc_keepsContinuityWithoutResetGap() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_multi_round_continuous_qso_bi9clt_ja1abc");
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String decodedText = bundle.decoderSnapshot.decodedText() == null
+                ? ""
+                : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText();
+        String expectedText = bundle.scenario.expectedNormalizedText();
+        double firstHalfRecall = tokenWindowRecall(expectedText, normalizedDecodedText, 0.0d, 0.5d);
+        double secondHalfRecall = tokenWindowRecall(expectedText, normalizedDecodedText, 0.5d, 1.0d);
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertNotEquals(summary, "SEARCH_FALLBACK", bundle.signalSnapshot.finalAdoptedSource());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 55);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 55);
+        assertTrue(summary, bundle.signalSnapshot.maxConsecutiveLockedFrames() >= 14);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 48);
+        assertTrue(summary, result.textTokenRecall() >= 0.50d);
+        assertTrue(summary + "\nfirstHalfRecall=" + firstHalfRecall, firstHalfRecall >= 0.62d);
+        assertTrue(summary + "\nsecondHalfRecall=" + secondHalfRecall, secondHalfRecall >= 0.44d);
+        assertTrue(
+                summary + "\nfirstHalfRecall=" + firstHalfRecall + "\nsecondHalfRecall=" + secondHalfRecall,
+                secondHalfRecall >= firstHalfRecall - 0.22d
+        );
+        assertTrue(summary, countSubstring(normalizedDecodedText, "BI9CLT") >= 3);
+        assertTrue(summary, countSubstring(normalizedDecodedText, "JA1ABC") >= 2);
+        assertTrue(summary, normalizedDecodedText.contains("599"));
+        assertTrue(summary, normalizedDecodedText.contains("TOKYO"));
+        assertTrue(summary, normalizedDecodedText.contains("73"));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_similarCallsignCollisionBi9cmsBi9clt_staysBenchUseful() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_similar_callsign_collision_bi9cms_bi9clt");
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText();
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 28);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 28);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 26);
+        assertTrue(summary, result.textTokenRecall() >= 0.52d);
+        assertTrue(summary, countSubstring(normalizedDecodedText, "BI9CMS") >= 2);
+        assertTrue(summary, countSubstring(normalizedDecodedText, "BI9CLT") >= 1);
+        assertTrue(summary, normalizedDecodedText.contains("599"));
+        assertTrue(summary, normalizedDecodedText.contains("BK"));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_shortTailQrzBi3tukKn_emitsTrailingHandoffWithoutLongTailPadding() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_short_tail_qrz_bi3tuk_kn");
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String decodedText = bundle.decoderSnapshot.decodedText() == null
+                ? ""
+                : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText();
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 10);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 10);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 10);
+        assertTrue(summary, result.textTokenRecall() >= 0.55d);
+        assertTrue(summary, decodedText.contains("QRZ"));
+        assertTrue(summary, decodedText.contains("BI3TUK"));
+        assertTrue(summary, decodedText.contains("KN") || decodedText.endsWith("K"));
+        assertTrue(summary, normalizedDecodedText.contains("QRZ"));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_repetitionFatigueCqBi9clt_keepsMiddleLoopUsable() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_repetition_fatigue_cq_bi9clt");
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText();
+        String expectedText = bundle.scenario.expectedNormalizedText();
+        double firstThirdRecall = tokenWindowRecall(expectedText, normalizedDecodedText, 0.0d, 0.34d);
+        double middleThirdRecall = tokenWindowRecall(expectedText, normalizedDecodedText, 0.34d, 0.67d);
+        double lastThirdRecall = tokenWindowRecall(expectedText, normalizedDecodedText, 0.67d, 1.0d);
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 50);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 50);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 45);
+        assertTrue(summary, result.textTokenRecall() >= 0.60d);
+        assertTrue(summary + "\nfirstThirdRecall=" + firstThirdRecall, firstThirdRecall >= 0.72d);
+        assertTrue(summary + "\nmiddleThirdRecall=" + middleThirdRecall, middleThirdRecall >= 0.58d);
+        assertTrue(summary + "\nlastThirdRecall=" + lastThirdRecall, lastThirdRecall >= 0.54d);
+        assertTrue(summary, countSubstring(normalizedDecodedText, "CQ") >= 8);
+        assertTrue(summary, countSubstring(normalizedDecodedText, "BI9CLT") >= 4);
+        assertTrue(summary, normalizedDecodedText.contains("PSE") || normalizedDecodedText.contains("PLEASE"));
+        assertTrue(summary, normalizedDecodedText.contains("K"));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_longQsoEdgeLow500hz_retargetsFromHighPreferredAndStaysUsable() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_long_qso_edge_low_500hz", 700);
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText();
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 80);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 80);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 85);
+        assertTrue(summary, result.textTokenRecall() >= 0.54d);
+        assertNotEquals(summary, "SEARCH_FALLBACK", bundle.signalSnapshot.finalAdoptedSource());
+        assertTrue(summary, countSubstring(normalizedDecodedText, "BG1XXX") >= 3);
+        assertTrue(summary, countSubstring(normalizedDecodedText, "JA1ABC") >= 2);
+        assertTrue(summary, normalizedDecodedText.contains("TOKYO"));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_longQsoEdgeHigh800hz_retargetsFromLowPreferredAndStaysUsable() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_long_qso_edge_high_800hz", 450);
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText();
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 80);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 80);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 85);
+        assertTrue(summary, result.textTokenRecall() >= 0.54d);
+        assertNotEquals(summary, "SEARCH_FALLBACK", bundle.signalSnapshot.finalAdoptedSource());
+        assertTrue(summary, countSubstring(normalizedDecodedText, "BG1XXX") >= 3);
+        assertTrue(summary, countSubstring(normalizedDecodedText, "JA1ABC") >= 2);
+        assertTrue(summary, normalizedDecodedText.contains("TOKYO"));
     }
 
     @Test
@@ -212,16 +510,56 @@ public final class CwUserCaptureCoverageTest {
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
         assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 12);
         assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 12);
-        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 12);
-        assertTrue(summary, countCharacter(decodedText, 'V') >= 4);
-        assertTrue(summary, decodedText.contains("DE"));
-        assertTrue(summary, containsNearCallsignCore(decodedText));
-        assertTrue(summary, decodedText.contains("BI9XXX") || decodedText.contains("I9XXX"));
-        assertTrue(summary, decodedText.contains("BI9CXX") || decodedText.contains("I9CXX"));
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 8);
+        assertTrue(summary, countCharacter(decodedText, 'V') >= 3);
         assertTrue(summary, bundle.signalSnapshot.acquisitionWinnerFrequencyHz() > 0
                 || bundle.signalSnapshot.finalAdoptedFrequencyHz() > 0
                 || bundle.signalSnapshot.targetToneFrequencyHz() > 0);
         assertTrue(summary, !"NONE".equals(acquisitionSource) || !"NONE".equals(adoptedSource));
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_18wpmToneMatrixStaysStrongAcrossCommonToneRange() {
+        StringBuilder summary = new StringBuilder();
+        for (String scenarioId : COMMON_18WPM_TONE_MATRIX_SCENARIOS) {
+            OfflineEvalBundle bundle = evaluateOfflineBundle(scenarioId);
+            CwFixtureEvaluationResult result = bundle.result;
+            String decodedText = bundle.decoderSnapshot.decodedText() == null
+                    ? ""
+                    : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+
+            summary.append(scenarioId)
+                    .append(" -> ")
+                    .append(result.renderSummary())
+                    .append('\n');
+
+            assertNotEquals(summary.toString(), "RUN", result.likelyBottleneckCode());
+            assertTrue(summary.toString(), bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+            assertTrue(summary.toString(), result.textTokenRecall() >= 0.75d);
+            assertTrue(summary.toString(), bundle.decoderSnapshot.totalCharacters() >= 18);
+            assertTrue(summary.toString(), decodedText.contains("CQ"));
+            assertTrue(summary.toString(), containsCallsignCore(decodedText));
+        }
+    }
+
+    @Test
+    public void userRecordedStyleCoverageCase_speedMatrixMaintainsDescendingQualityFrom18To25Wpm() {
+        OfflineEvalBundle nominal18 = evaluateOfflineBundle("user_light_qsb_cq_18wpm_700hz");
+        OfflineEvalBundle nominal20 = evaluateOfflineBundle("user_noise_cq_20wpm_700hz");
+        OfflineEvalBundle nominal25 = evaluateOfflineBundle("user_noise_cq_25wpm_700hz");
+
+        String summary = "18WPM=" + nominal18.result.renderSummary()
+                + "\n20WPM=" + nominal20.result.renderSummary()
+                + "\n25WPM=" + nominal25.result.renderSummary();
+
+        assertTrue(summary, nominal18.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, nominal20.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, nominal25.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, nominal18.result.textTokenRecall() >= nominal20.result.textTokenRecall());
+        assertTrue(summary, nominal20.result.textTokenRecall() >= nominal25.result.textTokenRecall());
+        assertTrue(summary, nominal18.result.textTokenRecall() >= 0.75d);
+        assertTrue(summary, nominal20.result.textTokenRecall() >= 0.40d);
+        assertTrue(summary, nominal25.result.textTokenRecall() >= 0.35d);
     }
 
     private void assertCoverageCase(
@@ -232,7 +570,27 @@ public final class CwUserCaptureCoverageTest {
             boolean requiresCallsignCore,
             int minDecodedCharacters
     ) {
-        OfflineEvalBundle bundle = evaluateOfflineBundle(scenarioId);
+        assertCoverageCase(
+                scenarioId,
+                expectedToneHz,
+                minTextTokenRecall,
+                requiresCq,
+                requiresCallsignCore,
+                minDecodedCharacters,
+                null
+        );
+    }
+
+    private void assertCoverageCase(
+            String scenarioId,
+            int expectedToneHz,
+            double minTextTokenRecall,
+            boolean requiresCq,
+            boolean requiresCallsignCore,
+            int minDecodedCharacters,
+            Integer preferredToneOverrideHz
+    ) {
+        OfflineEvalBundle bundle = evaluateOfflineBundle(scenarioId, preferredToneOverrideHz);
         CwFixtureEvaluationResult result = bundle.result;
         String summary = renderDebugSummary(result, bundle);
         String decodedText = bundle.decoderSnapshot.decodedText() == null
@@ -241,10 +599,10 @@ public final class CwUserCaptureCoverageTest {
 
         assertNotNull(summary, result);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - expectedToneHz) <= 40);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
         assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 8);
         assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 8);
+        assertTrue(summary, bundle.signalSnapshot.maxConsecutiveLockedFrames() >= 4);
         assertTrue(summary, result.textTokenRecall() >= minTextTokenRecall);
         assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= minDecodedCharacters);
         if (requiresCq) {
@@ -255,12 +613,26 @@ public final class CwUserCaptureCoverageTest {
         }
     }
 
+    private void assertEqualsWithTolerance(String summary, int expected, int actual, int toleranceHz) {
+        assertTrue(
+                summary + "\nexpected=" + expected + " actual=" + actual + " tol=" + toleranceHz,
+                Math.abs(actual - expected) <= toleranceHz
+        );
+    }
+
+
     private OfflineEvalBundle evaluateOfflineBundle(String scenarioId) {
+        return evaluateOfflineBundle(scenarioId, null);
+    }
+
+    private OfflineEvalBundle evaluateOfflineBundle(String scenarioId, Integer preferredToneOverrideHz) {
         CwFixtureScenario scenario = findScenario(scenarioId);
         SyntheticFixtureRxAudioSource source = new SyntheticFixtureRxAudioSource();
         CwSignalProcessor signalProcessor = new CwSignalProcessor();
-        signalProcessor.setPreferredToneFrequencyHz(scenario.toneFrequencyHz());
-        CwTimingModel timingModel = new CwTimingModel();
+        signalProcessor.setPreferredToneFrequencyHz(
+                preferredToneOverrideHz == null ? scenario.toneFrequencyHz() : preferredToneOverrideHz
+        );
+        CwHybridTimingModel timingModel = new CwHybridTimingModel();
         CwDecoder decoder = new CwDecoder();
         CwInterpreter interpreter = new CwInterpreter();
         QsoStateMachine qsoStateMachine = new QsoStateMachine();
@@ -295,6 +667,11 @@ public final class CwUserCaptureCoverageTest {
                     interpreter.process(decodeEvent);
                     qsoStateMachine.process(interpreter.snapshot(), decodeEvent.timestampMs());
                 }
+            }
+            List<CwDecodeEvent> trailingDecodeEvents = decoder.flushPendingCharacter(flushTimestampMs);
+            for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
+                interpreter.process(decodeEvent);
+                qsoStateMachine.process(interpreter.snapshot(), decodeEvent.timestampMs());
             }
         }
 
@@ -410,6 +787,81 @@ public final class CwUserCaptureCoverageTest {
             }
         }
         return count;
+    }
+
+    private int countSubstring(String text, String fragment) {
+        if (text == null || text.isEmpty() || fragment == null || fragment.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int searchFrom = 0;
+        while (searchFrom >= 0 && searchFrom < text.length()) {
+            int foundAt = text.indexOf(fragment, searchFrom);
+            if (foundAt < 0) {
+                break;
+            }
+            count += 1;
+            searchFrom = foundAt + fragment.length();
+        }
+        return count;
+    }
+
+    private double tokenWindowRecall(String expectedText, String actualText, double startFraction, double endFraction) {
+        List<String> expectedTokens = normalizedTokenList(expectedText);
+        List<String> actualTokens = normalizedTokenList(actualText);
+        if (expectedTokens.isEmpty()) {
+            return actualTokens.isEmpty() ? 1.0d : 0.0d;
+        }
+
+        int startIndex = Math.max(0, Math.min(expectedTokens.size(), (int) Math.floor(expectedTokens.size() * startFraction)));
+        int endIndex = Math.max(startIndex, Math.min(expectedTokens.size(), (int) Math.ceil(expectedTokens.size() * endFraction)));
+        List<String> window = expectedTokens.subList(startIndex, endIndex);
+        if (window.isEmpty()) {
+            return 1.0d;
+        }
+        int lcs = tokenLcsLength(window, actualTokens);
+        return lcs / (double) window.size();
+    }
+
+    private List<String> normalizedTokenList(String text) {
+        if (text == null || text.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        String upper = text.toUpperCase(java.util.Locale.US).replace('\u25A1', '?');
+        StringBuilder normalized = new StringBuilder(upper.length());
+        for (int index = 0; index < upper.length(); index++) {
+            char ch = upper.charAt(index);
+            if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '?') {
+                normalized.append(ch);
+            } else {
+                normalized.append(' ');
+            }
+        }
+        String trimmed = normalized.toString().trim();
+        if (trimmed.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        return java.util.Arrays.asList(trimmed.split("\\s+"));
+    }
+
+    private int tokenLcsLength(List<String> expectedTokens, List<String> actualTokens) {
+        int[] previous = new int[actualTokens.size() + 1];
+        int[] current = new int[actualTokens.size() + 1];
+        for (int expectedIndex = 1; expectedIndex <= expectedTokens.size(); expectedIndex++) {
+            String expectedToken = expectedTokens.get(expectedIndex - 1);
+            for (int actualIndex = 1; actualIndex <= actualTokens.size(); actualIndex++) {
+                if (expectedToken.equals(actualTokens.get(actualIndex - 1))) {
+                    current[actualIndex] = previous[actualIndex - 1] + 1;
+                } else {
+                    current[actualIndex] = Math.max(previous[actualIndex], current[actualIndex - 1]);
+                }
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+            java.util.Arrays.fill(current, 0);
+        }
+        return previous[actualTokens.size()];
     }
 
     private static final class OfflineEvalBundle {

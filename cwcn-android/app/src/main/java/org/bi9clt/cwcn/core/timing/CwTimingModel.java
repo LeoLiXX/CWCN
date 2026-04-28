@@ -15,9 +15,16 @@ public final class CwTimingModel {
     private static final double FAST_DOT_SMOOTHING = 0.30d;
     private static final double FAST_GAP_SMOOTHING = 0.24d;
     private static final long FAST_DOT_THRESHOLD_MS = 55L;
+    private static final double GAP_DOT_MAX_SLOWDOWN_STEP_RATIO = 1.18d;
+    private static final double GAP_DOT_MAX_SPEEDUP_STEP_RATIO = 0.88d;
     private static final double INTRA_GAP_MAX_RATIO = 1.8d;
     private static final double LETTER_GAP_MAX_RATIO = 4.35d;
     private static final double WORD_GAP_MAX_RATIO = 10.0d;
+    private static final double FAST_INTRA_GAP_MAX_RATIO = 1.55d;
+    private static final double FAST_LETTER_GAP_MAX_RATIO = 3.95d;
+    private static final double FAST_WORD_GAP_MAX_RATIO = 9.2d;
+    private static final double WORD_GAP_INTRA_RATIO_FALLBACK = 5.0d;
+    private static final double WORD_GAP_DOT_RATIO_FALLBACK_MIN = 3.15d;
     private boolean initialized;
     private double dotEstimateMs = DEFAULT_DOT_MS;
     private double dashEstimateMs = DEFAULT_DOT_MS * 3.0d;
@@ -169,7 +176,10 @@ public final class CwTimingModel {
         if (classification == CwTimingEvent.Classification.INTRA_SYMBOL_GAP) {
             intraGapEstimateMs = smoothEstimate(intraGapEstimateMs, gapDurationMs, gapSmoothing(gapDurationMs));
             if (initialized) {
-                dotEstimateMs = clampDot(smoothEstimate(dotEstimateMs, gapDurationMs, gapDotSmoothing(gapDurationMs)));
+                dotEstimateMs = clampDot(limitGapDrivenDotShift(
+                        dotEstimateMs,
+                        smoothEstimate(dotEstimateMs, gapDurationMs, gapDotSmoothing(gapDurationMs))
+                ));
             }
             return;
         }
@@ -178,7 +188,10 @@ public final class CwTimingModel {
             double inferredDot = gapDurationMs / 3.0d;
             intraGapEstimateMs = smoothEstimate(intraGapEstimateMs, inferredDot, gapSmoothing(inferredDot) * 0.75d);
             if (initialized) {
-                dotEstimateMs = clampDot(smoothEstimate(dotEstimateMs, inferredDot, gapDotSmoothing(inferredDot) * 0.8d));
+                dotEstimateMs = clampDot(limitGapDrivenDotShift(
+                        dotEstimateMs,
+                        smoothEstimate(dotEstimateMs, inferredDot, gapDotSmoothing(inferredDot) * 0.8d)
+                ));
             }
         }
     }
@@ -196,13 +209,27 @@ public final class CwTimingModel {
 
     private CwTimingEvent.Classification classifyGap(long gapDurationMs) {
         double ratio = gapDurationMs / Math.max(1.0d, dotEstimateMs);
-        if (ratio <= INTRA_GAP_MAX_RATIO) {
+        double intraRatio = gapDurationMs / Math.max(1.0d, intraGapEstimateMs);
+        double intraGapMaxRatio = isFastTimingContext()
+                ? FAST_INTRA_GAP_MAX_RATIO
+                : INTRA_GAP_MAX_RATIO;
+        double letterGapMaxRatio = isFastTimingContext()
+                ? FAST_LETTER_GAP_MAX_RATIO
+                : LETTER_GAP_MAX_RATIO;
+        double wordGapMaxRatio = isFastTimingContext()
+                ? FAST_WORD_GAP_MAX_RATIO
+                : WORD_GAP_MAX_RATIO;
+        if (ratio <= intraGapMaxRatio) {
             return CwTimingEvent.Classification.INTRA_SYMBOL_GAP;
         }
-        if (ratio <= LETTER_GAP_MAX_RATIO) {
+        if (ratio >= WORD_GAP_DOT_RATIO_FALLBACK_MIN
+                && intraRatio >= WORD_GAP_INTRA_RATIO_FALLBACK) {
+            return CwTimingEvent.Classification.WORD_GAP;
+        }
+        if (ratio <= letterGapMaxRatio) {
             return CwTimingEvent.Classification.LETTER_GAP;
         }
-        if (ratio <= WORD_GAP_MAX_RATIO) {
+        if (ratio <= wordGapMaxRatio) {
             return CwTimingEvent.Classification.WORD_GAP;
         }
         return CwTimingEvent.Classification.UNKNOWN;
@@ -226,6 +253,20 @@ public final class CwTimingModel {
 
     private double clampDot(double candidate) {
         return Math.max(MIN_DOT_MS, Math.min(MAX_DOT_MS, candidate));
+    }
+
+    private boolean isFastTimingContext() {
+        return dotEstimateMs <= FAST_DOT_THRESHOLD_MS || intraGapEstimateMs <= FAST_DOT_THRESHOLD_MS;
+    }
+
+    private double limitGapDrivenDotShift(double currentDotMs, double gapDrivenDotMs) {
+        if (gapDrivenDotMs < currentDotMs) {
+            return Math.max(gapDrivenDotMs, currentDotMs * GAP_DOT_MAX_SPEEDUP_STEP_RATIO);
+        }
+        if (gapDrivenDotMs <= currentDotMs) {
+            return gapDrivenDotMs;
+        }
+        return Math.min(gapDrivenDotMs, currentDotMs * GAP_DOT_MAX_SLOWDOWN_STEP_RATIO);
     }
 
     private long dotEstimateRounded() {

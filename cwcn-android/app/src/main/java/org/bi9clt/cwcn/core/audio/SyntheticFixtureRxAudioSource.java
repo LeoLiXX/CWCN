@@ -155,6 +155,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
     private short[] renderWaveform(CwFixtureScenario scenario) {
         List<Segment> segments = buildSegments(scenario);
         List<CwFixtureScenario.ContinuousInterfererProfile> interferers = buildContinuousInterferers(scenario);
+        List<KeyedInterfererRenderState> keyedInterferers = buildKeyedInterfererRenderStates(scenario);
         int totalSamples = 0;
         for (Segment segment : segments) {
             totalSamples += segment.sampleCount;
@@ -201,8 +202,12 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
                     interfererPhases[interfererIndex] += interfererPhaseStep;
                 }
                 double noiseComponent = (random.nextDouble() * 2.0d - 1.0d) * scenario.noiseAmplitude();
+                double keyedInterfererComponent = 0.0d;
+                for (KeyedInterfererRenderState keyedInterferer : keyedInterferers) {
+                    keyedInterfererComponent += keyedInterferer.nextSampleComponent(absoluteIndex, totalSamples);
+                }
                 waveform[absoluteIndex] = (short) clampToPcm16(Math.round(
-                        toneComponent + interfererComponent + noiseComponent
+                        toneComponent + interfererComponent + keyedInterfererComponent + noiseComponent
                 ));
                 tonePhase += tonePhaseStep;
                 absoluteIndex += 1;
@@ -272,6 +277,88 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
                 )
         );
         return segments;
+    }
+
+    private List<KeyedInterfererRenderState> buildKeyedInterfererRenderStates(CwFixtureScenario scenario) {
+        ArrayList<KeyedInterfererRenderState> states = new ArrayList<>();
+        for (CwFixtureScenario.KeyedInterfererProfile interferer : scenario.keyedInterferers()) {
+            List<Segment> segments = buildKeyedInterfererSegments(interferer);
+            if (!segments.isEmpty()) {
+                states.add(new KeyedInterfererRenderState(interferer, segments));
+            }
+        }
+        return states;
+    }
+
+    private List<Segment> buildKeyedInterfererSegments(CwFixtureScenario.KeyedInterfererProfile interferer) {
+        ArrayList<Segment> segments = new ArrayList<>();
+        if (interferer == null || !interferer.hasDecodableMessage()) {
+            return segments;
+        }
+        appendGap(segments, durationToSamples(interferer.startOffsetMs()));
+        List<String> parts = interferer.messageParts();
+        for (int partIndex = 0; partIndex < parts.size(); partIndex++) {
+            appendKeyedInterfererMessageSegments(segments, parts.get(partIndex), interferer);
+            if (partIndex < parts.size() - 1) {
+                appendGap(segments, durationToSamples(interferer.interMessageGapMs()));
+            }
+        }
+        return segments;
+    }
+
+    private void appendKeyedInterfererMessageSegments(
+            List<Segment> segments,
+            String message,
+            CwFixtureScenario.KeyedInterfererProfile interferer
+    ) {
+        if (message == null || message.trim().isEmpty()) {
+            return;
+        }
+
+        String[] words = message.toUpperCase(Locale.US).trim().split("\\s+");
+        int dotSamples = durationToSamples(1200.0d / Math.max(1.0d, interferer.wpm()));
+        int emittedCharacterCount = 0;
+        int totalDecodableCharacters = countDecodableCharacters(words);
+        if (totalDecodableCharacters <= 0) {
+            return;
+        }
+
+        for (int wordIndex = 0; wordIndex < words.length; wordIndex++) {
+            String word = words[wordIndex];
+            if (word.isEmpty()) {
+                continue;
+            }
+            for (int charIndex = 0; charIndex < word.length(); charIndex++) {
+                char current = word.charAt(charIndex);
+                String morse = MORSE_MAP.get(current);
+                if (morse == null) {
+                    continue;
+                }
+                for (int symbolIndex = 0; symbolIndex < morse.length(); symbolIndex++) {
+                    char symbol = morse.charAt(symbolIndex);
+                    segments.add(new Segment(
+                            true,
+                            symbol == '-' ? dotSamples * 3 : dotSamples,
+                            true,
+                            interferer.toneFrequencyHz(),
+                            interferer.toneFrequencyHz()
+                    ));
+                    if (symbolIndex < morse.length() - 1) {
+                        appendGap(segments, dotSamples);
+                    }
+                }
+
+                emittedCharacterCount += 1;
+                if (emittedCharacterCount >= totalDecodableCharacters) {
+                    continue;
+                }
+                if (hasLaterDecodableCharacter(word, charIndex + 1)) {
+                    appendGap(segments, dotSamples * 3);
+                } else if (hasLaterDecodableWord(words, wordIndex + 1)) {
+                    appendGap(segments, dotSamples * (isHandoffWord(nextDecodableWord(words, wordIndex + 1)) ? 8 : 7));
+                }
+            }
+        }
     }
 
     private void appendMessageSegments(
@@ -620,6 +707,21 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         return Math.max(1.0d, interferer.toneFrequencyHz() + (interferer.toneDriftHz() * progress));
     }
 
+    private double instantaneousKeyedInterfererFrequencyHz(
+            CwFixtureScenario.KeyedInterfererProfile interferer,
+            int sampleIndex,
+            int totalSamples
+    ) {
+        if (interferer == null || interferer.toneFrequencyHz() <= 0) {
+            return 0.0d;
+        }
+        if (Math.abs(interferer.toneDriftHz()) < 0.0001d || totalSamples <= 1) {
+            return interferer.toneFrequencyHz();
+        }
+        double progress = Math.max(0.0d, Math.min(1.0d, sampleIndex / (double) (totalSamples - 1)));
+        return Math.max(1.0d, interferer.toneFrequencyHz() + (interferer.toneDriftHz() * progress));
+    }
+
     private List<CwFixtureScenario.ContinuousInterfererProfile> buildContinuousInterferers(CwFixtureScenario scenario) {
         ArrayList<CwFixtureScenario.ContinuousInterfererProfile> interferers = new ArrayList<>();
         if (scenario.interfererToneAmplitude() > 0 && scenario.interfererToneFrequencyHz() > 0) {
@@ -685,8 +787,22 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
     }
 
     private double toneEdgeScale(CwFixtureScenario scenario, int segmentSampleCount, int segmentSampleIndex) {
-        int riseRampSamples = durationToSamples(scenario.riseRampMs());
-        int fallRampSamples = durationToSamples(scenario.fallRampMs());
+        return toneEdgeScale(
+                scenario.riseRampMs(),
+                scenario.fallRampMs(),
+                segmentSampleCount,
+                segmentSampleIndex
+        );
+    }
+
+    private double toneEdgeScale(
+            int riseRampMs,
+            int fallRampMs,
+            int segmentSampleCount,
+            int segmentSampleIndex
+    ) {
+        int riseRampSamples = durationToSamples(riseRampMs);
+        int fallRampSamples = durationToSamples(fallRampMs);
         double scale = 1.0d;
         if (riseRampSamples > 1) {
             double riseProgress = Math.min(1.0d, segmentSampleIndex / (double) riseRampSamples);
@@ -812,6 +928,60 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
 
         private boolean hasToneFrequencyOverride() {
             return toneOn && useToneFrequencyOverride && startToneFrequencyHz > 0.0d;
+        }
+    }
+
+    private final class KeyedInterfererRenderState {
+        private final CwFixtureScenario.KeyedInterfererProfile profile;
+        private final List<Segment> segments;
+        private int segmentIndex;
+        private int segmentSampleIndex;
+        private double phase;
+
+        private KeyedInterfererRenderState(
+                CwFixtureScenario.KeyedInterfererProfile profile,
+                List<Segment> segments
+        ) {
+            this.profile = profile;
+            this.segments = segments;
+        }
+
+        private double nextSampleComponent(int absoluteSampleIndex, int totalSamples) {
+            if (segmentIndex >= segments.size()) {
+                return 0.0d;
+            }
+            Segment segment = segments.get(segmentIndex);
+            double component = 0.0d;
+            if (segment.toneOn) {
+                double frequencyHz = instantaneousFrequencyHz(absoluteSampleIndex, totalSamples);
+                double phaseStep = 2.0d * Math.PI * frequencyHz / SAMPLE_RATE_HZ;
+                double edgeScale = toneEdgeScale(
+                        profile.riseRampMs(),
+                        profile.fallRampMs(),
+                        segment.sampleCount,
+                        segmentSampleIndex
+                );
+                component = Math.sin(phase) * profile.toneAmplitude() * edgeScale;
+                phase += phaseStep;
+            }
+            advance();
+            return component;
+        }
+
+        private double instantaneousFrequencyHz(int absoluteSampleIndex, int totalSamples) {
+            if (Math.abs(profile.toneDriftHz()) < 0.0001d || totalSamples <= 1) {
+                return profile.toneFrequencyHz();
+            }
+            double progress = Math.max(0.0d, Math.min(1.0d, absoluteSampleIndex / (double) (totalSamples - 1)));
+            return Math.max(1.0d, profile.toneFrequencyHz() + (profile.toneDriftHz() * progress));
+        }
+
+        private void advance() {
+            segmentSampleIndex += 1;
+            while (segmentIndex < segments.size() && segmentSampleIndex >= segments.get(segmentIndex).sampleCount) {
+                segmentIndex += 1;
+                segmentSampleIndex = 0;
+            }
         }
     }
 

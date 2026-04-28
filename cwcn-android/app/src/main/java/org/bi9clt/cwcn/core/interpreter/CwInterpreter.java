@@ -64,7 +64,10 @@ public final class CwInterpreter {
             return;
         }
 
-        rawText = decodeEvent.outputText().trim();
+        rawText = stabilizeRawText(
+                decodeEvent.outputText(),
+                recoveryMode != RecoveryMode.RAW_COPY_FOCUS
+        );
         parseCurrentText(decodeEvent.timestampMs());
     }
 
@@ -196,6 +199,43 @@ public final class CwInterpreter {
                 normalizedText,
                 latestTokenSummary
         );
+    }
+
+    private String stabilizeRawText(String candidateText, boolean allowCompoundExpansion) {
+        if (candidateText == null) {
+            return "";
+        }
+        String semanticRawText = candidateText.trim()
+                .toUpperCase(Locale.US)
+                .replace(CwDecoder.UNKNOWN_CHARACTER, "?");
+        if (semanticRawText.isEmpty()) {
+            return "";
+        }
+        String structuralRawText = allowCompoundExpansion
+                ? expandCompoundText(semanticRawText)
+                : semanticRawText;
+        List<String> rawParts = allowCompoundExpansion
+                ? normalizeRawParts(structuralRawText.split("\\s+"))
+                : normalizeRawCopyParts(structuralRawText.split("\\s+"));
+        return String.join(" ", rawParts).trim();
+    }
+
+    private List<String> normalizeRawCopyParts(String[] rawParts) {
+        ArrayList<String> normalizedParts = new ArrayList<>();
+        for (int index = 0; index < rawParts.length; index++) {
+            String token = rawParts[index];
+            if (token == null || token.isEmpty()) {
+                continue;
+            }
+            String mergedFixedToken = mergeSplitFixedToken(rawParts, index);
+            if (mergedFixedToken != null) {
+                normalizedParts.add(mergedFixedToken);
+                index += countMergedSplitTokens(rawParts, index, mergedFixedToken.length()) - 1;
+                continue;
+            }
+            normalizedParts.add(token);
+        }
+        return normalizedParts;
     }
 
     private void parseRawCopyFocusText(long timestampMs) {
@@ -1728,7 +1768,7 @@ public final class CwInterpreter {
         int partCount = 0;
         for (int index = startIndex; index < rawParts.length && partCount < 3; index++) {
             String token = rawParts[index];
-            if (!isShortMergeableFragment(token)) {
+            if (!isCountableMergedFragment(token)) {
                 break;
             }
             consumedLength += token.length();
@@ -1741,6 +1781,13 @@ public final class CwInterpreter {
             }
         }
         return 1;
+    }
+
+    private boolean isCountableMergedFragment(String token) {
+        return token != null
+                && !token.isEmpty()
+                && token.length() <= 2
+                && token.matches("[A-Z0-9?]+");
     }
 
     private String joinRawParts(String[] rawParts, int startInclusive, int endExclusive) {

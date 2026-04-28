@@ -8,6 +8,8 @@ public final class CwSignalSnapshot {
     private final boolean targetToneLocked;
     private final int preferredToneFrequencyHz;
     private final int targetToneFrequencyHz;
+    private final int representativeLockedToneFrequencyHz;
+    private final int representativeLockedToneFrameCount;
     private final int currentThreshold;
     private final int releaseThreshold;
     private final int noiseFloorEstimate;
@@ -41,12 +43,30 @@ public final class CwSignalSnapshot {
     private final double wideScanWinnerSelectionScore;
     private final double acquisitionWinnerSelectionScore;
     private final double finalAdoptedSelectionScore;
+    private final double preferredWindowWinnerConfidence;
+    private final double wideScanWinnerConfidence;
+    private final double acquisitionWinnerConfidence;
+    private final double finalAdoptedConfidence;
+    private final int preferredWindowRunnerUpFrequencyHz;
+    private final int wideScanRunnerUpFrequencyHz;
+    private final int acquisitionRunnerUpFrequencyHz;
+    private final double preferredWindowRunnerUpSelectionScore;
+    private final double wideScanRunnerUpSelectionScore;
+    private final double acquisitionRunnerUpSelectionScore;
+    private final int previousTargetBeforeScanFrequencyHz;
+    private final double previousTargetBeforeScanToneRms;
+    private final double previousTargetBeforeScanSelectionScore;
+    private final boolean previousTargetBeforeScanLocked;
     private final boolean preferredWindowWinnerLocked;
     private final boolean wideScanWinnerLocked;
     private final boolean acquisitionWinnerLocked;
     private final boolean finalAdoptedLocked;
     private final String acquisitionWinnerSource;
     private final String finalAdoptedSource;
+    private final String acquisitionDecisionDetail;
+    private final String finalAdoptionDetail;
+    private final String preferredWindowTopCandidatesSummary;
+    private final String wideScanTopCandidatesSummary;
     private final int totalToneOnEvents;
     private final int totalToneOffEvents;
     private final int frameGapResetCount;
@@ -64,6 +84,8 @@ public final class CwSignalSnapshot {
             boolean targetToneLocked,
             int preferredToneFrequencyHz,
             int targetToneFrequencyHz,
+            int representativeLockedToneFrequencyHz,
+            int representativeLockedToneFrameCount,
             int currentThreshold,
             int releaseThreshold,
             int noiseFloorEstimate,
@@ -112,6 +134,160 @@ public final class CwSignalSnapshot {
             long lastFrameGapResetAtMs,
             CwToneEvent lastEvent
     ) {
+        this(
+                recentHistoryFrameCount,
+                recentFrontEndStateHistory,
+                recentTrackingOffsetHistoryHz,
+                toneActive,
+                targetToneLocked,
+                preferredToneFrequencyHz,
+                targetToneFrequencyHz,
+                representativeLockedToneFrequencyHz,
+                representativeLockedToneFrameCount,
+                currentThreshold,
+                releaseThreshold,
+                noiseFloorEstimate,
+                signalFloorEstimate,
+                lastRmsAmplitude,
+                lastToneRmsAmplitude,
+                lastWidebandResidualRmsAmplitude,
+                toneDominanceRatio,
+                narrowbandIsolationRatio,
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                processedFrameCount,
+                lockedFrameCount,
+                toneActiveFrameCount,
+                toneActiveUnlockedFrameCount,
+                consecutiveLockedFrames,
+                maxConsecutiveLockedFrames,
+                consecutiveToneActiveUnlockedFrames,
+                maxConsecutiveToneActiveUnlockedFrames,
+                pendingRetuneCandidateFrequencyHz,
+                pendingRetuneCandidateStableScans,
+                preferredWindowWinnerFrequencyHz,
+                wideScanWinnerFrequencyHz,
+                acquisitionWinnerFrequencyHz,
+                finalAdoptedFrequencyHz,
+                preferredWindowWinnerToneRms,
+                wideScanWinnerToneRms,
+                acquisitionWinnerToneRms,
+                finalAdoptedToneRms,
+                preferredWindowWinnerSelectionScore,
+                wideScanWinnerSelectionScore,
+                acquisitionWinnerSelectionScore,
+                finalAdoptedSelectionScore,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0,
+                0,
+                0,
+                0.0d,
+                0.0d,
+                0.0d,
+                0,
+                0.0d,
+                0.0d,
+                false,
+                preferredWindowWinnerLocked,
+                wideScanWinnerLocked,
+                acquisitionWinnerLocked,
+                finalAdoptedLocked,
+                acquisitionWinnerSource,
+                finalAdoptedSource,
+                "NONE",
+                "NONE",
+                "NONE",
+                "NONE",
+                totalToneOnEvents,
+                totalToneOffEvents,
+                frameGapResetCount,
+                lastFrameGapMs,
+                lastFrameGapResetThresholdMs,
+                worstFrameGapMs,
+                lastFrameGapResetAtMs,
+                lastEvent
+        );
+    }
+
+    public CwSignalSnapshot(
+            int recentHistoryFrameCount,
+            char[] recentFrontEndStateHistory,
+            int[] recentTrackingOffsetHistoryHz,
+            boolean toneActive,
+            boolean targetToneLocked,
+            int preferredToneFrequencyHz,
+            int targetToneFrequencyHz,
+            int representativeLockedToneFrequencyHz,
+            int representativeLockedToneFrameCount,
+            int currentThreshold,
+            int releaseThreshold,
+            int noiseFloorEstimate,
+            int signalFloorEstimate,
+            double lastRmsAmplitude,
+            double lastToneRmsAmplitude,
+            double lastWidebandResidualRmsAmplitude,
+            double toneDominanceRatio,
+            double narrowbandIsolationRatio,
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            int processedFrameCount,
+            int lockedFrameCount,
+            int toneActiveFrameCount,
+            int toneActiveUnlockedFrameCount,
+            int consecutiveLockedFrames,
+            int maxConsecutiveLockedFrames,
+            int consecutiveToneActiveUnlockedFrames,
+            int maxConsecutiveToneActiveUnlockedFrames,
+            int pendingRetuneCandidateFrequencyHz,
+            int pendingRetuneCandidateStableScans,
+            int preferredWindowWinnerFrequencyHz,
+            int wideScanWinnerFrequencyHz,
+            int acquisitionWinnerFrequencyHz,
+            int finalAdoptedFrequencyHz,
+            double preferredWindowWinnerToneRms,
+            double wideScanWinnerToneRms,
+            double acquisitionWinnerToneRms,
+            double finalAdoptedToneRms,
+            double preferredWindowWinnerSelectionScore,
+            double wideScanWinnerSelectionScore,
+            double acquisitionWinnerSelectionScore,
+            double finalAdoptedSelectionScore,
+            double preferredWindowWinnerConfidence,
+            double wideScanWinnerConfidence,
+            double acquisitionWinnerConfidence,
+            double finalAdoptedConfidence,
+            int preferredWindowRunnerUpFrequencyHz,
+            int wideScanRunnerUpFrequencyHz,
+            int acquisitionRunnerUpFrequencyHz,
+            double preferredWindowRunnerUpSelectionScore,
+            double wideScanRunnerUpSelectionScore,
+            double acquisitionRunnerUpSelectionScore,
+            int previousTargetBeforeScanFrequencyHz,
+            double previousTargetBeforeScanToneRms,
+            double previousTargetBeforeScanSelectionScore,
+            boolean previousTargetBeforeScanLocked,
+            boolean preferredWindowWinnerLocked,
+            boolean wideScanWinnerLocked,
+            boolean acquisitionWinnerLocked,
+            boolean finalAdoptedLocked,
+            String acquisitionWinnerSource,
+            String finalAdoptedSource,
+            String acquisitionDecisionDetail,
+            String finalAdoptionDetail,
+            String preferredWindowTopCandidatesSummary,
+            String wideScanTopCandidatesSummary,
+            int totalToneOnEvents,
+            int totalToneOffEvents,
+            int frameGapResetCount,
+            long lastFrameGapMs,
+            long lastFrameGapResetThresholdMs,
+            long worstFrameGapMs,
+            long lastFrameGapResetAtMs,
+            CwToneEvent lastEvent
+    ) {
         this.recentHistoryFrameCount = recentHistoryFrameCount;
         this.recentFrontEndStateHistory = recentFrontEndStateHistory == null
                 ? new char[0]
@@ -123,6 +299,8 @@ public final class CwSignalSnapshot {
         this.targetToneLocked = targetToneLocked;
         this.preferredToneFrequencyHz = preferredToneFrequencyHz;
         this.targetToneFrequencyHz = targetToneFrequencyHz;
+        this.representativeLockedToneFrequencyHz = representativeLockedToneFrequencyHz;
+        this.representativeLockedToneFrameCount = representativeLockedToneFrameCount;
         this.currentThreshold = currentThreshold;
         this.releaseThreshold = releaseThreshold;
         this.noiseFloorEstimate = noiseFloorEstimate;
@@ -156,12 +334,34 @@ public final class CwSignalSnapshot {
         this.wideScanWinnerSelectionScore = wideScanWinnerSelectionScore;
         this.acquisitionWinnerSelectionScore = acquisitionWinnerSelectionScore;
         this.finalAdoptedSelectionScore = finalAdoptedSelectionScore;
+        this.preferredWindowWinnerConfidence = preferredWindowWinnerConfidence;
+        this.wideScanWinnerConfidence = wideScanWinnerConfidence;
+        this.acquisitionWinnerConfidence = acquisitionWinnerConfidence;
+        this.finalAdoptedConfidence = finalAdoptedConfidence;
+        this.preferredWindowRunnerUpFrequencyHz = preferredWindowRunnerUpFrequencyHz;
+        this.wideScanRunnerUpFrequencyHz = wideScanRunnerUpFrequencyHz;
+        this.acquisitionRunnerUpFrequencyHz = acquisitionRunnerUpFrequencyHz;
+        this.preferredWindowRunnerUpSelectionScore = preferredWindowRunnerUpSelectionScore;
+        this.wideScanRunnerUpSelectionScore = wideScanRunnerUpSelectionScore;
+        this.acquisitionRunnerUpSelectionScore = acquisitionRunnerUpSelectionScore;
+        this.previousTargetBeforeScanFrequencyHz = previousTargetBeforeScanFrequencyHz;
+        this.previousTargetBeforeScanToneRms = previousTargetBeforeScanToneRms;
+        this.previousTargetBeforeScanSelectionScore = previousTargetBeforeScanSelectionScore;
+        this.previousTargetBeforeScanLocked = previousTargetBeforeScanLocked;
         this.preferredWindowWinnerLocked = preferredWindowWinnerLocked;
         this.wideScanWinnerLocked = wideScanWinnerLocked;
         this.acquisitionWinnerLocked = acquisitionWinnerLocked;
         this.finalAdoptedLocked = finalAdoptedLocked;
         this.acquisitionWinnerSource = acquisitionWinnerSource == null ? "NONE" : acquisitionWinnerSource;
         this.finalAdoptedSource = finalAdoptedSource == null ? "NONE" : finalAdoptedSource;
+        this.acquisitionDecisionDetail = acquisitionDecisionDetail == null ? "NONE" : acquisitionDecisionDetail;
+        this.finalAdoptionDetail = finalAdoptionDetail == null ? "NONE" : finalAdoptionDetail;
+        this.preferredWindowTopCandidatesSummary = preferredWindowTopCandidatesSummary == null
+                ? "NONE"
+                : preferredWindowTopCandidatesSummary;
+        this.wideScanTopCandidatesSummary = wideScanTopCandidatesSummary == null
+                ? "NONE"
+                : wideScanTopCandidatesSummary;
         this.totalToneOnEvents = totalToneOnEvents;
         this.totalToneOffEvents = totalToneOffEvents;
         this.frameGapResetCount = frameGapResetCount;
@@ -197,6 +397,21 @@ public final class CwSignalSnapshot {
     }
 
     public int targetToneFrequencyHz() {
+        return targetToneFrequencyHz;
+    }
+
+    public int representativeLockedToneFrequencyHz() {
+        return representativeLockedToneFrequencyHz;
+    }
+
+    public int representativeLockedToneFrameCount() {
+        return representativeLockedToneFrameCount;
+    }
+
+    public int effectiveTrackedToneFrequencyHz() {
+        if (representativeLockedToneFrameCount > 0) {
+            return representativeLockedToneFrequencyHz;
+        }
         return targetToneFrequencyHz;
     }
 
@@ -296,7 +511,26 @@ public final class CwSignalSnapshot {
         return acquisitionWinnerFrequencyHz;
     }
 
+    public int effectiveAcquisitionWinnerFrequencyHz() {
+        return preferEffectiveTrackedDisplayTone(
+                acquisitionWinnerFrequencyHz,
+                acquisitionWinnerLocked,
+                acquisitionWinnerSelectionScore
+        );
+    }
+
     public int finalAdoptedFrequencyHz() {
+        return finalAdoptedFrequencyHz;
+    }
+
+    public int effectiveFinalAdoptedFrequencyHz() {
+        if ("SEARCH_FALLBACK".equals(finalAdoptedSource)) {
+            return preferEffectiveTrackedDisplayTone(
+                    finalAdoptedFrequencyHz,
+                    finalAdoptedLocked,
+                    finalAdoptedSelectionScore
+            );
+        }
         return finalAdoptedFrequencyHz;
     }
 
@@ -332,6 +566,62 @@ public final class CwSignalSnapshot {
         return finalAdoptedSelectionScore;
     }
 
+    public double preferredWindowWinnerConfidence() {
+        return preferredWindowWinnerConfidence;
+    }
+
+    public double wideScanWinnerConfidence() {
+        return wideScanWinnerConfidence;
+    }
+
+    public double acquisitionWinnerConfidence() {
+        return acquisitionWinnerConfidence;
+    }
+
+    public double finalAdoptedConfidence() {
+        return finalAdoptedConfidence;
+    }
+
+    public int preferredWindowRunnerUpFrequencyHz() {
+        return preferredWindowRunnerUpFrequencyHz;
+    }
+
+    public int wideScanRunnerUpFrequencyHz() {
+        return wideScanRunnerUpFrequencyHz;
+    }
+
+    public int acquisitionRunnerUpFrequencyHz() {
+        return acquisitionRunnerUpFrequencyHz;
+    }
+
+    public double preferredWindowRunnerUpSelectionScore() {
+        return preferredWindowRunnerUpSelectionScore;
+    }
+
+    public double wideScanRunnerUpSelectionScore() {
+        return wideScanRunnerUpSelectionScore;
+    }
+
+    public double acquisitionRunnerUpSelectionScore() {
+        return acquisitionRunnerUpSelectionScore;
+    }
+
+    public int previousTargetBeforeScanFrequencyHz() {
+        return previousTargetBeforeScanFrequencyHz;
+    }
+
+    public double previousTargetBeforeScanToneRms() {
+        return previousTargetBeforeScanToneRms;
+    }
+
+    public double previousTargetBeforeScanSelectionScore() {
+        return previousTargetBeforeScanSelectionScore;
+    }
+
+    public boolean previousTargetBeforeScanLocked() {
+        return previousTargetBeforeScanLocked;
+    }
+
     public boolean preferredWindowWinnerLocked() {
         return preferredWindowWinnerLocked;
     }
@@ -354,6 +644,22 @@ public final class CwSignalSnapshot {
 
     public String finalAdoptedSource() {
         return finalAdoptedSource;
+    }
+
+    public String acquisitionDecisionDetail() {
+        return acquisitionDecisionDetail;
+    }
+
+    public String finalAdoptionDetail() {
+        return finalAdoptionDetail;
+    }
+
+    public String preferredWindowTopCandidatesSummary() {
+        return preferredWindowTopCandidatesSummary;
+    }
+
+    public String wideScanTopCandidatesSummary() {
+        return wideScanTopCandidatesSummary;
     }
 
     public double lockedFrameRatio() {
@@ -499,5 +805,23 @@ public final class CwSignalSnapshot {
             return 0.0d;
         }
         return Math.max(0.0d, Math.min(1.0d, count / (double) recentLockedFrameCount));
+    }
+
+    private int preferEffectiveTrackedDisplayTone(
+            int rawFrequencyHz,
+            boolean rawLocked,
+            double rawSelectionScore
+    ) {
+        int effectiveTrackedToneHz = effectiveTrackedToneFrequencyHz();
+        if (rawLocked
+                || representativeLockedToneFrameCount <= 0
+                || effectiveTrackedToneHz <= 0
+                || Math.abs(rawFrequencyHz - effectiveTrackedToneHz) < 40) {
+            return rawFrequencyHz;
+        }
+        if (rawFrequencyHz <= 0 || rawSelectionScore <= 0.0d) {
+            return effectiveTrackedToneHz;
+        }
+        return rawFrequencyHz;
     }
 }

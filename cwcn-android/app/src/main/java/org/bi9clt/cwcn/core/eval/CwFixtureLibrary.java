@@ -263,6 +263,46 @@ public final class CwFixtureLibrary {
                     "Exercises a 700Hz short over-the-air style preamble that steps through 15, 10, 18, 20, and 25 WPM so front-end lock continuity can be regression-tested before live speaker-to-phone trials."
             ),
             new CwFixtureScenario(
+                    "user_speed_shift_jv3vv_700hz",
+                    "User Speed Shift JV3VV 700Hz",
+                    "CQ CQ DX DE JV3VV JV3VV PAGE K / CQ DX CQ DX DE JV3VV JV3VV PAGE K",
+                    Arrays.asList(
+                            "CQ CQ DX DE JV3VV JV3VV PAGE K",
+                            "CQ DX CQ DX DE JV3VV JV3VV PAGE K"
+                    ),
+                    1200,
+                    22,
+                    700,
+                    18000,
+                    2800,
+                    0.10d,
+                    1800,
+                    0.0d,
+                    0.0d,
+                    0.05d,
+                    0.02d,
+                    4,
+                    4,
+                    Arrays.asList(
+                            new PartTimingProfile(1.26d, 1.18d, 0.05d, 0.02d, 0.02d, 1.02d, 1.06d, 1.12d, 0, 0.0d),
+                            new PartTimingProfile(0.92d, 0.84d, 0.05d, 0.02d, 0.01d, 1.00d, 1.05d, 1.08d, 0, 0.0d)
+                    ),
+                    250,
+                    450,
+                    "CQ CQ DX DE JV3VV JV3VV PAGE K CQ DX CQ DX DE JV3VV JV3VV PAGE K",
+                    Collections.singletonList("JV3VV"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Speed shift / fast to slow continuity",
+                            "Repeated station identification under changing rhythm"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "DROP",
+                    "Exercises a recording-(2)-style two-round message where the operator starts fast and then intentionally slows down in the second round, without resetting tone tracking or decode state."
+            ),
+            new CwFixtureScenario(
                     "user_tone_sweep_vvv_18wpm",
                     "User Tone Sweep VVV 18WPM",
                     "VVV VVV DE BI9XXX BI9CXX SK",
@@ -303,6 +343,851 @@ public final class CwFixtureLibrary {
                     "DROP",
                     "Exercises preferred-window versus wide-scan retune behavior while a short over-the-air style preamble steps across 700, 600, 650, 750, 800, and 400Hz."
             ),
+            new CwFixtureScenario(
+                    "user_long_qso_drift_bg1xxx_ja1abc",
+                    "User Long QSO Drift BG1XXX JA1ABC",
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Arrays.asList(
+                            "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK"
+                    ),
+                    1800,
+                    19,
+                    670,
+                    17600,
+                    1300,
+                    0.10d,
+                    2200,
+                    10.0d,
+                    0.0d,
+                    0.09d,
+                    0.05d,
+                    6,
+                    7,
+                    Collections.singletonList(
+                            new PartTimingProfile(0.98d, 1.12d, 0.09d, 0.05d, 0.02d, 1.03d, 1.10d, 1.35d, 0, 0.0d)
+                    ),
+                    250,
+                    450,
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Arrays.asList("BG1XXX", "JA1ABC"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Turn handoff / over",
+                            "Closing / acknowledgement",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    null,
+                    "579",
+                    "CHECK",
+                    "Exercises a recording-(9)-style long continuous QSO text with no inter-part reset, light QSB, gentle tone drift, and gradual speed-up so second-half timing stability can be regression-tested directly."
+            ),
+            new CwFixtureScenario(
+                    "user_multi_round_continuous_qso_bi9clt_ja1abc",
+                    "User Multi-Round Continuous QSO BI9CLT JA1ABC",
+                    "CQ CQ CQ DE BI9CLT BI9CLT PSE K JA1ABC DE BI9CLT UR 599 BK BI9CLT DE JA1ABC R 579 QTH TOKYO BK JA1ABC DE BI9CLT TU 73 SK",
+                    Collections.singletonList(
+                            "CQ CQ CQ DE BI9CLT BI9CLT PSE K JA1ABC DE BI9CLT UR 599 BK BI9CLT DE JA1ABC R 579 QTH TOKYO BK JA1ABC DE BI9CLT TU 73 SK"
+                    ),
+                    1800,
+                    18,
+                    680,
+                    17800,
+                    1100,
+                    0.08d,
+                    2100,
+                    6.0d,
+                    0.0d,
+                    0.08d,
+                    0.04d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(
+                                    1.00d,
+                                    1.08d,
+                                    0.08d,
+                                    0.04d,
+                                    0.02d,
+                                    1.05d,
+                                    1.18d,
+                                    1.45d,
+                                    9,
+                                    1.1d
+                            )
+                    ),
+                    250,
+                    320,
+                    "CQ CQ CQ DE BI9CLT BI9CLT PSE K JA1ABC DE BI9CLT UR 599 BK BI9CLT DE JA1ABC R 579 QTH TOKYO BK JA1ABC DE BI9CLT TU 73 SK",
+                    Arrays.asList("BI9CLT", "JA1ABC"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Turn handoff / over",
+                            "Closing / acknowledgement",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    "599",
+                    "579",
+                    "GOOD",
+                    "Exercises a true single-stream multi-round exchange with K/BK handoffs embedded inside one continuous message part, so decode continuity is tested without relying on large inter-message reset gaps."
+            ),
+            new CwFixtureScenario(
+                    "user_similar_callsign_collision_bi9cms_bi9clt",
+                    "User Similar Callsign Collision BI9CMS BI9CLT",
+                    "BI9CMS BI9CMS BI9CMS DE BI9CLT BI8DLT BI9CLT UR 599 5NN BK",
+                    Collections.singletonList(
+                            "BI9CMS BI9CMS BI9CMS DE BI9CLT BI8DLT BI9CLT UR 599 5NN BK"
+                    ),
+                    1800,
+                    18,
+                    700,
+                    17800,
+                    1050,
+                    0.05d,
+                    1900,
+                    0.0d,
+                    0.0d,
+                    0.07d,
+                    0.04d,
+                    4,
+                    5,
+                    Collections.singletonList(
+                            new PartTimingProfile(
+                                    0.98d,
+                                    1.02d,
+                                    0.07d,
+                                    0.04d,
+                                    0.02d,
+                                    1.03d,
+                                    1.08d,
+                                    1.18d,
+                                    0,
+                                    0.0d
+                            )
+                    ),
+                    250,
+                    360,
+                    "BI9CMS BI9CMS BI9CMS DE BI9CLT BI8DLT BI9CLT UR 599 599 BK",
+                    Arrays.asList("BI9CMS", "BI9CLT", "BI8DLT"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Repeated short tokens",
+                            "Near-neighbor callsign discrimination",
+                            "Report exchange",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    "599",
+                    null,
+                    "GOOD",
+                    "Exercises repeated near-neighbor callsigns in one compact stream so segmentation and token discrimination can be checked separately from any callsign-smart postprocessing."
+            ),
+            new CwFixtureScenario(
+                    "user_short_tail_qrz_bi3tuk_kn",
+                    "User Short-Tail QRZ BI3TUK KN",
+                    "QRZ DE BI3TUK KN",
+                    Collections.singletonList("QRZ DE BI3TUK KN"),
+                    1800,
+                    20,
+                    580,
+                    17600,
+                    950,
+                    0.04d,
+                    1800,
+                    0.0d,
+                    0.0d,
+                    0.05d,
+                    0.02d,
+                    4,
+                    4,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.00d, 0.05d, 0.02d, 0.01d, 1.02d, 1.05d, 1.10d, 0, 0.0d)
+                    ),
+                    220,
+                    85,
+                    "QRZ DE BI3TUK KN",
+                    Collections.singletonList("BI3TUK"),
+                    Arrays.asList(
+                            "Station identification / callsign exchange",
+                            "Short-tail ending",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.REPORT_EXCHANGE,
+                    null,
+                    null,
+                    "GOOD",
+                    "Exercises a short-tail ending where the final KN is followed by only slightly more than a letter-gap worth of silence, so trailing-character emission can be checked without relying on long tail padding."
+            ),
+            new CwFixtureScenario(
+                    "user_repetition_fatigue_cq_bi9clt",
+                    "User Repetition Fatigue CQ BI9CLT",
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K CQ CQ CQ DE BI9CLT BI9CLT PSE K CQ CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList(
+                            "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K CQ CQ CQ DE BI9CLT BI9CLT PSE K CQ CQ CQ DE BI9CLT BI9CLT PSE K"
+                    ),
+                    1800,
+                    18,
+                    700,
+                    17800,
+                    1150,
+                    0.08d,
+                    2200,
+                    0.0d,
+                    0.0d,
+                    0.09d,
+                    0.04d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.04d, 0.09d, 0.04d, 0.02d, 1.04d, 1.10d, 1.24d, 8, 0.9d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K CQ CQ CQ DE BI9CLT BI9CLT PSE K CQ CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Repetition fatigue",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "GOOD",
+                    "Exercises three repeated CQ loops in one continuous stream so mid-stream timing fatigue and repeated-pattern corruption can be regression-tested directly."
+            ),
+            new CwFixtureScenario(
+                    "user_long_qso_edge_low_500hz",
+                    "User Long QSO Edge Low 500Hz",
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Collections.singletonList(
+                            "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK"
+                    ),
+                    1800,
+                    18,
+                    500,
+                    17600,
+                    1050,
+                    0.06d,
+                    2200,
+                    2.0d,
+                    0.0d,
+                    0.08d,
+                    0.04d,
+                    6,
+                    7,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.06d, 0.08d, 0.04d, 0.02d, 1.03d, 1.10d, 1.30d, 0, 0.0d)
+                    ),
+                    250,
+                    420,
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Arrays.asList("BG1XXX", "JA1ABC"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Low-edge tone acquisition",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    null,
+                    "579",
+                    "CHECK",
+                    "Exercises the long QSO payload near the low tone edge so acquisition and segmentation can be checked when the true signal sits around 500Hz rather than in the 650-700Hz comfort zone."
+            ),
+            new CwFixtureScenario(
+                    "user_long_qso_edge_high_800hz",
+                    "User Long QSO Edge High 800Hz",
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Collections.singletonList(
+                            "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK"
+                    ),
+                    1800,
+                    18,
+                    800,
+                    17600,
+                    1000,
+                    0.05d,
+                    2200,
+                    3.0d,
+                    0.0d,
+                    0.08d,
+                    0.04d,
+                    6,
+                    7,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.06d, 0.08d, 0.04d, 0.02d, 1.03d, 1.10d, 1.30d, 0, 0.0d)
+                    ),
+                    250,
+                    420,
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Arrays.asList("BG1XXX", "JA1ABC"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "High-edge tone acquisition",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    null,
+                    "579",
+                    "CHECK",
+                    "Exercises the long QSO payload near the high tone edge so wrong-preferred recovery and long-text stability can be checked when the real signal sits around 800Hz."
+            ),
+            new CwFixtureScenario(
+                    "user_long_qso_edge_low_460hz_stress",
+                    "User Long QSO Edge Low 460Hz Stress",
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Collections.singletonList(
+                            "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK"
+                    ),
+                    1800,
+                    18,
+                    460,
+                    17600,
+                    1250,
+                    0.08d,
+                    2200,
+                    4.0d,
+                    0.0d,
+                    0.08d,
+                    0.04d,
+                    6,
+                    7,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.06d, 0.08d, 0.04d, 0.02d, 1.03d, 1.10d, 1.30d, 0, 0.0d)
+                    ),
+                    250,
+                    420,
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Arrays.asList("BG1XXX", "JA1ABC"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Low-edge tone acquisition stress",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    null,
+                    "579",
+                    "DROP",
+                    "Stress-only variant of the long QSO payload near 460Hz. This is intentionally harsher than the main regression edge pair and should be treated as observability pressure rather than a stable pass/fail boundary."
+            ),
+            new CwFixtureScenario(
+                    "user_long_qso_edge_high_840hz_stress",
+                    "User Long QSO Edge High 840Hz Stress",
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Collections.singletonList(
+                            "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK"
+                    ),
+                    1800,
+                    18,
+                    840,
+                    17600,
+                    1250,
+                    0.08d,
+                    2200,
+                    6.0d,
+                    0.0d,
+                    0.08d,
+                    0.04d,
+                    6,
+                    7,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.06d, 0.08d, 0.04d, 0.02d, 1.03d, 1.10d, 1.30d, 0, 0.0d)
+                    ),
+                    250,
+                    420,
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Arrays.asList("BG1XXX", "JA1ABC"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "High-edge tone acquisition stress",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    null,
+                    "579",
+                    "DROP",
+                    "Stress-only variant of the long QSO payload near 840Hz. This is intentionally harsher than the main regression edge pair and should be treated as observability pressure rather than a stable pass/fail boundary."
+            ),
+            new CwFixtureScenario(
+                    "user_weak_adjacent_cluster_cq_700hz",
+                    "User Weak Adjacent Cluster CQ 700Hz",
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Arrays.asList("CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    700,
+                    18000,
+                    3000,
+                    0.12d,
+                    1850,
+                    0.0d,
+                    0.0d,
+                    0.05d,
+                    0.02d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.05d, 0.02d, 0.01d, 1.01d, 1.05d, 1.15d, 0, 0.0d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Weak adjacent cluster",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "GOOD",
+                    "Exercises a user-style 18 WPM CQ under several weak adjacent carriers at once, closer to benign crowded-band listening than a single isolated nearby tone."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(620, 650),
+                    new CwFixtureScenario.ContinuousInterfererProfile(760, 600, -8.0d),
+                    new CwFixtureScenario.ContinuousInterfererProfile(830, 450, 0.0d, 85, 125, 45)
+            )),
+            new CwFixtureScenario(
+                    "user_noisy_bursty_adjacent_cluster_cq_700hz",
+                    "User Noisy Bursty Adjacent Cluster CQ 700Hz",
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Arrays.asList("CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    700,
+                    18000,
+                    4200,
+                    0.10d,
+                    1750,
+                    0.0d,
+                    0.0d,
+                    0.06d,
+                    0.03d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(0.99d, 1.04d, 0.06d, 0.03d, 0.01d, 1.02d, 1.06d, 1.18d, 0, 0.0d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Bursty adjacent QRM",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "CHECK",
+                    "Exercises a noisier user-style CQ where nearby weak interferers are no longer all continuous: one carrier bursts, another drifts, and a third sits farther out as weak occupancy."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(660, 1100, 0.0d, 90, 100, 20, 0.12d, 310),
+                    new CwFixtureScenario.ContinuousInterfererProfile(780, 900, -12.0d, 70, 140, 55),
+                    new CwFixtureScenario.ContinuousInterfererProfile(920, 500)
+            )),
+            new CwFixtureScenario(
+                    "user_cochannel_underlay_proxy_cq_700hz",
+                    "User Cochannel Underlay Proxy CQ 700Hz",
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Arrays.asList("CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    700,
+                    18000,
+                    2600,
+                    0.08d,
+                    1900,
+                    0.0d,
+                    0.0d,
+                    0.05d,
+                    0.02d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.05d, 0.02d, 0.01d, 1.01d, 1.05d, 1.15d, 0, 0.0d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Cochannel underlay proxy",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "CHECK",
+                    "Exercises a proxy for weak cochannel occupancy using a same-frequency drifting/bursty carrier underlay plus a small nearby carrier. This is not yet a true second keyed CW sender, but it gives us a first bench-useful cochannel-like stress shape."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(700, 700, 2.5d, 95, 115, 30, 0.08d, 260),
+                    new CwFixtureScenario.ContinuousInterfererProfile(735, 450)
+            )),
+            new CwFixtureScenario(
+                    "user_same_tone_dual_sequence_target_priority_700hz",
+                    "User Same-Tone Dual Sequence Target Priority 700Hz",
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("CQ CQ DE BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    700,
+                    18000,
+                    1200,
+                    0.04d,
+                    2200,
+                    0.0d,
+                    0.0d,
+                    0.05d,
+                    0.02d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.05d, 0.02d, 0.01d, 1.01d, 1.05d, 1.15d, 0, 0.0d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Same-tone branch discrimination",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "CHECK",
+                    "Exercises a true same-tone keyed overlap where the target CQ sequence shares 700Hz with a different interfering Morse sequence. The messages are intentionally different so we can tell which branch the decoder actually followed."
+            ).withKeyedInterferers(Collections.singletonList(
+                    new CwFixtureScenario.KeyedInterfererProfile(
+                            "VVV VVV DE JA1ABC JA1ABC BK",
+                            18,
+                            700,
+                            14500,
+                            180
+                    )
+            )),
+            new CwFixtureScenario(
+                    "user_same_tone_dual_sequence_target_dominant_700hz",
+                    "User Same-Tone Dual Sequence Target Dominant 700Hz",
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("CQ CQ DE BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    700,
+                    19000,
+                    700,
+                    0.03d,
+                    2200,
+                    0.0d,
+                    0.0d,
+                    0.04d,
+                    0.02d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.04d, 0.02d, 0.01d, 1.01d, 1.05d, 1.15d, 0, 0.0d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Same-tone branch discrimination",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "CHECK",
+                    "Exercises same-tone dual keyed overlap where the target branch is intentionally stronger than the interfering branch, so we can see whether a simple strong-signal preference is enough to keep copy on the intended CQ sequence."
+            ).withKeyedInterferers(Collections.singletonList(
+                    new CwFixtureScenario.KeyedInterfererProfile(
+                            "VVV VVV DE JA1ABC JA1ABC BK",
+                            18,
+                            700,
+                            7000,
+                            220
+                    )
+            )),
+            new CwFixtureScenario(
+                    "user_same_tone_dual_sequence_interferer_dominant_700hz",
+                    "User Same-Tone Dual Sequence Interferer Dominant 700Hz",
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("CQ CQ DE BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    700,
+                    12000,
+                    700,
+                    0.03d,
+                    2200,
+                    0.0d,
+                    0.0d,
+                    0.04d,
+                    0.02d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.04d, 0.02d, 0.01d, 1.01d, 1.05d, 1.15d, 0, 0.0d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Same-tone branch discrimination",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "CHECK",
+                    "Exercises the same same-tone dual keyed overlap, but now the interfering branch is intentionally stronger so we can measure whether decode drifts toward the stronger foreign sequence instead of the intended target."
+            ).withKeyedInterferers(Collections.singletonList(
+                    new CwFixtureScenario.KeyedInterfererProfile(
+                            "VVV VVV DE JA1ABC JA1ABC BK",
+                            18,
+                            700,
+                            19000,
+                            220
+                    )
+            )),
+            new CwFixtureScenario(
+                    "user_hum_noise_adjacent_cluster_cq_700hz",
+                    "User Hum Noise Adjacent Cluster CQ 700Hz",
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Arrays.asList("CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    700,
+                    18000,
+                    100,
+                    900,
+                    3600,
+                    0.10d,
+                    1800,
+                    0.0d,
+                    0.0d,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.05d, 0.02d, 0.01d, 1.01d, 1.05d, 1.15d, 0, 0.0d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Hum plus adjacent cluster",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "GOOD",
+                    "Exercises a user-style CQ under combined light line-hum, moderate broadband noise, and several weak adjacent carriers. This should feel dirtier than the single-effect baselines while still leaving the message basically copyable."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(620, 520),
+                    new CwFixtureScenario.ContinuousInterfererProfile(760, 500, -6.0d),
+                    new CwFixtureScenario.ContinuousInterfererProfile(835, 380, 0.0d, 90, 130, 40)
+            )),
+            new CwFixtureScenario(
+                    "user_left_adjacent_occupancy_cq_700hz",
+                    "User Left Adjacent Occupancy CQ 700Hz",
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Arrays.asList("CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    700,
+                    18000,
+                    3200,
+                    0.10d,
+                    1850,
+                    0.0d,
+                    0.0d,
+                    0.05d,
+                    0.02d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.05d, 0.02d, 0.01d, 1.01d, 1.05d, 1.15d, 0, 0.0d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Left adjacent occupancy",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "GOOD",
+                    "Exercises a user-style CQ with most of the weak crowded-band occupancy sitting below the target tone, so we can compare whether lower-side adjacent activity biases tracking differently from upper-side activity."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(610, 720),
+                    new CwFixtureScenario.ContinuousInterfererProfile(655, 540, -8.0d),
+                    new CwFixtureScenario.ContinuousInterfererProfile(570, 360, 0.0d, 90, 125, 30)
+            )),
+            new CwFixtureScenario(
+                    "user_right_adjacent_occupancy_cq_700hz",
+                    "User Right Adjacent Occupancy CQ 700Hz",
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Arrays.asList("CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    700,
+                    18000,
+                    3200,
+                    0.10d,
+                    1850,
+                    0.0d,
+                    0.0d,
+                    0.05d,
+                    0.02d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.05d, 0.02d, 0.01d, 1.01d, 1.05d, 1.15d, 0, 0.0d)
+                    ),
+                    250,
+                    360,
+                    "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Right adjacent occupancy",
+                            "Turn handoff / over"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "GOOD",
+                    "Exercises a user-style CQ with most of the weak crowded-band occupancy sitting above the target tone, paired with the left-side case so asymmetry can be measured explicitly."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(745, 560),
+                    new CwFixtureScenario.ContinuousInterfererProfile(790, 720, -8.0d),
+                    new CwFixtureScenario.ContinuousInterfererProfile(840, 360, 0.0d, 90, 125, 30)
+            )),
+            new CwFixtureScenario(
+                    "user_left_adjacent_occupancy_long_qso_700hz",
+                    "User Left Adjacent Occupancy Long QSO 700Hz",
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Collections.singletonList(
+                            "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK"
+                    ),
+                    1800,
+                    18,
+                    700,
+                    17600,
+                    2600,
+                    0.08d,
+                    2100,
+                    0.0d,
+                    0.0d,
+                    0.08d,
+                    0.04d,
+                    6,
+                    7,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.06d, 0.08d, 0.04d, 0.02d, 1.03d, 1.10d, 1.30d, 0, 0.0d)
+                    ),
+                    250,
+                    420,
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Arrays.asList("BG1XXX", "JA1ABC"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Left adjacent occupancy",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    null,
+                    "579",
+                    "CHECK",
+                    "Exercises the long QSO payload with most crowded-band occupancy sitting below the target tone, so we can see whether lower-side adjacent pressure causes sustained drift or only local copy damage during a longer continuous exchange."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(610, 660),
+                    new CwFixtureScenario.ContinuousInterfererProfile(655, 500, -8.0d),
+                    new CwFixtureScenario.ContinuousInterfererProfile(570, 320, 0.0d, 90, 125, 30)
+            )),
+            new CwFixtureScenario(
+                    "user_right_adjacent_occupancy_long_qso_700hz",
+                    "User Right Adjacent Occupancy Long QSO 700Hz",
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Collections.singletonList(
+                            "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK"
+                    ),
+                    1800,
+                    18,
+                    700,
+                    17600,
+                    2600,
+                    0.08d,
+                    2100,
+                    0.0d,
+                    0.0d,
+                    0.08d,
+                    0.04d,
+                    6,
+                    7,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.06d, 0.08d, 0.04d, 0.02d, 1.03d, 1.10d, 1.30d, 0, 0.0d)
+                    ),
+                    250,
+                    420,
+                    "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK",
+                    Arrays.asList("BG1XXX", "JA1ABC"),
+                    Arrays.asList(
+                            "CQ / calling flow",
+                            "Station identification / callsign exchange",
+                            "Report exchange",
+                            "Right adjacent occupancy",
+                            "73 closing"
+                    ),
+                    QsoPhase.COMPLETED,
+                    null,
+                    "579",
+                    "CHECK",
+                    "Exercises the same long QSO payload with most crowded-band occupancy above the target tone, paired with the left-side case so we can study whether upper-side pressure encourages stable retune or unstable side hopping."
+            ).withAdditionalInterferers(Arrays.asList(
+                    new CwFixtureScenario.ContinuousInterfererProfile(745, 520),
+                    new CwFixtureScenario.ContinuousInterfererProfile(790, 660, -8.0d),
+                    new CwFixtureScenario.ContinuousInterfererProfile(840, 320, 0.0d, 90, 125, 30)
+            )),
             new CwFixtureScenario(
                     "usb_nominal_cq_18wpm_700hz",
                     "USB Nominal CQ 18WPM 700Hz",
@@ -640,7 +1525,7 @@ public final class CwFixtureLibrary {
                     "599",
                     "GOOD",
                     "Adds deterministic broadband noise to stress signal and timing stages."
-            ),
+            ).withExpectedRawText("BI9CLT DE BG7YOZ UR 5NN 5NN BK"),
             new CwFixtureScenario(
                     "weak_broadband_noise_report",
                     "Weak Broadband Noise Report",
@@ -676,7 +1561,7 @@ public final class CwFixtureLibrary {
                     "599",
                     "GOOD",
                     "Targets the quiet-room-but-low-volume case: useful CW tone is present, but broadband noise is high enough to expose threshold and lock-coverage weakness."
-            ),
+            ).withExpectedRawText("BI9CLT DE BG7YOZ UR 5NN BK"),
             new CwFixtureScenario(
                     "near_frequency_narrowband_noise_report",
                     "Near-Frequency Narrowband Noise Report",
@@ -749,7 +1634,7 @@ public final class CwFixtureLibrary {
                     "599",
                     "GOOD",
                     "Approximates phone mic/OS AGC pumping with fast deep amplitude swing, light tone drift, and mild noise so threshold release behavior is visible in fixture logs."
-            ),
+            ).withExpectedRawText("BI9CLT DE BG7YOZ UR 5NN BK"),
             new CwFixtureScenario(
                     "irregular_bug_qsb_report",
                     "Irregular Bug Report",
@@ -1686,7 +2571,7 @@ public final class CwFixtureLibrary {
                     "599",
                     "GOOD",
                     "Exercises a hand-key/QSB style directed report where the copied report/control tail is damaged as UR?NN B and must be recovered downstream."
-            ),
+            ).withExpectedRawText("BI9CLT DE BG7YOZ UR ?NN B"),
             new CwFixtureScenario(
                     "human_damaged_ack_report_exchange",
                     "Human Damaged Ack Report Tail",
@@ -1719,7 +2604,7 @@ public final class CwFixtureLibrary {
                     null,
                     "GOOD",
                     "Exercises a hand-key/QSB style acknowledgement-return-report token where R?NNB should still normalize into R 599 BK."
-            ),
+            ).withExpectedRawText("BI9CLT DE BG7YOZ R ?NN B"),
             new CwFixtureScenario(
                     "human_split_short_tokens_report_exchange",
                     "Human Split Short Tokens Report",
@@ -1752,7 +2637,7 @@ public final class CwFixtureLibrary {
                     "599",
                     "GOOD",
                     "Exercises a low-priority human timing case where short CW tokens are accidentally split by extra pauses, such as 5 NN and B K, and should still normalize downstream."
-            ),
+            ).withExpectedRawText("BI9CLT DE BG7YOZ UR 5NN BK"),
             new CwFixtureScenario(
                     "human_hesitation_gap_report_exchange",
                     "Human Hesitation Gap Report",
@@ -2020,7 +2905,7 @@ public final class CwFixtureLibrary {
                     null,
                     "GOOD",
                     "Exercises a clarification flow where AGN and PSE are sent normally but hesitation pauses can make them sound temporarily split like AG N and PS E."
-            ),
+            ).withExpectedRawText("BI9CLT AGN PSE K"),
             new CwFixtureScenario(
                     "human_remembered_uncertain_prefix_closing",
                     "Human Remembered Uncertain Prefix Closing",
@@ -2101,7 +2986,7 @@ public final class CwFixtureLibrary {
                     "599",
                     "GOOD",
                     "Exercises a two-part flow where a clean earlier addressed callsign should let a later BI ?CLT closing copy preserve uncertain text while still recovering the clean remembered addressed callsign candidate."
-            ),
+            ).withExpectedRawText("BI9CLT DE BG7YOZ UR 5NN BK BI?CLT DE BG7YOZ TU 73 BK"),
             new CwFixtureScenario(
                     "human_compact_report_tail_followup",
                     "Human Compact Tail Follow-up",
@@ -2173,7 +3058,7 @@ public final class CwFixtureLibrary {
                     null,
                     "GOOD",
                     "Exercises a sticky DE-plus-closing chain with human-style speed drift, stretched handoff pause, fading, and moderate noise."
-            ),
+            ).withExpectedRawText("BI9CLT DE BG7YOZ TU 73 BK"),
             new CwFixtureScenario(
                     "human_compact_ack_closing_chain",
                     "Human Compact Ack Closing",
@@ -2525,7 +3410,7 @@ public final class CwFixtureLibrary {
                     null,
                     "GOOD",
                     "Exercises the compact ack/closing chain with soft keying edges and a gradual upward tone drift, so preferred-tone tracking and front-end retune behavior are tested against a more radio-like moving target."
-            ),
+            ).withExpectedRawText("BI9CLT DE BG7YOZ R 5NN TU 73 BK"),
             new CwFixtureScenario(
                     "fully_glued_ack_closing_chain",
                     "Fully Glued Ack Closing Chain",

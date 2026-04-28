@@ -15,6 +15,7 @@ public final class CwInterpreterRawCopyFocusTest {
         interpreter.process(decoded("CQ CQ CQ DE BI9CLTBI9CLT PSE K", 1000L));
 
         CwInterpreterSnapshot snapshot = interpreter.snapshot();
+        assertEquals("CQ CQ CQ DE BI9CLTBI9CLT PSE K", snapshot.rawText());
         assertEquals("CQ CQ CQ DE BI9CLT BI9CLT PLEASE K", snapshot.normalizedText());
         assertEquals(1, snapshot.callsignCandidates().size());
         assertEquals("BI9CLT", snapshot.primaryCallsignCandidate());

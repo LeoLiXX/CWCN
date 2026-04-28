@@ -21,6 +21,20 @@ public final class CwInterpreterCallsignRecoveryTest {
     }
 
     @Test
+    public void rawTextStabilizationMergesSplitShortControlAndReportTokens() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR 5 NN B K");
+
+        assertEquals("BI9CLT DE BG7YOZ UR 5NN BK", snapshot.rawText());
+    }
+
+    @Test
+    public void rawTextStabilizationSplitsCompactAckCallsignChainsIntoStructuralTokens() {
+        CwInterpreterSnapshot snapshot = runSequence("BKBI9CLTDEBG7YOZR5NNTU73BK");
+
+        assertEquals("BK BI9CLT DE BG7YOZ R 5NN TU 73 BK", snapshot.rawText());
+    }
+
+    @Test
     public void tailPrefixFragmentMergesIntoEarlierFullCallsignCandidate() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ TU73BKBI9CL");
 

@@ -35,16 +35,29 @@ public final class CwFixtureEvaluator {
             CwSignalSnapshot signalSnapshot,
             boolean completed
     ) {
-        String expectedText = normalizeText(scenario.expectedNormalizedText());
-        String actualText = normalizeText(interpreterSnapshot.normalizedText());
+        // Fixture scoring must reflect original copy quality first.
+        // Normalization is still useful elsewhere, but it should not inflate decode recall here.
+        String expectedText = normalizeText(scenario.expectedRawText());
+        String actualText = normalizeText(interpreterSnapshot.rawText());
         boolean exactTextMatch = expectedText.equals(actualText);
         List<String> missingTextTokens = computeMissingTextTokens(expectedText, actualText);
+        double textTokenRecall = computeTokenRecall(expectedText, actualText);
+        String expectedNormalizedText = normalizeText(scenario.expectedNormalizedText());
+        String actualNormalizedText = normalizeText(interpreterSnapshot.normalizedText());
+        boolean exactNormalizedTextMatch = expectedNormalizedText.equals(actualNormalizedText);
+        List<String> missingNormalizedTextTokens = computeMissingTextTokens(
+                expectedNormalizedText,
+                actualNormalizedText
+        );
+        double normalizedTextTokenRecall = computeTokenRecall(
+                expectedNormalizedText,
+                actualNormalizedText
+        );
+
         double primaryCallsignScore = computePrimaryCallsignScore(
                 scenario.expectedCallsigns(),
                 interpreterSnapshot.primaryCallsignCandidate()
         );
-
-        double textTokenRecall = computeTokenRecall(expectedText, actualText);
         double callsignRecall = computeValueRecall(
                 scenario.expectedCallsigns(),
                 interpreterSnapshot.callsignCandidates()
@@ -112,13 +125,17 @@ public final class CwFixtureEvaluator {
                 completed,
                 passed,
                 exactTextMatch,
+                exactNormalizedTextMatch,
                 primaryCallsignScore,
                 textTokenRecall,
+                normalizedTextTokenRecall,
                 callsignRecall,
                 hintRecall,
                 qsoSemanticScore,
                 expectedText,
                 actualText,
+                expectedNormalizedText,
+                actualNormalizedText,
                 scenario.expectedPhase() == null ? null : scenario.expectedPhase().name(),
                 actualPhase,
                 normalizeOptionalValue(scenario.expectedRstSent()),
@@ -128,6 +145,7 @@ public final class CwFixtureEvaluator {
                 normalizeValueList(interpreterSnapshot.callsignCandidates()),
                 normalizeValueList(interpreterSnapshot.phraseHints()),
                 missingTextTokens,
+                missingNormalizedTextTokens,
                 missingCallsigns,
                 missingHints,
                 failureReasons,
@@ -145,7 +163,7 @@ public final class CwFixtureEvaluator {
                 signalSnapshot == null ? 0.0d : signalSnapshot.toneActiveUnlockedFrameRatio(),
                 signalSnapshot == null ? 0 : signalSnapshot.maxConsecutiveToneActiveUnlockedFrames(),
                 signalSnapshot == null ? 0 : signalSnapshot.preferredToneFrequencyHz(),
-                signalSnapshot == null ? 0 : signalSnapshot.targetToneFrequencyHz(),
+                signalSnapshot == null ? 0 : signalSnapshot.effectiveTrackedToneFrequencyHz(),
                 signalSnapshot == null ? 0.0d : signalSnapshot.lastRmsAmplitude(),
                 signalSnapshot == null ? 0.0d : signalSnapshot.lastToneRmsAmplitude(),
                 signalSnapshot == null ? 0.0d : signalSnapshot.lastWidebandResidualRmsAmplitude(),

@@ -331,4 +331,5 @@ public final class CwFixtureEvaluationResultTest {
         assertTrue(result.renderSummary().contains("Recovery pressure: Heavy best-effort normalization"));
         assertTrue(result.renderSummary().contains("?NN->599"));
     }
+
 }

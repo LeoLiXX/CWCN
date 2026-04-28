@@ -1,6 +1,6 @@
 # Context Checkpoint
 
-Last updated: 2026-04-23
+Last updated: 2026-04-27
 
 ## Purpose
 
@@ -8,9 +8,16 @@ This file is a compact handoff note for quickly resuming work without rereading 
 
 ## Current Git State
 
-- Latest local commit at last checkpoint: `0bc01f2`
-- Commit message at last checkpoint: `milestone: surface usb keyer failure stages explicitly`
-- Working tree status at last checkpoint: clean
+- Latest mainline checkpoint commit: `eb0adbf`
+- Commit message: `milestone: checkpoint rig ui and tone acquisition refactor`
+- Newer focused RX timing experiment commit: `e534482`
+- Commit message: `milestone: speed up fast-cw timing convergence`
+- Current working tree is intentionally not clean:
+- modified: `ContextCheckpoint.md`
+- untracked experimental A/B files:
+- `cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/timing/CwAdaptiveTimingModel.java`
+- `cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/timing/CwAdaptiveTimingModelTest.java`
+- `cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwTimingModelAbComparisonTest.java`
 
 ## What Is Already In Good Shape
 
@@ -138,6 +145,261 @@ If continuing coding immediately, do this next:
 When resuming, do not start by adding more generic TX UI controls.
 Start from real bench diagnostics or return to RX real-input stability work.
 
+## 2026-04-27 RX / Rig Reality Check
+
+### What has now converged
+
+- Rig-side CW serial keying behavior has been bench-validated on the user's `FT-710`.
+- Practical result is now aligned with `DM780` behavior rather than our earlier assumptions.
+- For the tested setup:
+- when the rig is configured to use `RTS`, `RTS` keying works normally
+- when the rig is configured to use `DTR`, `RTS + DTR` is the reliable combination
+- `DTR only` is not a reliable standalone assumption for this station setup
+- Conclusion:
+- `CW keying type` must stay configurable
+- dual-line assertion is a valid compatibility mode, not a hack
+- this is important for future `Icom / Kenwood / Yaesu` serial-keying compatibility
+
+### TX product direction that already changed
+
+- The app has been pulled away from wizard-style flow and toward a single daily-use entry.
+- `Operate` is the intended normal user entry.
+- Experimental rig and bench actions should live in developer/debug surfaces, not in the primary daily UI.
+- The user explicitly wants feature sprawl reduced:
+- de-emphasize `QSL`, `Log Book`, and other distant features for now
+- keep focus on `RX decode stability` first
+
+### RX direction that is now confirmed
+
+- The current biggest problem is not generic UI or CAT plumbing.
+- The real bottleneck is `CW RX front-end robustness`, especially:
+- dominant single-peak acquisition
+- noise discrimination
+- target-tone confidence
+- believable dynamic WPM behavior
+- stability under real-world preferred-tone mismatch
+
+### Important decoding conclusions already reached
+
+- `Preferred Tone` must be treated as a soft prior only.
+- It must never silently become a hard target anchor during acquisition.
+- Earlier hidden `preferred -> target` fallback behavior was identified as one source of wrong-tone lock and has already been cleaned up in several places.
+- Timing-only optimization is not enough.
+- The experimental `CwAdaptiveTimingModel` A/B path did not materially beat the current mainline path.
+- Therefore:
+- do not merge the timing-only B path into live decode
+- do not spend the next cycle polishing timing in isolation
+
+### A/B timing experiment status
+
+- Experimental files currently exist only as a side branch in the working tree:
+- `CwAdaptiveTimingModel.java`
+- `CwAdaptiveTimingModelTest.java`
+- `CwTimingModelAbComparisonTest.java`
+- Their purpose is observability and comparison, not promotion into production.
+- Current conclusion from that experiment:
+- `20/25/30 WPM` decode weaknesses are still dominated by front-end acquisition and front-end evidence quality
+- not by the current timing model alone
+
+### Known unresolved RX weakness
+
+- There is still at least one important failing unit-test pattern in `CwSignalProcessorTest`:
+- wrong preferred tone plus noisy true signal acquisition
+- practical shape:
+- preferred near `450 Hz`
+- actual CW near `700 Hz`
+- noisy environment
+- Meaning:
+- the processor can still be dragged toward a wrong/noisy peak instead of the real single-tone dominant peak
+
+### Observability that already exists
+
+- `CwSignalSnapshot` now exposes more acquisition internals including:
+- preferred-window winner
+- wide-scan winner
+- acquisition winner
+- final adopted tone
+- `InputDebugActivity` already surfaces these fields and spectrum guidance labels
+- The user specifically found the spectrum visualization useful and wants more indicators kept visible in the main workflow when practical.
+
+### Product priorities explicitly deprioritized by the user
+
+- Do not prioritize:
+- callsign auto-recognition polish
+- phrase completion
+- QSO intelligence expansion
+- broader UI feature growth
+- The user has stated multiple times that if RX decoding is unstable, those higher-level features are not worth optimizing yet.
+
+### Next recommended mainline engineering step
+
+Do not continue with timing-only tuning as the main track.
+
+Instead, the next meaningful B-path should be inside `CwSignalProcessor` and should focus on:
+
+1. stronger dominant-peak confidence scoring
+2. clearer noise-vs-true-peak discrimination
+3. explicit acquisition stability metrics
+4. a short rolling recent-frame buffer
+5. later, a second-pass re-decode when tone/WPM stabilize
+
+### Second-pass re-decode plan
+
+- The user agreed this is a worthwhile direction:
+- if the start of a transmission is decoded while tone/WPM are still unstable, we should consider replaying a short recent window once acquisition stabilizes
+- This should be introduced carefully:
+- first in debug or local replay path
+- with instrumentation
+- before promoting to always-on live path
+
+### Instrumentation that should accompany second-pass work
+
+- re-decode trigger count
+- average re-decode duration
+- recent trigger frequency
+- stable/unstable acquisition state
+
+## 2026-04-28 RX Decode Priority Lock
+
+### What has now converged
+
+- Mainline RX regression is in acceptable shape again for the current branch.
+- The following suites are the current guardrail baseline and were treated as the main product truth:
+- `CwFixturePipelineRegressionTest`
+- `CwUserCaptureCoverageTest`
+- `CwLocalAudioFolderRegressionTest`
+- `CwFixtureEvaluatorTest`
+- We also aligned local recording `(3)` with the confirmed trailing `.-.-.-` period, so that sample now expects `BK.` instead of `BK`.
+- RAW-versus-normalized judging has been explicitly separated:
+- `expectedRawText` is now the reference for RAW decode quality
+- higher-level normalize / phrase / callsign behavior must not dominate RX correctness verdicts
+
+### What is still intentionally red
+
+- A recent full unit-test pass ended with `373 tests completed, 4 failed`.
+- Those 4 failures are currently all probe / experimental suites, not the mainline RX regression gate:
+- `CwFastPreferredOffsetMatrixRegressionTest`
+- `CwPreferredOffsetMatrixRegressionTest`
+- `CwTimingModelAbComparisonTest`
+- `CwTimingModelStrategyProbeTest`
+- Interpretation:
+- the mainline path is no longer the main crisis
+- the remaining real engineering problem is still acquisition / preferred-offset / dynamic restabilization
+- not another round of surface-level normalization work
+
+### Locked priority order
+
+The user explicitly re-confirmed this priority order and we should preserve it unless bench evidence changes:
+
+1. Protect RAW RX decode correctness first.
+2. Improve noisy-case robustness second.
+3. Treat interferer / cochannel behavior as lower-priority stretch coverage.
+4. Keep callsign inference, phrase completion, and other normalization helpers subordinate to RAW decode quality.
+
+Practical rule:
+
+- any feature that makes normalized output prettier but risks degrading RAW decode truth should lose that tradeoff
+- RAW decode metrics should always be judged from the raw decode path first
+
+### Current main attack direction
+
+Do not spend the next cycle primarily polishing timing-only A/B logic.
+
+The next mainline work should stay inside `CwSignalProcessor` and focus on:
+
+1. preferred-offset acquisition failures
+2. strong-true-peak versus wrong-prior / noise discrimination
+3. dynamic retarget / restabilization during speed or tone changes
+4. process observability that explains why the tracker chose its winner
+
+The most important still-problematic shapes are:
+
+- `user_qsb_cq_18wpm_600hz`
+- `user_speed_sweep_vvv_700hz`
+- `user_noise_cq_20wpm_700hz`
+- `user_noise_cq_25wpm_700hz`
+- `user_noise_cq_30wpm_700hz`
+
+### Secondary work that is still worth doing
+
+- A narrow interpreter regression group is still worth adding for glued short-token structures such as:
+- `LEO HW?`
+- `JA1ABC FB`
+- `BG1XXX SK`
+- `FB OM`
+- But this is only a guardrail against post-processing damage.
+- It must not become the main workstream while acquisition and restabilization are still the bigger issue.
+
+### Fixed rerun set after each small change
+
+After every non-trivial RX algorithm change, rerun this fixed set before trusting the result:
+
+- `CwFixturePipelineRegressionTest`
+- `CwUserCaptureCoverageTest`
+- `CwLocalAudioFolderRegressionTest`
+- `CwFastPreferredOffsetMatrixRegressionTest`
+- `CwPreferredOffsetMatrixRegressionTest`
+- `CwTimingModelAbComparisonTest`
+- `CwTimingModelStrategyProbeTest`
+
+### Short resume hint for the next session
+
+If resuming from this checkpoint:
+
+- do not restart from UI, TX, or normalization ideas
+- first inspect the preferred-offset / dynamic-restabilization red probes
+- then change acquisition behavior in small steps
+- after each step, re-run the fixed guardrail set and check that mainline RAW RX quality did not regress
+
+### 2026-04-28 incremental-work discipline
+
+- We have now explicitly switched to a "small step + full guardrail rerun" rhythm.
+- Before the next algorithm edit, the fixed rerun set was executed as a baseline:
+- `CwFixturePipelineRegressionTest`
+- `CwUserCaptureCoverageTest`
+- `CwLocalAudioFolderRegressionTest`
+- `CwFixtureEvaluatorTest`
+- `CwFastPreferredOffsetMatrixRegressionTest`
+- `CwPreferredOffsetMatrixRegressionTest`
+- `CwTimingModelAbComparisonTest`
+- `CwTimingModelStrategyProbeTest`
+- Result at this checkpoint:
+- 85 tests completed in the fixed set
+- only 4 failures remain
+- and those 4 are still the same probe / experiment suites listed above
+- Practical meaning:
+- mainline guardrails are currently stable enough for narrow acquisition experiments
+- every change from here should preserve that invariant before we trust any local improvement
+- target-tone confidence
+- top-peak vs next-peak separation when practical
+
+### Performance / battery constraint
+
+- The user explicitly asked that any second-pass design be checked for phone-side cost.
+- Guidance:
+- keep the buffer short, around `1.5s` to `3s`
+- trigger only on unstable -> stable transitions
+- instrument before enabling widely
+- do not assume the extra work is free on-device
+
+### Ground truth on practical test environment
+
+- Daytime testing is often limited to:
+- PC playback
+- phone microphone receive
+- The eventual production scenario is more likely USB-carried rig audio, but current iteration still needs to support speaker-to-mic debug loops.
+- The user also wants the app to accept local recording replay for quieter iteration, including Windows-produced `.m4a` files when Android codec support permits.
+
+### Immediate resume instruction
+
+When picking this work back up:
+
+1. preserve the current mainline decode path
+2. keep the timing A/B experiment isolated
+3. move the next experiment into `CwSignalProcessor`
+4. add stronger acquisition confidence observability first
+5. only then prototype rolling-buffer + second-pass re-decode
+
 ## 2026-04-23 Incremental Notes After This Checkpoint
 
 ### Mock P0 status
@@ -258,6 +520,192 @@ Start from real bench diagnostics or return to RX real-input stability work.
 ### Verification
 
 - `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.signal.CwSignalProcessorTest --tests org.bi9clt.cwcn.core.signal.CwSignalSnapshotTest --tests org.bi9clt.cwcn.core.eval.CwFrontEndHealthClassifierTest`
+
+## 2026-04-27 RX Decoder Rework Checkpoint
+
+### Current Git Milestones
+
+- `eb0adbf` `milestone: checkpoint rig ui and tone acquisition refactor`
+- `e534482` `milestone: speed up fast-cw timing convergence`
+
+### What We Reconfirmed
+
+- `preferred tone` must remain a soft prior only.
+- The real dominant peak must be detected from signal evidence.
+- The main unresolved bug is no longer “preferred silently rewrites target” in several branches; those hidden fallback paths were cleaned up.
+- The biggest remaining decoder weakness is still front-end acquisition under noise, especially wrong-preferred or unstable-peak cases.
+
+### Unit-Test Reality Check
+
+- `CwSignalProcessorTest` still has one important failing case:
+- noisy wrong-preferred acquisition
+- representative shape: `preferred=450 Hz`, actual signal near `700 Hz`
+- failure meaning:
+- the front end still lets noise/false peaks beat the real CW peak in some conditions
+
+- `CwUserCaptureCoverageTest` currently passes.
+- But that does **not** mean `>20 WPM` is truly good enough.
+- Existing thresholds are intentionally loose:
+- `20 WPM` and `25 WPM` still pass at relatively modest recall
+- `30 WPM` is currently treated more like a boundary/observability case than a strong decode-success target
+
+### Fast-CW A/B Experiment
+
+We built an isolated B-path timing experiment instead of replacing the live path:
+
+- New experimental files:
+- [CwAdaptiveTimingModel.java](/D:/Workshop/CWCN/cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/timing/CwAdaptiveTimingModel.java)
+- [CwAdaptiveTimingModelTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/timing/CwAdaptiveTimingModelTest.java)
+- [CwTimingModelAbComparisonTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwTimingModelAbComparisonTest.java)
+
+- A/B conclusion:
+- a timing-only rewrite does **not** solve the core problem
+- the experimental timing path did not beat the baseline on the fast/noisy fixtures
+- especially at `30 WPM`, both paths remain weak, and the B-path was worse in the first comparison run
+
+### Practical Interpretation
+
+- The decoder bottleneck is not just `dot/dash/gap` estimation.
+- The deeper bottleneck is still upstream:
+- tone acquisition
+- single-peak confidence
+- noise discrimination
+- stable target adoption
+
+## 2026-04-28 RX UT Backlog Refresh
+
+### What the local recordings clarified
+
+- `录音 (2)` is now understood as a true `mid-stream speed shift` sample:
+- first round faster
+- second round intentionally slower
+- this is a stronger test-design signal than treating it as generic noisy fast CW
+- `录音 (9)` remains the best current evidence that long-text decode can drift over time without the front end fully collapsing
+- `录音 (13)` proved that acquisition observability matters:
+- `preferred / wide / acquisition / final adopted` can disagree in meaningful ways
+
+### Why this matters
+
+- Existing synthetic coverage is already decent on static dimensions:
+- fixed WPM
+- fixed tone
+- QSB
+- tone sweep
+- speed sweep
+- USB-like level variation
+- What is still under-covered is dynamic behavior inside one continuous stream.
+
+### New test-design priority
+
+Focus next fixture growth on:
+
+1. real-text `fast -> slow` speed-shift fixture
+2. long-text gradual timing-drift fixture
+3. long-text gradual tone-drift fixture
+4. wrong-preferred + strong true peak over long payload
+5. multi-round no-reset continuous-stream fixture
+6. short-tail non-EOF ending fixture
+7. similar-callsign collision fixture
+
+### Reference note
+
+- Detailed backlog and rationale are now in:
+- [RxUtBacklog.md](/D:/Workshop/CWCN/RxUtBacklog.md)
+
+### Progress since this note
+
+- The first dynamic backlog tranche is now partially landed:
+1. `user_speed_shift_jv3vv_700hz`
+2. `user_long_qso_drift_bg1xxx_ja1abc`
+3. `user_multi_round_continuous_qso_bi9clt_ja1abc`
+4. `user_similar_callsign_collision_bi9cms_bi9clt`
+- The next fixture tranche is also now landed:
+1. `user_short_tail_qrz_bi3tuk_kn`
+2. `user_repetition_fatigue_cq_bi9clt`
+3. `user_long_qso_edge_low_500hz`
+4. `user_long_qso_edge_high_800hz`
+- The corresponding coverage tests in [CwUserCaptureCoverageTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwUserCaptureCoverageTest.java) currently pass.
+- The new multi-round continuous fixture already showed an important nuance:
+- raw decode can still split tokens like `BI9CLT` / `JA1ABC`
+- but normalized-token continuity remains healthy enough to treat this as a useful continuity test rather than a front-end-collapse case
+- The newly added short-tail and fatigue cases confirmed a second nuance:
+- raw decoder text can already be healthier than normalized interpreter/callsign extraction output
+- so some RX regression checks should stay anchored to raw decoder text while others remain anchored to normalized/token continuity
+- A first attempt at harsher `460Hz / 840Hz` long-text edge fixtures was intentionally backed off to `500Hz / 800Hz` for now:
+- the harsher pair currently measures front-end collapse more than a stable regression boundary
+- The harsher pair is now still preserved as dedicated stress probes rather than discarded:
+- `user_long_qso_edge_low_460hz_stress`
+- `user_long_qso_edge_high_840hz_stress`
+- We also corrected a synthetic-fixture modeling mistake in `user_speed_shift_jv3vv_700hz`:
+- its `wpmScale` direction had accidentally been authored as `slow -> fast`
+- it now correctly models `fast -> slow`
+- After that correction, the new speed-shift re-stabilization probe became meaningful again.
+- We also widened the crowded-band combination layer with three more user-style CQ fixtures:
+- `user_weak_adjacent_cluster_cq_700hz`
+- `user_noisy_bursty_adjacent_cluster_cq_700hz`
+- `user_cochannel_underlay_proxy_cq_700hz`
+- That layer now also includes a first combined hum+noise+adjacent fixture:
+- `user_hum_noise_adjacent_cluster_cq_700hz`
+- This is useful because it stops us from treating hum, broadband noise, and adjacent occupancy as entirely separate worlds during RX review.
+- Important honesty note:
+- the last case is only a cochannel proxy because the current fixture engine still cannot render a true second keyed CW sender on the same tone
+- it can already do multiple continuous/drifting/bursty carriers, but not yet full dual-Morse overlap
+- This means the next fixture wave should keep separating:
+- front-end failure
+- token segmentation drift
+- higher-level semantic drift
+
+### Agreed Next Direction
+
+We agreed to move the main redesign effort back to the front end:
+
+1. Stronger single-peak / dominant-peak confidence logic
+2. Dynamic tone acquisition with softer prior bias
+3. Dynamic WPM tracking only after front-end confidence becomes reliable
+4. Keep timing improvements, but do not expect timing alone to rescue fast/noisy decode
+
+### Important New Product Idea: Second-Pass Re-decode
+
+This idea is explicitly approved for future implementation:
+
+- keep a short rolling audio-frame buffer
+- allow provisional first-pass decode while tone/WPM are still stabilizing
+- once tone and WPM become stable enough, rerun decode on the recent short window
+- expose the result as something like:
+- provisional
+- confirmed
+
+Why this matters:
+
+- opening characters are often decoded before tone/WPM have settled
+- a short second pass can recover earlier text once the front end is confident
+- this is more realistic than demanding perfect first-pass decode every time
+
+### Performance / Battery Guidance For Second-Pass Decode
+
+Current decision:
+
+- the feature is considered feasible on phones if constrained carefully
+- do **not** continuously double-process all audio
+- only re-decode short recent windows
+- only trigger on stability transitions, not every frame
+- start in debug / replay paths before enabling more broadly
+
+Guardrails to preserve battery:
+
+- buffer about `1.5s ~ 3s`, not a long history
+- trigger only when confidence moves from unstable to stable
+- add instrumentation:
+- re-decode count
+- average re-decode duration
+- recent trigger frequency
+
+### Recommended Immediate Next Implementation
+
+1. Design a new front-end B-path for `CwSignalProcessor` rather than more timing-only tuning
+2. Add explicit peak-confidence observability
+3. Add a minimal rolling-frame buffer abstraction for future second-pass replay
+4. Keep the A/B timing experiment files unmerged into the live path until a signal-front-end redesign exists
 - `.\gradlew.bat assembleDebug`
 
 ### Recommended next step from here
@@ -1221,3 +1669,98 @@ Start from real bench diagnostics or return to RX real-input stability work.
 - a stable on-screen status message
 - or a different failure text instead of app death
 4. Paste back the exact new status text if it still does not connect.
+
+## 2026-04-28 Crowded-Band Asymmetry Checkpoint
+
+### What just converged
+
+- Added paired crowded-band fixtures for asymmetric adjacent occupancy:
+- `user_left_adjacent_occupancy_cq_700hz`
+- `user_right_adjacent_occupancy_cq_700hz`
+- Added matching coverage in:
+- [CwCrowdedBandCoverageTest.java](/D:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwCrowdedBandCoverageTest.java)
+
+### What the paired results mean
+
+- The current front end does **not** behave symmetrically when most adjacent occupancy sits below versus above the target tone.
+- Current observed shape:
+- left-heavy occupancy tends to keep tracking nearer the target region, but text recall degrades more
+- right-heavy occupancy more readily locks high and can follow the stronger upper interferer, while the CQ skeleton may still remain more legible
+- This means:
+- do not encode fake `left == right` expectations into regression tests
+- keep the paired case as an `observability + no-collapse` boundary
+- treat the asymmetry itself as a real algorithm clue for later acquisition work
+
+### Verified focused suite
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwUserCaptureCoverageTest --tests org.bi9clt.cwcn.core.audio.CwCrowdedBandCoverageTest --tests org.bi9clt.cwcn.core.audio.CwEdgeToneStressProbeTest --tests org.bi9clt.cwcn.core.audio.CwSpeedShiftRestabilizationProbeTest`
+
+### Best next crowded-band branch
+
+1. extend the same left/right occupancy idea to a longer QSO payload
+2. combine asymmetric occupancy with a mid-stream WPM shift
+3. add `wrong preferred + crowded band` as a `probe/stress` matrix before trying to promote it into strict coverage
+
+## 2026-04-28 Same-Tone Dual-Sequence Probe
+
+### What just changed
+
+- The synthetic fixture engine can now render a second independently keyed Morse interferer, not just continuous/drifting/bursty carriers.
+- First same-tone keyed probe landed:
+- `user_same_tone_dual_sequence_target_priority_700hz`
+- The target branch is `CQ CQ DE BI9CLT BI9CLT PSE K`
+- The interfering branch is a different same-tone keyed sequence:
+- `VVV VVV DE JA1ABC JA1ABC BK`
+
+### Why this matters
+
+- Using two different same-tone sequences gives us branch visibility that the earlier cochannel proxy did not.
+- If future decode starts favoring one branch, we will be able to see whether it followed the `CQ/BI9CLT` side or the `VVV/JA1ABC` side.
+
+### Current result
+
+- This is currently an `observability/probe` case, not a success regression.
+- The front end can keep a healthy same-tone lock near `700Hz`, but downstream timing/character recovery still collapses badly under true keyed cochannel overlap.
+- In other words:
+- lock is not the same as branch discrimination
+- same-tone dual-keyed copy is still an open algorithm problem
+
+### Amplitude-matrix follow-up
+
+- Added two first same-tone amplitude variants:
+- `user_same_tone_dual_sequence_target_dominant_700hz`
+- `user_same_tone_dual_sequence_interferer_dominant_700hz`
+- Important result:
+- even when the target branch is made clearly stronger, the current decoder still does not recover the intended `CQ / BI9CLT` sequence reliably
+- the front end locks cleanly at the right tone, but the downstream text path still smears/collapses
+- practical interpretation:
+- the next real improvement is not just "more lock"
+- we need an actual branch-selection or branch-stability strategy after lock, otherwise stronger-signal preference alone is not yet expressing itself in decoded text
+
+### Verified focused suites
+
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwCrowdedBandCoverageTest`
+- `.\gradlew.bat testDebugUnitTest --tests org.bi9clt.cwcn.core.audio.CwUserCaptureCoverageTest --tests org.bi9clt.cwcn.core.audio.CwCrowdedBandCoverageTest --tests org.bi9clt.cwcn.core.audio.CwEdgeToneStressProbeTest --tests org.bi9clt.cwcn.core.audio.CwSpeedShiftRestabilizationProbeTest`
+
+## 2026-04-28 Recording (2) Acquisition Note
+
+### What was just verified
+
+- `CwLocalAudioFolderRegressionTest` fixture labels were repaired back to the real `录音...` names, so local-audio regression is usable again.
+- After that repair, the only new red case was the experimental `录音 (2)` acquisition assertion.
+- Current observed shape for `录音 (2)` remains:
+- `effectiveTrackedToneFrequencyHz ~= 660`
+- but `preferredWindowWinner / wideScanWinner / acquisitionWinner` still stick at `450`
+- and `finalAdoptedSource` is still `SEARCH_FALLBACK`
+
+### What we learned
+
+- A simple stronger absolute-edge penalty was **not** the right fix:
+- it did not clear `录音 (2)`
+- and it degraded `录音 (8)` observability
+- So this branch should proceed via better acquisition-process observability first, not broader score punishment.
+
+### Current stable test stance
+
+- Keep `录音 (2)` in regression as a guard that it eventually recovers off the low edge.
+- Do **not** yet hard-gate `acquisitionWinner != 450` until we expose more of the candidate/runner-up decision path.

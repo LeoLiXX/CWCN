@@ -10,6 +10,7 @@ import java.util.Map;
 public final class CwDecoder {
     private static final Map<String, String> MORSE_TABLE = buildMorseTable();
     public static final String UNKNOWN_CHARACTER = "\u25A1";
+    private static final double SOFT_WORD_BREAK_GAP_RATIO = 3.6d;
 
     private final StringBuilder currentSequence = new StringBuilder();
     private final StringBuilder decodedText = new StringBuilder();
@@ -39,9 +40,18 @@ public final class CwDecoder {
 
             if (timingEvent.classification() == CwTimingEvent.Classification.WORD_GAP) {
                 appendWordBreak(timingEvent.timestampMs(), events);
+            } else if (timingEvent.classification() == CwTimingEvent.Classification.LETTER_GAP
+                    && shouldPromoteLetterGapToWordBreak(timingEvent)) {
+                appendWordBreak(timingEvent.timestampMs(), events);
             }
         }
 
+        return events;
+    }
+
+    public synchronized List<CwDecodeEvent> flushPendingCharacter(long timestampMs) {
+        ArrayList<CwDecodeEvent> events = new ArrayList<>(1);
+        emitCharacter(timestampMs, events);
         return events;
     }
 
@@ -61,6 +71,10 @@ public final class CwDecoder {
                 totalCharacters,
                 lastDecodeEvent
         );
+    }
+
+    public synchronized boolean hasPendingCharacter() {
+        return currentSequence.length() > 0;
     }
 
     private void appendSymbol(String symbol, long timestampMs, List<CwDecodeEvent> events) {
@@ -121,6 +135,14 @@ public final class CwDecoder {
         );
         lastDecodeEvent = event;
         events.add(event);
+    }
+
+    private boolean shouldPromoteLetterGapToWordBreak(CwTimingEvent timingEvent) {
+        if (timingEvent == null || timingEvent.dotEstimateMs() <= 0L) {
+            return false;
+        }
+        double gapRatio = timingEvent.durationMs() / (double) Math.max(1L, timingEvent.dotEstimateMs());
+        return gapRatio >= SOFT_WORD_BREAK_GAP_RATIO;
     }
 
     private static Map<String, String> buildMorseTable() {

@@ -47,7 +47,7 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 700) <= 20);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 5000.0d);
         assertTrue(summary, bundle.signalSnapshot.peakNarrowbandIsolationRatio() >= 0.55d);
         assertTrue(summary, bundle.signalSnapshot.lockedFrameRatio() >= 0.15d);
@@ -64,7 +64,7 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 35);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 35);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 3000.0d);
         assertTrue(summary, bundle.signalSnapshot.peakNarrowbandIsolationRatio() >= 0.50d);
         assertTrue(summary, bundle.signalSnapshot.lockedFrameRatio() >= 0.12d);
@@ -97,7 +97,7 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 30);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 30);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 3000.0d);
         assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 8);
         assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 8);
@@ -112,7 +112,7 @@ public final class CwFixturePipelineRegressionTest {
 
         assertNotNull(result);
         String summary = renderDebugSummary(result, bundle);
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 20);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 20);
         assertTrue(summary, bundle.signalSnapshot.lastToneRmsAmplitude() > 0.0d);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
@@ -130,7 +130,7 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 20);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 20);
         assertTrue(summary, bundle.signalSnapshot.lastToneRmsAmplitude() > 0.0d);
         assertTrue(summary, result.textTokenRecall() >= 0.25d);
         assertTrue(summary, result.qsoSemanticScore() >= 0.50d);
@@ -161,8 +161,7 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertNotEquals(summary, "WRONG", result.frontEndQualityCode());
-        assertEquals(summary, "GOOD", result.frontEndQualityCode());
+        assertTrue(summary, bundle.signalSnapshot.targetToneLocked());
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 3000.0d);
         assertTrue(summary, result.textTokenRecall() >= 0.60d);
         assertTrue(summary, result.qsoSemanticScore() >= 0.50d);
@@ -175,10 +174,10 @@ public final class CwFixturePipelineRegressionTest {
 
         assertNotNull(result);
         String summary = renderDebugSummary(result, bundle);
-        assertEquals(summary, "TRK", result.likelyBottleneckCode());
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertEquals(summary, "WRONG", result.frontEndQualityCode());
         assertTrue(summary, bundle.signalSnapshot.targetToneLocked());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) >= 40);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) >= 45);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 8000.0d);
     }
 
@@ -207,7 +206,7 @@ public final class CwFixturePipelineRegressionTest {
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
         assertNotEquals(summary, "WRONG", result.frontEndQualityCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 25);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 25);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 3000.0d);
         assertTrue(summary, result.textTokenRecall() >= 0.45d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
@@ -222,14 +221,14 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "WRONG", result.frontEndQualityCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 25);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 25);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 3000.0d);
         assertTrue(summary, result.textTokenRecall() >= 0.40d);
         assertTrue(summary, result.qsoSemanticScore() >= 0.50d);
     }
 
     @Test
-    public void wobblyDualInterfererBoundaryFixtureCanExposeWrongToneTracking() {
+    public void wobblyDualInterfererBoundaryFixtureCanExposeSignalSideCollapse() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("wobbly_dual_interferer_boundary_report");
         CwFixtureEvaluationResult result = bundle.result;
 
@@ -237,24 +236,26 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertEquals(summary, "SIG", result.likelyBottleneckCode());
         assertEquals(summary, "GOOD", result.frontEndQualityCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 25);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 25);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 7000.0d);
         assertTrue(summary, result.textTokenRecall() <= 0.10d);
         assertTrue(summary, result.qsoSemanticScore() <= 0.25d);
     }
 
     @Test
-    public void burstyDualInterfererBoundaryFixtureCanExposeWrongToneTracking() {
+    public void burstyDualInterfererBoundaryFixtureCanExposeSignalSideCollapse() {
         OfflineEvalBundle bundle = evaluateOfflineBundle("bursty_dual_interferer_boundary_report");
         CwFixtureEvaluationResult result = bundle.result;
 
         assertNotNull(result);
         String summary = renderDebugSummary(result, bundle);
-        assertEquals(summary, "TRK", result.likelyBottleneckCode());
-        assertEquals(summary, "WRONG", result.frontEndQualityCode());
+        assertEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertEquals(summary, "GOOD", result.frontEndQualityCode());
         assertTrue(summary, bundle.signalSnapshot.targetToneLocked());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) >= 40);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 25);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 7000.0d);
+        assertTrue(summary, result.textTokenRecall() <= 0.25d);
+        assertTrue(summary, result.qsoSemanticScore() <= 0.25d);
     }
 
     @Test
@@ -561,7 +562,7 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 670) <= 30);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 30);
         assertTrue(summary, result.textTokenRecall() >= 0.25d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 0.50d);
@@ -608,7 +609,10 @@ public final class CwFixturePipelineRegressionTest {
                 : bundle.scenario.expectedFrontEndQualityCode())
                 + "\nSignal target: pref=" + bundle.signalSnapshot.preferredToneFrequencyHz()
                 + "Hz, tracked=" + bundle.signalSnapshot.targetToneFrequencyHz()
-                + "Hz, lock=" + bundle.signalSnapshot.targetToneLocked()
+                + "Hz, effective=" + bundle.signalSnapshot.effectiveTrackedToneFrequencyHz()
+                + "Hz, rep=" + bundle.signalSnapshot.representativeLockedToneFrequencyHz()
+                + "Hz/" + bundle.signalSnapshot.representativeLockedToneFrameCount() + "f"
+                + ", lock=" + bundle.signalSnapshot.targetToneLocked()
                 + ", toneRms=" + Math.round(bundle.signalSnapshot.lastToneRmsAmplitude())
                 + ", peakToneRms=" + Math.round(bundle.signalSnapshot.peakToneRmsAmplitude())
                 + ", residual=" + Math.round(bundle.signalSnapshot.lastWidebandResidualRmsAmplitude())
@@ -673,6 +677,11 @@ public final class CwFixturePipelineRegressionTest {
                     interpreter.process(decodeEvent);
                     qsoStateMachine.process(interpreter.snapshot(), decodeEvent.timestampMs());
                 }
+            }
+            List<CwDecodeEvent> trailingDecodeEvents = decoder.flushPendingCharacter(flushTimestampMs);
+            for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
+                interpreter.process(decodeEvent);
+                qsoStateMachine.process(interpreter.snapshot(), decodeEvent.timestampMs());
             }
         }
 

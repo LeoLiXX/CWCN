@@ -45,6 +45,72 @@ public final class CwSignalSnapshotTest {
         assertEquals(0.0d, snapshot.recentFarOffTargetLockedFrameRatio(), 0.0001d);
     }
 
+    @Test
+    public void effectiveDisplayFrequenciesPreferRepresentativeTrackedToneWhenTailFallsBack() {
+        CwSignalSnapshot snapshot = new CwSignalSnapshot(
+                6,
+                new char[]{'L', 'L', 'L', 'u', '.', '.'},
+                new int[]{0, 10, -10, 0, 0, 0},
+                false,
+                false,
+                650,
+                650,
+                650,
+                6,
+                1200,
+                800,
+                600,
+                1800,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                100,
+                50,
+                100,
+                10,
+                3,
+                6,
+                1,
+                2,
+                650,
+                0,
+                450,
+                0,
+                450,
+                450,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                false,
+                false,
+                false,
+                false,
+                "PREFERRED_WINDOW",
+                "SEARCH_FALLBACK",
+                0,
+                0,
+                0,
+                0L,
+                0L,
+                0L,
+                -1L,
+                null
+        );
+
+        assertEquals(650, snapshot.effectiveTrackedToneFrequencyHz());
+        assertEquals(650, snapshot.effectiveAcquisitionWinnerFrequencyHz());
+        assertEquals(650, snapshot.effectiveFinalAdoptedFrequencyHz());
+    }
+
     private static CwSignalSnapshot snapshot(
             int recentHistoryFrameCount,
             char[] recentFrontEndStateHistory,
@@ -58,6 +124,8 @@ public final class CwSignalSnapshotTest {
                 false,
                 650,
                 650,
+                650,
+                0,
                 1200,
                 800,
                 600,

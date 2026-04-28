@@ -21,6 +21,7 @@ public final class CwFixtureScenario {
     private final int interfererToneFrequencyHz;
     private final int interfererToneAmplitude;
     private final List<ContinuousInterfererProfile> additionalInterferers;
+    private final List<KeyedInterfererProfile> keyedInterferers;
     private final int noiseAmplitude;
     private final double qsbDepth;
     private final int qsbCycleMs;
@@ -33,6 +34,7 @@ public final class CwFixtureScenario {
     private final List<PartTimingProfile> partTimingProfiles;
     private final int leadInMs;
     private final int tailMs;
+    private final String expectedRawText;
     private final String expectedNormalizedText;
     private final List<String> expectedCallsigns;
     private final List<String> expectedHints;
@@ -396,6 +398,148 @@ public final class CwFixtureScenario {
             String expectedFrontEndQualityCode,
             String notes
     ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                interfererToneFrequencyHz,
+                interfererToneAmplitude,
+                additionalInterferers,
+                Collections.emptyList(),
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                interfererToneDriftHz,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
+    }
+
+    private CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int interfererToneFrequencyHz,
+            int interfererToneAmplitude,
+            List<ContinuousInterfererProfile> additionalInterferers,
+            List<KeyedInterfererProfile> keyedInterferers,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double toneDriftHz,
+            double interfererToneDriftHz,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
+        this(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                interfererToneFrequencyHz,
+                interfererToneAmplitude,
+                additionalInterferers,
+                keyedInterferers,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                interfererToneDriftHz,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
+    }
+
+    private CwFixtureScenario(
+            String id,
+            String displayName,
+            String message,
+            List<String> messageParts,
+            int interMessageGapMs,
+            int wpm,
+            int toneFrequencyHz,
+            int toneAmplitude,
+            int interfererToneFrequencyHz,
+            int interfererToneAmplitude,
+            List<ContinuousInterfererProfile> additionalInterferers,
+            List<KeyedInterfererProfile> keyedInterferers,
+            int noiseAmplitude,
+            double qsbDepth,
+            int qsbCycleMs,
+            double toneDriftHz,
+            double interfererToneDriftHz,
+            double timingJitterDepth,
+            double dotSwingDepth,
+            int riseRampMs,
+            int fallRampMs,
+            List<PartTimingProfile> partTimingProfiles,
+            int leadInMs,
+            int tailMs,
+            String expectedRawText,
+            String expectedNormalizedText,
+            List<String> expectedCallsigns,
+            List<String> expectedHints,
+            QsoPhase expectedPhase,
+            String expectedRstSent,
+            String expectedRstRcvd,
+            String expectedFrontEndQualityCode,
+            String notes
+    ) {
         this.id = id;
         this.displayName = displayName;
         this.message = message;
@@ -407,6 +551,7 @@ public final class CwFixtureScenario {
         this.interfererToneFrequencyHz = interfererToneFrequencyHz;
         this.interfererToneAmplitude = interfererToneAmplitude;
         this.additionalInterferers = sanitizeAdditionalInterferers(additionalInterferers);
+        this.keyedInterferers = sanitizeKeyedInterferers(keyedInterferers);
         this.noiseAmplitude = noiseAmplitude;
         this.qsbDepth = qsbDepth;
         this.qsbCycleMs = qsbCycleMs;
@@ -419,6 +564,7 @@ public final class CwFixtureScenario {
         this.partTimingProfiles = sanitizePartTimingProfiles(partTimingProfiles);
         this.leadInMs = leadInMs;
         this.tailMs = tailMs;
+        this.expectedRawText = expectedRawText == null ? expectedNormalizedText : expectedRawText;
         this.expectedNormalizedText = expectedNormalizedText;
         this.expectedCallsigns = new ArrayList<>(expectedCallsigns);
         this.expectedHints = new ArrayList<>(expectedHints);
@@ -1085,6 +1231,10 @@ public final class CwFixtureScenario {
         return new ArrayList<>(additionalInterferers);
     }
 
+    public List<KeyedInterfererProfile> keyedInterferers() {
+        return new ArrayList<>(keyedInterferers);
+    }
+
     public int noiseAmplitude() {
         return noiseAmplitude;
     }
@@ -1117,6 +1267,44 @@ public final class CwFixtureScenario {
                 toneAmplitude,
                 interfererToneFrequencyHz,
                 interfererToneAmplitude,
+                interferers,
+                keyedInterferers,
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                interfererToneDriftHz,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                partTimingProfiles,
+                leadInMs,
+                tailMs,
+                expectedNormalizedText,
+                expectedCallsigns,
+                expectedHints,
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
+    }
+
+    public CwFixtureScenario withKeyedInterferers(List<KeyedInterfererProfile> interferers) {
+        return new CwFixtureScenario(
+                id,
+                displayName,
+                message,
+                messageParts,
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                interfererToneFrequencyHz,
+                interfererToneAmplitude,
+                additionalInterferers,
                 interferers,
                 noiseAmplitude,
                 qsbDepth,
@@ -1180,6 +1368,10 @@ public final class CwFixtureScenario {
         return expectedNormalizedText;
     }
 
+    public String expectedRawText() {
+        return expectedRawText;
+    }
+
     public List<String> expectedCallsigns() {
         return new ArrayList<>(expectedCallsigns);
     }
@@ -1208,6 +1400,44 @@ public final class CwFixtureScenario {
         return notes;
     }
 
+    public CwFixtureScenario withExpectedRawText(String expectedRawText) {
+        return new CwFixtureScenario(
+                id,
+                displayName,
+                message,
+                new ArrayList<>(messageParts),
+                interMessageGapMs,
+                wpm,
+                toneFrequencyHz,
+                toneAmplitude,
+                interfererToneFrequencyHz,
+                interfererToneAmplitude,
+                new ArrayList<>(additionalInterferers),
+                new ArrayList<>(keyedInterferers),
+                noiseAmplitude,
+                qsbDepth,
+                qsbCycleMs,
+                toneDriftHz,
+                interfererToneDriftHz,
+                timingJitterDepth,
+                dotSwingDepth,
+                riseRampMs,
+                fallRampMs,
+                new ArrayList<>(partTimingProfiles),
+                leadInMs,
+                tailMs,
+                expectedRawText,
+                expectedNormalizedText,
+                new ArrayList<>(expectedCallsigns),
+                new ArrayList<>(expectedHints),
+                expectedPhase,
+                expectedRstSent,
+                expectedRstRcvd,
+                expectedFrontEndQualityCode,
+                notes
+        );
+    }
+
     public String timingProfileSummary() {
         ArrayList<String> parts = new ArrayList<>();
         if (timingJitterDepth > 0.0d) {
@@ -1224,6 +1454,9 @@ public final class CwFixtureScenario {
         }
         for (ContinuousInterfererProfile interferer : additionalInterferers) {
             parts.add("extra interferer " + interferer.summaryLabel());
+        }
+        for (KeyedInterfererProfile interferer : keyedInterferers) {
+            parts.add("keyed interferer " + interferer.summaryLabel());
         }
         if (riseRampMs > 0 || fallRampMs > 0) {
             parts.add("edge ramp " + riseRampMs + "/" + fallRampMs + "ms");
@@ -1276,6 +1509,28 @@ public final class CwFixtureScenario {
                 continue;
             }
             if (interferer.toneFrequencyHz() <= 0 || interferer.toneAmplitude() <= 0) {
+                continue;
+            }
+            sanitized.add(interferer);
+        }
+        return sanitized;
+    }
+
+    private static List<KeyedInterfererProfile> sanitizeKeyedInterferers(
+            List<KeyedInterfererProfile> interferers
+    ) {
+        ArrayList<KeyedInterfererProfile> sanitized = new ArrayList<>();
+        if (interferers == null) {
+            return sanitized;
+        }
+        for (KeyedInterfererProfile interferer : interferers) {
+            if (interferer == null) {
+                continue;
+            }
+            if (interferer.toneFrequencyHz() <= 0
+                    || interferer.toneAmplitude() <= 0
+                    || interferer.wpm() <= 0
+                    || !interferer.hasDecodableMessage()) {
                 continue;
             }
             sanitized.add(interferer);
@@ -1425,6 +1680,154 @@ public final class CwFixtureScenario {
                 }
             }
             return builder.toString();
+        }
+    }
+
+    public static final class KeyedInterfererProfile {
+        private final String message;
+        private final List<String> messageParts;
+        private final int interMessageGapMs;
+        private final int wpm;
+        private final int toneFrequencyHz;
+        private final int toneAmplitude;
+        private final int startOffsetMs;
+        private final double toneDriftHz;
+        private final int riseRampMs;
+        private final int fallRampMs;
+
+        public KeyedInterfererProfile(
+                String message,
+                int wpm,
+                int toneFrequencyHz,
+                int toneAmplitude,
+                int startOffsetMs
+        ) {
+            this(
+                    message,
+                    Collections.singletonList(message),
+                    DEFAULT_INTER_MESSAGE_GAP_MS,
+                    wpm,
+                    toneFrequencyHz,
+                    toneAmplitude,
+                    startOffsetMs,
+                    0.0d,
+                    3,
+                    3
+            );
+        }
+
+        public KeyedInterfererProfile(
+                String message,
+                List<String> messageParts,
+                int interMessageGapMs,
+                int wpm,
+                int toneFrequencyHz,
+                int toneAmplitude,
+                int startOffsetMs,
+                double toneDriftHz,
+                int riseRampMs,
+                int fallRampMs
+        ) {
+            this.message = message == null ? "" : message;
+            this.messageParts = sanitizeMessageParts(messageParts, this.message);
+            this.interMessageGapMs = Math.max(0, interMessageGapMs);
+            this.wpm = Math.max(1, wpm);
+            this.toneFrequencyHz = toneFrequencyHz;
+            this.toneAmplitude = toneAmplitude;
+            this.startOffsetMs = Math.max(0, startOffsetMs);
+            this.toneDriftHz = toneDriftHz;
+            this.riseRampMs = Math.max(0, riseRampMs);
+            this.fallRampMs = Math.max(0, fallRampMs);
+        }
+
+        public String message() {
+            return message;
+        }
+
+        public List<String> messageParts() {
+            return new ArrayList<>(messageParts);
+        }
+
+        public int interMessageGapMs() {
+            return interMessageGapMs;
+        }
+
+        public int wpm() {
+            return wpm;
+        }
+
+        public int toneFrequencyHz() {
+            return toneFrequencyHz;
+        }
+
+        public int toneAmplitude() {
+            return toneAmplitude;
+        }
+
+        public int startOffsetMs() {
+            return startOffsetMs;
+        }
+
+        public double toneDriftHz() {
+            return toneDriftHz;
+        }
+
+        public int riseRampMs() {
+            return riseRampMs;
+        }
+
+        public int fallRampMs() {
+            return fallRampMs;
+        }
+
+        public boolean hasDecodableMessage() {
+            for (String part : messageParts) {
+                if (part != null && !part.trim().isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public String summaryLabel() {
+            StringBuilder builder = new StringBuilder()
+                    .append(toneFrequencyHz)
+                    .append("Hz keyed @ ")
+                    .append(toneAmplitude)
+                    .append(" ")
+                    .append(wpm)
+                    .append("WPM");
+            if (startOffsetMs > 0) {
+                builder.append(" offset ")
+                        .append(startOffsetMs)
+                        .append("ms");
+            }
+            if (Math.abs(toneDriftHz) > 0.0d) {
+                builder.append(" drift ")
+                        .append(trimDouble(toneDriftHz))
+                        .append("Hz");
+            }
+            if (!message.isEmpty()) {
+                builder.append(" \"")
+                        .append(message.length() > 18 ? message.substring(0, 18) + "…" : message)
+                        .append("\"");
+            }
+            return builder.toString();
+        }
+
+        private static List<String> sanitizeMessageParts(List<String> parts, String fallbackMessage) {
+            ArrayList<String> sanitized = new ArrayList<>();
+            if (parts != null) {
+                for (String part : parts) {
+                    if (part != null && !part.trim().isEmpty()) {
+                        sanitized.add(part);
+                    }
+                }
+            }
+            if (sanitized.isEmpty() && fallbackMessage != null && !fallbackMessage.trim().isEmpty()) {
+                sanitized.add(fallbackMessage);
+            }
+            return sanitized;
         }
     }
 

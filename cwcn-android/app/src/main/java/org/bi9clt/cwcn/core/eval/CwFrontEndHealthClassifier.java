@@ -351,6 +351,6 @@ public final class CwFrontEndHealthClassifier {
         if (snapshot == null) {
             return 0;
         }
-        return snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz();
+        return snapshot.effectiveTrackedToneFrequencyHz() - snapshot.preferredToneFrequencyHz();
     }
 }

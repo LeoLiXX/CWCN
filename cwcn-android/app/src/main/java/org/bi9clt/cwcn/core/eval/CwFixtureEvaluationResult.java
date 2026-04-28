@@ -11,12 +11,18 @@ public final class CwFixtureEvaluationResult {
     private final long evaluatedAtEpochMs;
     private final boolean completed;
     private final boolean passed;
-    private final boolean exactTextMatch;
+    private boolean exactTextMatch;
+    private final boolean exactRawTextMatch;
+    private final boolean exactNormalizedTextMatch;
     private final double primaryCallsignScore;
-    private final double textTokenRecall;
+    private double textTokenRecall;
+    private final double rawTextTokenRecall;
+    private final double normalizedTextTokenRecall;
     private final double callsignRecall;
     private final double hintRecall;
     private final double qsoSemanticScore;
+    private final String expectedRawText;
+    private final String actualRawText;
     private final String expectedNormalizedText;
     private final String actualNormalizedText;
     private final String expectedPhase;
@@ -27,7 +33,9 @@ public final class CwFixtureEvaluationResult {
     private final String actualRstRcvd;
     private final List<String> actualCallsigns;
     private final List<String> actualHints;
-    private final List<String> missingTextTokens;
+    private List<String> missingTextTokens;
+    private final List<String> missingRawTextTokens;
+    private final List<String> missingNormalizedTextTokens;
     private final List<String> missingCallsigns;
     private final List<String> missingHints;
     private final List<String> failureReasons;
@@ -373,11 +381,17 @@ public final class CwFixtureEvaluationResult {
         this.completed = completed;
         this.passed = passed;
         this.exactTextMatch = exactTextMatch;
+        this.exactRawTextMatch = exactTextMatch;
+        this.exactNormalizedTextMatch = exactTextMatch;
         this.primaryCallsignScore = primaryCallsignScore;
         this.textTokenRecall = textTokenRecall;
+        this.rawTextTokenRecall = textTokenRecall;
+        this.normalizedTextTokenRecall = textTokenRecall;
         this.callsignRecall = callsignRecall;
         this.hintRecall = hintRecall;
         this.qsoSemanticScore = qsoSemanticScore;
+        this.expectedRawText = expectedNormalizedText;
+        this.actualRawText = actualNormalizedText;
         this.expectedNormalizedText = expectedNormalizedText;
         this.actualNormalizedText = actualNormalizedText;
         this.expectedPhase = expectedPhase;
@@ -389,6 +403,127 @@ public final class CwFixtureEvaluationResult {
         this.actualCallsigns = new ArrayList<>(actualCallsigns);
         this.actualHints = new ArrayList<>(actualHints);
         this.missingTextTokens = new ArrayList<>(missingTextTokens);
+        this.missingRawTextTokens = new ArrayList<>(missingTextTokens);
+        this.missingNormalizedTextTokens = new ArrayList<>(missingTextTokens);
+        this.missingCallsigns = new ArrayList<>(missingCallsigns);
+        this.missingHints = new ArrayList<>(missingHints);
+        this.failureReasons = new ArrayList<>(failureReasons);
+        this.normalizedTokenCount = normalizedTokenCount;
+        this.totalTokenCount = totalTokenCount;
+        this.normalizedTokenPairs = new ArrayList<>(normalizedTokenPairs);
+        this.finalToneLocked = finalToneLocked;
+        this.endedOnToneOffEvent = endedOnToneOffEvent;
+        this.peakToneRmsAmplitude = peakToneRmsAmplitude;
+        this.peakNarrowbandIsolationRatio = peakNarrowbandIsolationRatio;
+        this.lockedFrameRatio = lockedFrameRatio;
+        this.maxConsecutiveLockedFrames = maxConsecutiveLockedFrames;
+        this.toneActiveUnlockedFrameRatio = toneActiveUnlockedFrameRatio;
+        this.maxConsecutiveToneActiveUnlockedFrames = maxConsecutiveToneActiveUnlockedFrames;
+        this.preferredToneFrequencyHz = preferredToneFrequencyHz;
+        this.trackedToneFrequencyHz = trackedToneFrequencyHz;
+        this.lastRmsAmplitude = lastRmsAmplitude;
+        this.lastToneRmsAmplitude = lastToneRmsAmplitude;
+        this.lastWidebandResidualRmsAmplitude = lastWidebandResidualRmsAmplitude;
+        this.toneDominanceRatio = toneDominanceRatio;
+        this.narrowbandIsolationRatio = narrowbandIsolationRatio;
+        this.currentThreshold = currentThreshold;
+        this.releaseThreshold = releaseThreshold;
+        this.noiseFloorEstimate = noiseFloorEstimate;
+        this.signalFloorEstimate = signalFloorEstimate;
+        this.totalToneOnEvents = totalToneOnEvents;
+        this.totalToneOffEvents = totalToneOffEvents;
+        this.frameGapResetCount = frameGapResetCount;
+        this.worstFrameGapMs = worstFrameGapMs;
+    }
+
+    public CwFixtureEvaluationResult(
+            String scenarioId,
+            String scenarioDisplayName,
+            long evaluatedAtEpochMs,
+            boolean completed,
+            boolean passed,
+            boolean exactRawTextMatch,
+            boolean exactNormalizedTextMatch,
+            double primaryCallsignScore,
+            double rawTextTokenRecall,
+            double normalizedTextTokenRecall,
+            double callsignRecall,
+            double hintRecall,
+            double qsoSemanticScore,
+            String expectedRawText,
+            String actualRawText,
+            String expectedNormalizedText,
+            String actualNormalizedText,
+            String expectedPhase,
+            String actualPhase,
+            String expectedRstSent,
+            String actualRstSent,
+            String expectedRstRcvd,
+            String actualRstRcvd,
+            List<String> actualCallsigns,
+            List<String> actualHints,
+            List<String> missingRawTextTokens,
+            List<String> missingNormalizedTextTokens,
+            List<String> missingCallsigns,
+            List<String> missingHints,
+            List<String> failureReasons,
+            int normalizedTokenCount,
+            int totalTokenCount,
+            List<String> normalizedTokenPairs,
+            boolean finalToneLocked,
+            boolean endedOnToneOffEvent,
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            double lockedFrameRatio,
+            int maxConsecutiveLockedFrames,
+            double toneActiveUnlockedFrameRatio,
+            int maxConsecutiveToneActiveUnlockedFrames,
+            int preferredToneFrequencyHz,
+            int trackedToneFrequencyHz,
+            double lastRmsAmplitude,
+            double lastToneRmsAmplitude,
+            double lastWidebandResidualRmsAmplitude,
+            double toneDominanceRatio,
+            double narrowbandIsolationRatio,
+            int currentThreshold,
+            int releaseThreshold,
+            int noiseFloorEstimate,
+            int signalFloorEstimate,
+            int totalToneOnEvents,
+            int totalToneOffEvents,
+            int frameGapResetCount,
+            long worstFrameGapMs
+    ) {
+        this.scenarioId = scenarioId;
+        this.scenarioDisplayName = scenarioDisplayName;
+        this.evaluatedAtEpochMs = evaluatedAtEpochMs;
+        this.completed = completed;
+        this.passed = passed;
+        this.exactTextMatch = exactRawTextMatch;
+        this.exactRawTextMatch = exactRawTextMatch;
+        this.exactNormalizedTextMatch = exactNormalizedTextMatch;
+        this.primaryCallsignScore = primaryCallsignScore;
+        this.textTokenRecall = rawTextTokenRecall;
+        this.rawTextTokenRecall = rawTextTokenRecall;
+        this.normalizedTextTokenRecall = normalizedTextTokenRecall;
+        this.callsignRecall = callsignRecall;
+        this.hintRecall = hintRecall;
+        this.qsoSemanticScore = qsoSemanticScore;
+        this.expectedRawText = expectedRawText;
+        this.actualRawText = actualRawText;
+        this.expectedNormalizedText = expectedNormalizedText;
+        this.actualNormalizedText = actualNormalizedText;
+        this.expectedPhase = expectedPhase;
+        this.actualPhase = actualPhase;
+        this.expectedRstSent = expectedRstSent;
+        this.actualRstSent = actualRstSent;
+        this.expectedRstRcvd = expectedRstRcvd;
+        this.actualRstRcvd = actualRstRcvd;
+        this.actualCallsigns = new ArrayList<>(actualCallsigns);
+        this.actualHints = new ArrayList<>(actualHints);
+        this.missingTextTokens = new ArrayList<>(missingRawTextTokens);
+        this.missingRawTextTokens = new ArrayList<>(missingRawTextTokens);
+        this.missingNormalizedTextTokens = new ArrayList<>(missingNormalizedTextTokens);
         this.missingCallsigns = new ArrayList<>(missingCallsigns);
         this.missingHints = new ArrayList<>(missingHints);
         this.failureReasons = new ArrayList<>(failureReasons);
@@ -441,7 +576,15 @@ public final class CwFixtureEvaluationResult {
     }
 
     public boolean exactTextMatch() {
-        return exactTextMatch;
+        return exactRawTextMatch;
+    }
+
+    public boolean exactRawTextMatch() {
+        return exactRawTextMatch;
+    }
+
+    public boolean exactNormalizedTextMatch() {
+        return exactNormalizedTextMatch;
     }
 
     public double primaryCallsignScore() {
@@ -449,7 +592,15 @@ public final class CwFixtureEvaluationResult {
     }
 
     public double textTokenRecall() {
-        return textTokenRecall;
+        return rawTextTokenRecall;
+    }
+
+    public double rawTextTokenRecall() {
+        return rawTextTokenRecall;
+    }
+
+    public double normalizedTextTokenRecall() {
+        return normalizedTextTokenRecall;
     }
 
     public double callsignRecall() {
@@ -462,6 +613,14 @@ public final class CwFixtureEvaluationResult {
 
     public double qsoSemanticScore() {
         return qsoSemanticScore;
+    }
+
+    public String expectedRawText() {
+        return expectedRawText;
+    }
+
+    public String actualRawText() {
+        return actualRawText;
     }
 
     public String expectedNormalizedText() {
@@ -505,7 +664,15 @@ public final class CwFixtureEvaluationResult {
     }
 
     public List<String> missingTextTokens() {
-        return new ArrayList<>(missingTextTokens);
+        return new ArrayList<>(missingRawTextTokens);
+    }
+
+    public List<String> missingRawTextTokens() {
+        return new ArrayList<>(missingRawTextTokens);
+    }
+
+    public List<String> missingNormalizedTextTokens() {
+        return new ArrayList<>(missingNormalizedTextTokens);
     }
 
     public List<String> missingCallsigns() {
@@ -840,8 +1007,10 @@ public final class CwFixtureEvaluationResult {
                 + (passed ? "PASS" : "CHECK")
                 + " P:"
                 + percent(primaryCallsignScore)
-                + " T:"
-                + percent(textTokenRecall)
+                + " R:"
+                + percent(rawTextTokenRecall)
+                + " N:"
+                + percent(normalizedTextTokenRecall)
                 + " C:"
                 + percent(callsignRecall)
                 + " Q:"
@@ -863,8 +1032,10 @@ public final class CwFixtureEvaluationResult {
         builder.append("\nOverall: ").append(passed ? "PASS" : "CHECK");
         builder.append("\nLikely bottleneck: ").append(likelyBottleneckLabel());
         builder.append("\nPrimary callsign: ").append(percent(primaryCallsignScore));
-        builder.append("\nText recall: ").append(percent(textTokenRecall))
-                .append(exactTextMatch ? " (exact)" : " (approx)");
+        builder.append("\nRaw text recall: ").append(percent(rawTextTokenRecall))
+                .append(exactRawTextMatch ? " (exact)" : " (approx)");
+        builder.append("\nNormalized text recall: ").append(percent(normalizedTextTokenRecall))
+                .append(exactNormalizedTextMatch ? " (exact)" : " (approx)");
         builder.append("\nCallsign recall: ").append(percent(callsignRecall));
         builder.append("\nQSO semantics: ").append(percent(qsoSemanticScore));
         builder.append("\nHint recall: ").append(percent(hintRecall));
@@ -907,8 +1078,10 @@ public final class CwFixtureEvaluationResult {
                     .append(", frameGapResets=").append(frameGapResetCount)
                     .append(", worstFrameGapMs=").append(worstFrameGapMs);
         }
-        builder.append("\nExpected text: ").append(safeText(expectedNormalizedText));
-        builder.append("\nActual text: ").append(safeText(actualNormalizedText));
+        builder.append("\nExpected raw text: ").append(safeText(expectedRawText));
+        builder.append("\nActual raw text: ").append(safeText(actualRawText));
+        builder.append("\nExpected normalized text: ").append(safeText(expectedNormalizedText));
+        builder.append("\nActual normalized text: ").append(safeText(actualNormalizedText));
         if (expectedPhase != null || actualPhase != null) {
             builder.append("\nExpected phase: ").append(safeText(expectedPhase));
             builder.append("\nActual phase: ").append(safeText(actualPhase));
@@ -921,8 +1094,11 @@ public final class CwFixtureEvaluationResult {
             builder.append("\nExpected RST rcvd: ").append(safeText(expectedRstRcvd));
             builder.append("\nActual RST rcvd: ").append(safeText(actualRstRcvd));
         }
-        if (!missingTextTokens.isEmpty()) {
-            builder.append("\nMissing text tokens: ").append(renderList(missingTextTokens));
+        if (!missingRawTextTokens.isEmpty()) {
+            builder.append("\nMissing raw text tokens: ").append(renderList(missingRawTextTokens));
+        }
+        if (!missingNormalizedTextTokens.isEmpty()) {
+            builder.append("\nMissing normalized text tokens: ").append(renderList(missingNormalizedTextTokens));
         }
         builder.append("\nActual callsigns: ").append(renderList(actualCallsigns));
         if (!missingCallsigns.isEmpty()) {
