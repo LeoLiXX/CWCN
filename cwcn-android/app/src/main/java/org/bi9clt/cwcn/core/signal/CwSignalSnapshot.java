@@ -8,8 +8,39 @@ public final class CwSignalSnapshot {
     private final boolean targetToneLocked;
     private final int preferredToneFrequencyHz;
     private final int targetToneFrequencyHz;
+    private final int acquisitionReferenceFrequencyHz;
+    private final int toneHypothesisFrequencyHz;
+    private final double toneHypothesisConfidence;
+    private final int toneHypothesisSupportFrames;
+    private final int toneHypothesisIdleFrames;
+    private final String toneHypothesisSource;
+    private final boolean hypothesisGuardExperimentEnabled;
+    private final boolean hypothesisGuardEligible;
+    private final boolean hypothesisGuardApplied;
+    private final int hypothesisGuardAppliedFrequencyHz;
+    private final int hypothesisGuardApplyCount;
+    private final int hypothesisGuardHistorySpanHz;
+    private final String hypothesisGuardDecision;
     private final int representativeLockedToneFrequencyHz;
     private final int representativeLockedToneFrameCount;
+    private final int activeWindowObservationCount;
+    private final int activeAcquisitionCenterFrequencyHz;
+    private final int activeAcquisitionCenterHitCount;
+    private final int activeHypothesisObservationCount;
+    private final int activeHypothesisCenterFrequencyHz;
+    private final int activeHypothesisCenterHitCount;
+    private final int representativeCompetitionObservationCount;
+    private final int representativeCompetitionTrackedWinFrames;
+    private final int representativeCompetitionHypothesisWinFrames;
+    private final int representativeCompetitionTieFrames;
+    private final int representativeCompetitionHypothesisCurrentWinStreak;
+    private final int representativeCompetitionHypothesisMaxWinStreak;
+    private final int activeCenterCompetitionObservationCount;
+    private final int activeCenterCompetitionTrackedWinFrames;
+    private final int activeCenterCompetitionHypothesisWinFrames;
+    private final int activeCenterCompetitionTieFrames;
+    private final int activeCenterCompetitionHypothesisCurrentWinStreak;
+    private final int activeCenterCompetitionHypothesisMaxWinStreak;
     private final int currentThreshold;
     private final int releaseThreshold;
     private final int noiseFloorEstimate;
@@ -142,8 +173,219 @@ public final class CwSignalSnapshot {
                 targetToneLocked,
                 preferredToneFrequencyHz,
                 targetToneFrequencyHz,
+                preferredToneFrequencyHz,
+                targetToneFrequencyHz,
+                0.0d,
+                0,
+                0,
+                "NONE",
+                false,
+                false,
+                false,
+                0,
+                0,
+                0,
+                "DISABLED",
                 representativeLockedToneFrequencyHz,
                 representativeLockedToneFrameCount,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                currentThreshold,
+                releaseThreshold,
+                noiseFloorEstimate,
+                signalFloorEstimate,
+                lastRmsAmplitude,
+                lastToneRmsAmplitude,
+                lastWidebandResidualRmsAmplitude,
+                toneDominanceRatio,
+                narrowbandIsolationRatio,
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                processedFrameCount,
+                lockedFrameCount,
+                toneActiveFrameCount,
+                toneActiveUnlockedFrameCount,
+                consecutiveLockedFrames,
+                maxConsecutiveLockedFrames,
+                consecutiveToneActiveUnlockedFrames,
+                maxConsecutiveToneActiveUnlockedFrames,
+                pendingRetuneCandidateFrequencyHz,
+                pendingRetuneCandidateStableScans,
+                preferredWindowWinnerFrequencyHz,
+                wideScanWinnerFrequencyHz,
+                acquisitionWinnerFrequencyHz,
+                finalAdoptedFrequencyHz,
+                preferredWindowWinnerToneRms,
+                wideScanWinnerToneRms,
+                acquisitionWinnerToneRms,
+                finalAdoptedToneRms,
+                preferredWindowWinnerSelectionScore,
+                wideScanWinnerSelectionScore,
+                acquisitionWinnerSelectionScore,
+                finalAdoptedSelectionScore,
+                preferredWindowWinnerLocked,
+                wideScanWinnerLocked,
+                acquisitionWinnerLocked,
+                finalAdoptedLocked,
+                acquisitionWinnerSource,
+                finalAdoptedSource,
+                totalToneOnEvents,
+                totalToneOffEvents,
+                frameGapResetCount,
+                lastFrameGapMs,
+                lastFrameGapResetThresholdMs,
+                worstFrameGapMs,
+                lastFrameGapResetAtMs,
+                lastEvent
+        );
+    }
+
+    public CwSignalSnapshot(
+            int recentHistoryFrameCount,
+            char[] recentFrontEndStateHistory,
+            int[] recentTrackingOffsetHistoryHz,
+            boolean toneActive,
+            boolean targetToneLocked,
+            int preferredToneFrequencyHz,
+            int targetToneFrequencyHz,
+            int acquisitionReferenceFrequencyHz,
+            int toneHypothesisFrequencyHz,
+            double toneHypothesisConfidence,
+            int toneHypothesisSupportFrames,
+            int toneHypothesisIdleFrames,
+            String toneHypothesisSource,
+            boolean hypothesisGuardExperimentEnabled,
+            boolean hypothesisGuardEligible,
+            boolean hypothesisGuardApplied,
+            int hypothesisGuardAppliedFrequencyHz,
+            int hypothesisGuardApplyCount,
+            int hypothesisGuardHistorySpanHz,
+            String hypothesisGuardDecision,
+            int representativeLockedToneFrequencyHz,
+            int representativeLockedToneFrameCount,
+            int activeWindowObservationCount,
+            int activeAcquisitionCenterFrequencyHz,
+            int activeAcquisitionCenterHitCount,
+            int activeHypothesisObservationCount,
+            int activeHypothesisCenterFrequencyHz,
+            int activeHypothesisCenterHitCount,
+            int representativeCompetitionObservationCount,
+            int representativeCompetitionTrackedWinFrames,
+            int representativeCompetitionHypothesisWinFrames,
+            int representativeCompetitionTieFrames,
+            int representativeCompetitionHypothesisCurrentWinStreak,
+            int representativeCompetitionHypothesisMaxWinStreak,
+            int activeCenterCompetitionObservationCount,
+            int activeCenterCompetitionTrackedWinFrames,
+            int activeCenterCompetitionHypothesisWinFrames,
+            int activeCenterCompetitionTieFrames,
+            int activeCenterCompetitionHypothesisCurrentWinStreak,
+            int activeCenterCompetitionHypothesisMaxWinStreak,
+            int currentThreshold,
+            int releaseThreshold,
+            int noiseFloorEstimate,
+            int signalFloorEstimate,
+            double lastRmsAmplitude,
+            double lastToneRmsAmplitude,
+            double lastWidebandResidualRmsAmplitude,
+            double toneDominanceRatio,
+            double narrowbandIsolationRatio,
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            int processedFrameCount,
+            int lockedFrameCount,
+            int toneActiveFrameCount,
+            int toneActiveUnlockedFrameCount,
+            int consecutiveLockedFrames,
+            int maxConsecutiveLockedFrames,
+            int consecutiveToneActiveUnlockedFrames,
+            int maxConsecutiveToneActiveUnlockedFrames,
+            int pendingRetuneCandidateFrequencyHz,
+            int pendingRetuneCandidateStableScans,
+            int preferredWindowWinnerFrequencyHz,
+            int wideScanWinnerFrequencyHz,
+            int acquisitionWinnerFrequencyHz,
+            int finalAdoptedFrequencyHz,
+            double preferredWindowWinnerToneRms,
+            double wideScanWinnerToneRms,
+            double acquisitionWinnerToneRms,
+            double finalAdoptedToneRms,
+            double preferredWindowWinnerSelectionScore,
+            double wideScanWinnerSelectionScore,
+            double acquisitionWinnerSelectionScore,
+            double finalAdoptedSelectionScore,
+            boolean preferredWindowWinnerLocked,
+            boolean wideScanWinnerLocked,
+            boolean acquisitionWinnerLocked,
+            boolean finalAdoptedLocked,
+            String acquisitionWinnerSource,
+            String finalAdoptedSource,
+            int totalToneOnEvents,
+            int totalToneOffEvents,
+            int frameGapResetCount,
+            long lastFrameGapMs,
+            long lastFrameGapResetThresholdMs,
+            long worstFrameGapMs,
+            long lastFrameGapResetAtMs,
+            CwToneEvent lastEvent
+    ) {
+        this(
+                recentHistoryFrameCount,
+                recentFrontEndStateHistory,
+                recentTrackingOffsetHistoryHz,
+                toneActive,
+                targetToneLocked,
+                preferredToneFrequencyHz,
+                targetToneFrequencyHz,
+                acquisitionReferenceFrequencyHz,
+                toneHypothesisFrequencyHz,
+                toneHypothesisConfidence,
+                toneHypothesisSupportFrames,
+                toneHypothesisIdleFrames,
+                toneHypothesisSource,
+                hypothesisGuardExperimentEnabled,
+                hypothesisGuardEligible,
+                hypothesisGuardApplied,
+                hypothesisGuardAppliedFrequencyHz,
+                hypothesisGuardApplyCount,
+                hypothesisGuardHistorySpanHz,
+                hypothesisGuardDecision,
+                representativeLockedToneFrequencyHz,
+                representativeLockedToneFrameCount,
+                activeWindowObservationCount,
+                activeAcquisitionCenterFrequencyHz,
+                activeAcquisitionCenterHitCount,
+                activeHypothesisObservationCount,
+                activeHypothesisCenterFrequencyHz,
+                activeHypothesisCenterHitCount,
+                representativeCompetitionObservationCount,
+                representativeCompetitionTrackedWinFrames,
+                representativeCompetitionHypothesisWinFrames,
+                representativeCompetitionTieFrames,
+                representativeCompetitionHypothesisCurrentWinStreak,
+                representativeCompetitionHypothesisMaxWinStreak,
+                activeCenterCompetitionObservationCount,
+                activeCenterCompetitionTrackedWinFrames,
+                activeCenterCompetitionHypothesisWinFrames,
+                activeCenterCompetitionTieFrames,
+                activeCenterCompetitionHypothesisCurrentWinStreak,
+                activeCenterCompetitionHypothesisMaxWinStreak,
                 currentThreshold,
                 releaseThreshold,
                 noiseFloorEstimate,
@@ -220,8 +462,39 @@ public final class CwSignalSnapshot {
             boolean targetToneLocked,
             int preferredToneFrequencyHz,
             int targetToneFrequencyHz,
+            int acquisitionReferenceFrequencyHz,
+            int toneHypothesisFrequencyHz,
+            double toneHypothesisConfidence,
+            int toneHypothesisSupportFrames,
+            int toneHypothesisIdleFrames,
+            String toneHypothesisSource,
+            boolean hypothesisGuardExperimentEnabled,
+            boolean hypothesisGuardEligible,
+            boolean hypothesisGuardApplied,
+            int hypothesisGuardAppliedFrequencyHz,
+            int hypothesisGuardApplyCount,
+            int hypothesisGuardHistorySpanHz,
+            String hypothesisGuardDecision,
             int representativeLockedToneFrequencyHz,
             int representativeLockedToneFrameCount,
+            int activeWindowObservationCount,
+            int activeAcquisitionCenterFrequencyHz,
+            int activeAcquisitionCenterHitCount,
+            int activeHypothesisObservationCount,
+            int activeHypothesisCenterFrequencyHz,
+            int activeHypothesisCenterHitCount,
+            int representativeCompetitionObservationCount,
+            int representativeCompetitionTrackedWinFrames,
+            int representativeCompetitionHypothesisWinFrames,
+            int representativeCompetitionTieFrames,
+            int representativeCompetitionHypothesisCurrentWinStreak,
+            int representativeCompetitionHypothesisMaxWinStreak,
+            int activeCenterCompetitionObservationCount,
+            int activeCenterCompetitionTrackedWinFrames,
+            int activeCenterCompetitionHypothesisWinFrames,
+            int activeCenterCompetitionTieFrames,
+            int activeCenterCompetitionHypothesisCurrentWinStreak,
+            int activeCenterCompetitionHypothesisMaxWinStreak,
             int currentThreshold,
             int releaseThreshold,
             int noiseFloorEstimate,
@@ -299,8 +572,39 @@ public final class CwSignalSnapshot {
         this.targetToneLocked = targetToneLocked;
         this.preferredToneFrequencyHz = preferredToneFrequencyHz;
         this.targetToneFrequencyHz = targetToneFrequencyHz;
+        this.acquisitionReferenceFrequencyHz = acquisitionReferenceFrequencyHz;
+        this.toneHypothesisFrequencyHz = toneHypothesisFrequencyHz;
+        this.toneHypothesisConfidence = toneHypothesisConfidence;
+        this.toneHypothesisSupportFrames = toneHypothesisSupportFrames;
+        this.toneHypothesisIdleFrames = toneHypothesisIdleFrames;
+        this.toneHypothesisSource = toneHypothesisSource == null ? "NONE" : toneHypothesisSource;
+        this.hypothesisGuardExperimentEnabled = hypothesisGuardExperimentEnabled;
+        this.hypothesisGuardEligible = hypothesisGuardEligible;
+        this.hypothesisGuardApplied = hypothesisGuardApplied;
+        this.hypothesisGuardAppliedFrequencyHz = hypothesisGuardAppliedFrequencyHz;
+        this.hypothesisGuardApplyCount = hypothesisGuardApplyCount;
+        this.hypothesisGuardHistorySpanHz = hypothesisGuardHistorySpanHz;
+        this.hypothesisGuardDecision = hypothesisGuardDecision == null ? "NONE" : hypothesisGuardDecision;
         this.representativeLockedToneFrequencyHz = representativeLockedToneFrequencyHz;
         this.representativeLockedToneFrameCount = representativeLockedToneFrameCount;
+        this.activeWindowObservationCount = activeWindowObservationCount;
+        this.activeAcquisitionCenterFrequencyHz = activeAcquisitionCenterFrequencyHz;
+        this.activeAcquisitionCenterHitCount = activeAcquisitionCenterHitCount;
+        this.activeHypothesisObservationCount = activeHypothesisObservationCount;
+        this.activeHypothesisCenterFrequencyHz = activeHypothesisCenterFrequencyHz;
+        this.activeHypothesisCenterHitCount = activeHypothesisCenterHitCount;
+        this.representativeCompetitionObservationCount = representativeCompetitionObservationCount;
+        this.representativeCompetitionTrackedWinFrames = representativeCompetitionTrackedWinFrames;
+        this.representativeCompetitionHypothesisWinFrames = representativeCompetitionHypothesisWinFrames;
+        this.representativeCompetitionTieFrames = representativeCompetitionTieFrames;
+        this.representativeCompetitionHypothesisCurrentWinStreak = representativeCompetitionHypothesisCurrentWinStreak;
+        this.representativeCompetitionHypothesisMaxWinStreak = representativeCompetitionHypothesisMaxWinStreak;
+        this.activeCenterCompetitionObservationCount = activeCenterCompetitionObservationCount;
+        this.activeCenterCompetitionTrackedWinFrames = activeCenterCompetitionTrackedWinFrames;
+        this.activeCenterCompetitionHypothesisWinFrames = activeCenterCompetitionHypothesisWinFrames;
+        this.activeCenterCompetitionTieFrames = activeCenterCompetitionTieFrames;
+        this.activeCenterCompetitionHypothesisCurrentWinStreak = activeCenterCompetitionHypothesisCurrentWinStreak;
+        this.activeCenterCompetitionHypothesisMaxWinStreak = activeCenterCompetitionHypothesisMaxWinStreak;
         this.currentThreshold = currentThreshold;
         this.releaseThreshold = releaseThreshold;
         this.noiseFloorEstimate = noiseFloorEstimate;
@@ -400,12 +704,136 @@ public final class CwSignalSnapshot {
         return targetToneFrequencyHz;
     }
 
+    public int acquisitionReferenceFrequencyHz() {
+        return acquisitionReferenceFrequencyHz;
+    }
+
+    public int toneHypothesisFrequencyHz() {
+        return toneHypothesisFrequencyHz;
+    }
+
+    public double toneHypothesisConfidence() {
+        return toneHypothesisConfidence;
+    }
+
+    public int toneHypothesisSupportFrames() {
+        return toneHypothesisSupportFrames;
+    }
+
+    public int toneHypothesisIdleFrames() {
+        return toneHypothesisIdleFrames;
+    }
+
+    public String toneHypothesisSource() {
+        return toneHypothesisSource;
+    }
+
+    public boolean hypothesisGuardExperimentEnabled() {
+        return hypothesisGuardExperimentEnabled;
+    }
+
+    public boolean hypothesisGuardEligible() {
+        return hypothesisGuardEligible;
+    }
+
+    public boolean hypothesisGuardApplied() {
+        return hypothesisGuardApplied;
+    }
+
+    public int hypothesisGuardAppliedFrequencyHz() {
+        return hypothesisGuardAppliedFrequencyHz;
+    }
+
+    public int hypothesisGuardApplyCount() {
+        return hypothesisGuardApplyCount;
+    }
+
+    public int hypothesisGuardHistorySpanHz() {
+        return hypothesisGuardHistorySpanHz;
+    }
+
+    public String hypothesisGuardDecision() {
+        return hypothesisGuardDecision;
+    }
+
     public int representativeLockedToneFrequencyHz() {
         return representativeLockedToneFrequencyHz;
     }
 
     public int representativeLockedToneFrameCount() {
         return representativeLockedToneFrameCount;
+    }
+
+    public int activeWindowObservationCount() {
+        return activeWindowObservationCount;
+    }
+
+    public int activeAcquisitionCenterFrequencyHz() {
+        return activeAcquisitionCenterFrequencyHz;
+    }
+
+    public int activeAcquisitionCenterHitCount() {
+        return activeAcquisitionCenterHitCount;
+    }
+
+    public int activeHypothesisObservationCount() {
+        return activeHypothesisObservationCount;
+    }
+
+    public int activeHypothesisCenterFrequencyHz() {
+        return activeHypothesisCenterFrequencyHz;
+    }
+
+    public int activeHypothesisCenterHitCount() {
+        return activeHypothesisCenterHitCount;
+    }
+
+    public int representativeCompetitionObservationCount() {
+        return representativeCompetitionObservationCount;
+    }
+
+    public int representativeCompetitionTrackedWinFrames() {
+        return representativeCompetitionTrackedWinFrames;
+    }
+
+    public int representativeCompetitionHypothesisWinFrames() {
+        return representativeCompetitionHypothesisWinFrames;
+    }
+
+    public int representativeCompetitionTieFrames() {
+        return representativeCompetitionTieFrames;
+    }
+
+    public int representativeCompetitionHypothesisCurrentWinStreak() {
+        return representativeCompetitionHypothesisCurrentWinStreak;
+    }
+
+    public int representativeCompetitionHypothesisMaxWinStreak() {
+        return representativeCompetitionHypothesisMaxWinStreak;
+    }
+
+    public int activeCenterCompetitionObservationCount() {
+        return activeCenterCompetitionObservationCount;
+    }
+
+    public int activeCenterCompetitionTrackedWinFrames() {
+        return activeCenterCompetitionTrackedWinFrames;
+    }
+
+    public int activeCenterCompetitionHypothesisWinFrames() {
+        return activeCenterCompetitionHypothesisWinFrames;
+    }
+
+    public int activeCenterCompetitionTieFrames() {
+        return activeCenterCompetitionTieFrames;
+    }
+
+    public int activeCenterCompetitionHypothesisCurrentWinStreak() {
+        return activeCenterCompetitionHypothesisCurrentWinStreak;
+    }
+
+    public int activeCenterCompetitionHypothesisMaxWinStreak() {
+        return activeCenterCompetitionHypothesisMaxWinStreak;
     }
 
     public int effectiveTrackedToneFrequencyHz() {
@@ -652,6 +1080,20 @@ public final class CwSignalSnapshot {
 
     public String finalAdoptionDetail() {
         return finalAdoptionDetail;
+    }
+
+    public String hypothesisCompetitionSummary() {
+        return "rep(obs=" + representativeCompetitionObservationCount
+                + ", trk=" + representativeCompetitionTrackedWinFrames
+                + ", hyp=" + representativeCompetitionHypothesisWinFrames
+                + ", tie=" + representativeCompetitionTieFrames
+                + ", maxHyp=" + representativeCompetitionHypothesisMaxWinStreak
+                + ") act(obs=" + activeCenterCompetitionObservationCount
+                + ", trk=" + activeCenterCompetitionTrackedWinFrames
+                + ", hyp=" + activeCenterCompetitionHypothesisWinFrames
+                + ", tie=" + activeCenterCompetitionTieFrames
+                + ", maxHyp=" + activeCenterCompetitionHypothesisMaxWinStreak
+                + ")";
     }
 
     public String preferredWindowTopCandidatesSummary() {

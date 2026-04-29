@@ -32,7 +32,7 @@ public final class CwFastPreferredOffsetMatrixRegressionTest {
 
         addExpectations(expectations, "user_noise_cq_20wpm_700hz", PREFERRED_MATRIX, 0.40d, 14, true, true);
         addExpectations(expectations, "user_noise_cq_25wpm_700hz", PREFERRED_MATRIX, 0.35d, 12, true, true);
-        addExpectations(expectations, "user_noise_cq_30wpm_700hz", PREFERRED_MATRIX, 0.00d, 6, false, false);
+        addExpectations(expectations, "user_noise_cq_30wpm_700hz", PREFERRED_MATRIX, 0.95d, 24, true, true);
         addExpectations(expectations, "user_speed_sweep_vvv_700hz", PREFERRED_MATRIX, 0.45d, 18, false, false);
 
         StringBuilder summary = new StringBuilder();
@@ -64,6 +64,13 @@ public final class CwFastPreferredOffsetMatrixRegressionTest {
             }
             if (expectation.requiresCallsignCore) {
                 assertTrue(summary.toString(), containsCallsignCore(decodedText));
+            }
+            if ("user_noise_cq_30wpm_700hz".equals(expectation.scenarioId)) {
+                assertTrue(summary.toString(), countSubstring(decodedText, "CQ") >= 3);
+                assertTrue(summary.toString(), decodedText.contains("DE"));
+                assertTrue(summary.toString(), countSubstring(decodedText, "BI9CLT") >= 3);
+                assertTrue(summary.toString(), decodedText.contains("PSE"));
+                assertTrue(summary.toString(), decodedText.contains("K"));
             }
             if ("user_speed_sweep_vvv_700hz".equals(expectation.scenarioId)) {
                 assertTrue(summary.toString(), countCharacter(decodedText, 'V') >= 3);
@@ -198,6 +205,23 @@ public final class CwFastPreferredOffsetMatrixRegressionTest {
             if (Character.toUpperCase(text.charAt(index)) == Character.toUpperCase(target)) {
                 count += 1;
             }
+        }
+        return count;
+    }
+
+    private int countSubstring(String text, String fragment) {
+        if (text == null || text.isEmpty() || fragment == null || fragment.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int searchFrom = 0;
+        while (searchFrom >= 0 && searchFrom < text.length()) {
+            int foundAt = text.indexOf(fragment, searchFrom);
+            if (foundAt < 0) {
+                break;
+            }
+            count += 1;
+            searchFrom = foundAt + fragment.length();
         }
         return count;
     }

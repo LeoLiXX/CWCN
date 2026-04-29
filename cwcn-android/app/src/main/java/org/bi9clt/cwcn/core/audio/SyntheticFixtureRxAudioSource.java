@@ -228,6 +228,95 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         return frames;
     }
 
+    RenderedFixtureFrames renderFramesWithTruthForTesting(CwFixtureScenario scenario) {
+        short[] waveform = renderWaveform(scenario);
+        ArrayList<AudioFrame> frames = new ArrayList<>();
+        ArrayList<FrameToneTruth> truths = new ArrayList<>();
+        long startedAtMs = 0L;
+        for (int offset = 0; offset < waveform.length; offset += FRAME_SIZE_SAMPLES) {
+            int frameLength = Math.min(FRAME_SIZE_SAMPLES, waveform.length - offset);
+            short[] samples = Arrays.copyOfRange(waveform, offset, offset + frameLength);
+            frames.add(buildFrame(samples, startedAtMs, offset));
+        }
+        buildFrameTruthsForTesting(scenario, waveform.length, truths);
+        return new RenderedFixtureFrames(frames, truths);
+    }
+
+    private void buildFrameTruthsForTesting(
+            CwFixtureScenario scenario,
+            int totalSamples,
+            List<FrameToneTruth> truths
+    ) {
+        List<Segment> segments = buildSegments(scenario);
+        int frameIndex = 0;
+        int frameSampleCount = Math.min(FRAME_SIZE_SAMPLES, Math.max(0, totalSamples));
+        int frameConsumedSamples = 0;
+        int frameActiveSamples = 0;
+        double frameToneFrequencySumHz = 0.0d;
+        int absoluteIndex = 0;
+
+        for (Segment segment : segments) {
+            for (int segmentSampleIndex = 0; segmentSampleIndex < segment.sampleCount; segmentSampleIndex++) {
+                if (segment.toneOn) {
+                    frameActiveSamples += 1;
+                    frameToneFrequencySumHz += instantaneousToneFrequencyHz(
+                            scenario,
+                            segment,
+                            segmentSampleIndex,
+                            absoluteIndex,
+                            totalSamples
+                    );
+                }
+                absoluteIndex += 1;
+                frameConsumedSamples += 1;
+                if (frameConsumedSamples >= frameSampleCount) {
+                    truths.add(buildFrameToneTruth(
+                            frameIndex,
+                            absoluteIndex - frameConsumedSamples,
+                            frameSampleCount,
+                            frameActiveSamples,
+                            frameToneFrequencySumHz
+                    ));
+                    frameIndex += 1;
+                    frameConsumedSamples = 0;
+                    frameActiveSamples = 0;
+                    frameToneFrequencySumHz = 0.0d;
+                    frameSampleCount = Math.min(FRAME_SIZE_SAMPLES, Math.max(0, totalSamples - absoluteIndex));
+                }
+            }
+        }
+
+        if (frameConsumedSamples > 0) {
+            truths.add(buildFrameToneTruth(
+                    frameIndex,
+                    absoluteIndex - frameConsumedSamples,
+                    frameConsumedSamples,
+                    frameActiveSamples,
+                    frameToneFrequencySumHz
+            ));
+        }
+    }
+
+    private FrameToneTruth buildFrameToneTruth(
+            int frameIndex,
+            int frameSampleOffset,
+            int frameSampleCount,
+            int activeSampleCount,
+            double toneFrequencySumHz
+    ) {
+        double expectedToneFrequencyHz = activeSampleCount <= 0
+                ? 0.0d
+                : toneFrequencySumHz / activeSampleCount;
+        long frameStartTimestampMs = Math.round(frameSampleOffset * 1000.0d / SAMPLE_RATE_HZ);
+        return new FrameToneTruth(
+                frameIndex,
+                frameStartTimestampMs,
+                frameSampleCount,
+                activeSampleCount,
+                expectedToneFrequencyHz
+        );
+    }
+
     private List<Segment> buildSegments(CwFixtureScenario scenario) {
         List<String> messageParts = scenario.messageParts();
         if (messageParts == null || messageParts.isEmpty()) {
@@ -928,6 +1017,77 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
 
         private boolean hasToneFrequencyOverride() {
             return toneOn && useToneFrequencyOverride && startToneFrequencyHz > 0.0d;
+        }
+    }
+
+    static final class RenderedFixtureFrames {
+        private final List<AudioFrame> frames;
+        private final List<FrameToneTruth> toneTruths;
+
+        private RenderedFixtureFrames(List<AudioFrame> frames, List<FrameToneTruth> toneTruths) {
+            this.frames = frames;
+            this.toneTruths = toneTruths;
+        }
+
+        List<AudioFrame> frames() {
+            return frames;
+        }
+
+        List<FrameToneTruth> toneTruths() {
+            return toneTruths;
+        }
+    }
+
+    static final class FrameToneTruth {
+        private final int frameIndex;
+        private final long frameStartTimestampMs;
+        private final int sampleCount;
+        private final int activeSampleCount;
+        private final double expectedToneFrequencyHz;
+
+        private FrameToneTruth(
+                int frameIndex,
+                long frameStartTimestampMs,
+                int sampleCount,
+                int activeSampleCount,
+                double expectedToneFrequencyHz
+        ) {
+            this.frameIndex = frameIndex;
+            this.frameStartTimestampMs = frameStartTimestampMs;
+            this.sampleCount = sampleCount;
+            this.activeSampleCount = activeSampleCount;
+            this.expectedToneFrequencyHz = expectedToneFrequencyHz;
+        }
+
+        int frameIndex() {
+            return frameIndex;
+        }
+
+        long frameStartTimestampMs() {
+            return frameStartTimestampMs;
+        }
+
+        int sampleCount() {
+            return sampleCount;
+        }
+
+        int activeSampleCount() {
+            return activeSampleCount;
+        }
+
+        double activeSampleRatio() {
+            if (sampleCount <= 0) {
+                return 0.0d;
+            }
+            return Math.max(0.0d, Math.min(1.0d, activeSampleCount / (double) sampleCount));
+        }
+
+        boolean toneActive() {
+            return activeSampleCount > 0 && expectedToneFrequencyHz > 0.0d;
+        }
+
+        double expectedToneFrequencyHz() {
+            return expectedToneFrequencyHz;
         }
     }
 

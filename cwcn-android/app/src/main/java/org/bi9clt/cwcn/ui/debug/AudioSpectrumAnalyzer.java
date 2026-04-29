@@ -28,23 +28,33 @@ public final class AudioSpectrumAnalyzer {
             AudioFrame frame,
             int preferredToneHz,
             int trackedToneHz,
+            int hypothesisToneHz,
             int preferredWindowWinnerToneHz,
             int wideScanWinnerToneHz,
             int acquisitionWinnerToneHz,
             int finalAdoptedToneHz,
             String acquisitionWinnerSource,
-            String finalAdoptedSource
+            String finalAdoptedSource,
+            boolean hypothesisGuardEnabled,
+            boolean hypothesisGuardApplied,
+            int hypothesisGuardAppliedToneHz,
+            String hypothesisGuardDecision
     ) {
         if (frame == null || frame.samples() == null || frame.samples().length == 0 || frame.sampleRateHz() <= 0) {
             return snapshot(
                     preferredToneHz,
                     trackedToneHz,
+                    hypothesisToneHz,
                     preferredWindowWinnerToneHz,
                     wideScanWinnerToneHz,
                     acquisitionWinnerToneHz,
                     finalAdoptedToneHz,
                     acquisitionWinnerSource,
-                    finalAdoptedSource
+                    finalAdoptedSource,
+                    hypothesisGuardEnabled,
+                    hypothesisGuardApplied,
+                    hypothesisGuardAppliedToneHz,
+                    hypothesisGuardDecision
             );
         }
 
@@ -60,24 +70,34 @@ public final class AudioSpectrumAnalyzer {
         return snapshot(
                 preferredToneHz,
                 trackedToneHz,
+                hypothesisToneHz,
                 preferredWindowWinnerToneHz,
                 wideScanWinnerToneHz,
                 acquisitionWinnerToneHz,
                 finalAdoptedToneHz,
                 acquisitionWinnerSource,
-                finalAdoptedSource
+                finalAdoptedSource,
+                hypothesisGuardEnabled,
+                hypothesisGuardApplied,
+                hypothesisGuardAppliedToneHz,
+                hypothesisGuardDecision
         );
     }
 
     private AudioSpectrumSnapshot snapshot(
             int preferredToneHz,
             int trackedToneHz,
+            int hypothesisToneHz,
             int preferredWindowWinnerToneHz,
             int wideScanWinnerToneHz,
             int acquisitionWinnerToneHz,
             int finalAdoptedToneHz,
             String acquisitionWinnerSource,
-            String finalAdoptedSource
+            String finalAdoptedSource,
+            boolean hypothesisGuardEnabled,
+            boolean hypothesisGuardApplied,
+            int hypothesisGuardAppliedToneHz,
+            String hypothesisGuardDecision
     ) {
         int peakIndex = 0;
         float peakMagnitude = 0.0f;
@@ -105,12 +125,17 @@ public final class AudioSpectrumAnalyzer {
                 noiseFloorMagnitude,
                 preferredToneHz,
                 trackedToneHz,
+                hypothesisToneHz,
                 preferredWindowWinnerToneHz,
                 wideScanWinnerToneHz,
                 acquisitionWinnerToneHz,
                 finalAdoptedToneHz,
                 acquisitionWinnerSource,
-                finalAdoptedSource
+                finalAdoptedSource,
+                hypothesisGuardEnabled,
+                hypothesisGuardApplied,
+                hypothesisGuardAppliedToneHz,
+                hypothesisGuardDecision
         );
     }
 

@@ -24,6 +24,13 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public final class CwUserCaptureCoverageTest {
+    // Assertion tiers in this suite:
+    // 1) assertCoverageCase(...) for stable mainline user-capture CQ fixtures that should
+    //    hold tone, raw decodability, and normalized visibility together.
+    // 2) custom boundary tests for fast/noisy/speed-shift fixtures where we only lock in
+    //    RAW structure that the current bench repeatedly proves stable.
+    // 3) long-form / retarget cases keep custom assertions because continuity and handoff
+    //    quality matter more than generic fragment presence.
     private static final String[] COMMON_18WPM_TONE_MATRIX_SCENARIOS = new String[]{
             "user_light_qsb_cq_18wpm_600hz",
             "user_light_qsb_cq_18wpm_700hz",
@@ -32,42 +39,62 @@ public final class CwUserCaptureCoverageTest {
 
     @Test
     public void userRecordedStyleCoverageCase_range10wpm700hz_staysDecodable() {
-        assertCoverageCase("user_range_cq_10wpm_700hz", 700, 0.55d, true, true, 20);
+        assertCoverageCase(
+                "user_range_cq_10wpm_700hz",
+                700,
+                0.55d,
+                true,
+                true,
+                20,
+                null,
+                new String[]{"CQ", "BI9CLT"},
+                "BI9CLT"
+        );
     }
 
     @Test
     public void userRecordedStyleCoverageCase_range15wpm700hz_staysDecodable() {
-        assertCoverageCase("user_range_cq_15wpm_700hz", 700, 0.68d, true, true, 20);
+        assertCoverageCase(
+                "user_range_cq_15wpm_700hz",
+                700,
+                0.68d,
+                true,
+                true,
+                20,
+                null,
+                new String[]{"CQ", "BI9CLT"},
+                "BI9CLT"
+        );
     }
 
     @Test
     public void userRecordedStyleCoverageCase_qsb18wpm700hz_staysDecodable() {
-        assertCoverageCase("user_qsb_cq_18wpm_700hz", 700, 0.40d, true, true, 12);
+        assertCoverageCase("user_qsb_cq_18wpm_700hz", 700, 0.40d, true, true, 12, null, new String[0], "BI9CLT");
     }
 
     @Test
     public void userRecordedStyleCoverageCase_qsb18wpm600hz_staysDecodable() {
-        assertCoverageCase("user_qsb_cq_18wpm_600hz", 600, 0.40d, true, true, 12);
+        assertCoverageCase("user_qsb_cq_18wpm_600hz", 600, 0.40d, true, true, 12, null, new String[0], "BI9CLT");
     }
 
     @Test
     public void userRecordedStyleCoverageCase_qsb18wpm800hz_staysDecodable() {
-        assertCoverageCase("user_qsb_cq_18wpm_800hz", 800, 0.40d, true, true, 12);
+        assertCoverageCase("user_qsb_cq_18wpm_800hz", 800, 0.40d, true, true, 12, null, new String[0], "BI9CLT");
     }
 
     @Test
     public void userRecordedStyleCoverageCase_lightQsb18wpm700hz_staysStronglyDecodable() {
-        assertCoverageCase("user_light_qsb_cq_18wpm_700hz", 700, 0.75d, true, true, 18);
+        assertCoverageCase("user_light_qsb_cq_18wpm_700hz", 700, 0.75d, true, true, 18, null, "CQ", "BI9CLT");
     }
 
     @Test
     public void userRecordedStyleCoverageCase_lightQsb18wpm600hz_staysStronglyDecodable() {
-        assertCoverageCase("user_light_qsb_cq_18wpm_600hz", 600, 0.75d, true, true, 18);
+        assertCoverageCase("user_light_qsb_cq_18wpm_600hz", 600, 0.75d, true, true, 18, null, "CQ", "BI9CLT");
     }
 
     @Test
     public void userRecordedStyleCoverageCase_lightQsb18wpm800hz_staysStronglyDecodable() {
-        assertCoverageCase("user_light_qsb_cq_18wpm_800hz", 800, 0.75d, true, true, 18);
+        assertCoverageCase("user_light_qsb_cq_18wpm_800hz", 800, 0.75d, true, true, 18, null, "CQ", "BI9CLT");
     }
 
     @Test
@@ -78,6 +105,9 @@ public final class CwUserCaptureCoverageTest {
         String decodedText = bundle.decoderSnapshot.decodedText() == null
                 ? ""
                 : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText().replace('\u25A1', '?');
 
         assertNotNull(summary, result);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
@@ -86,6 +116,8 @@ public final class CwUserCaptureCoverageTest {
         assertTrue(summary, result.textTokenRecall() >= 0.75d);
         assertTrue(summary, decodedText.contains("CQ"));
         assertTrue(summary, containsCallsignCore(decodedText));
+        assertTrue(summary, normalizedDecodedText.contains("CQ"));
+        assertTrue(summary, normalizedDecodedText.contains("BI9CLT"));
     }
 
     @Test
@@ -93,6 +125,9 @@ public final class CwUserCaptureCoverageTest {
         OfflineEvalBundle bundle = evaluateOfflineBundle("user_qsb_cq_18wpm_600hz", 500);
         CwFixtureEvaluationResult result = bundle.result;
         String summary = renderDebugSummary(result, bundle);
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText().replace('\u25A1', '?');
 
         assertNotNull(summary, result);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
@@ -101,6 +136,8 @@ public final class CwUserCaptureCoverageTest {
         assertEqualsWithTolerance(summary, 590, bundle.signalSnapshot.targetToneFrequencyHz(), 20);
         assertNotEquals(summary, "SEARCH_FALLBACK", bundle.signalSnapshot.finalAdoptedSource());
         assertTrue(summary, result.textTokenRecall() >= 0.88d);
+        assertTrue(summary, normalizedDecodedText.contains("CQ"));
+        assertTrue(summary, normalizedDecodedText.contains("BI9CLT"));
     }
 
     @Test
@@ -111,6 +148,9 @@ public final class CwUserCaptureCoverageTest {
         String decodedText = bundle.decoderSnapshot.decodedText() == null
                 ? ""
                 : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText().replace('\u25A1', '?');
 
         assertNotNull(summary, result);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
@@ -120,6 +160,8 @@ public final class CwUserCaptureCoverageTest {
                 || bundle.signalSnapshot.targetToneFrequencyHz() >= 550);
         assertTrue(summary, result.textTokenRecall() >= 0.78d);
         assertTrue(summary, decodedText.contains("BI9CLT"));
+        assertTrue(summary, normalizedDecodedText.contains("CQ"));
+        assertTrue(summary, normalizedDecodedText.contains("BI9CLT"));
     }
 
     @Test
@@ -130,6 +172,9 @@ public final class CwUserCaptureCoverageTest {
         String decodedText = bundle.decoderSnapshot.decodedText() == null
                 ? ""
                 : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText().replace('\u25A1', '?');
 
         assertNotNull(summary, result);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
@@ -138,51 +183,53 @@ public final class CwUserCaptureCoverageTest {
                 || bundle.signalSnapshot.targetToneFrequencyHz() >= 550);
         assertTrue(summary, result.textTokenRecall() >= 0.78d);
         assertTrue(summary, decodedText.contains("BI9CLT"));
+        assertTrue(summary, normalizedDecodedText.contains("CQ"));
+        assertTrue(summary, normalizedDecodedText.contains("BI9CLT"));
     }
 
     @Test
     public void usbAudioCoverageCase_offset20wpm600hz_remainsDecodableWhenPreferredToneStartsAt800hz() {
-        assertCoverageCase("usb_freq_offset_cq_20wpm_600hz", 600, 0.60d, true, true, 18, 800);
+        assertCoverageCase("usb_freq_offset_cq_20wpm_600hz", 600, 0.60d, true, true, 18, 800, "CQ", "BI9CLT");
     }
 
     @Test
     public void usbAudioCoverageCase_offset20wpm800hz_remainsDecodableWhenPreferredToneStartsAt450hz() {
-        assertCoverageCase("usb_freq_offset_cq_20wpm_800hz", 800, 0.60d, true, true, 18, 450);
+        assertCoverageCase("usb_freq_offset_cq_20wpm_800hz", 800, 0.60d, true, true, 18, 450, "CQ", "BI9CLT");
     }
 
     @Test
     public void usbAudioCoverageCase_nominal18wpm700hz_staysStronglyDecodable() {
-        assertCoverageCase("usb_nominal_cq_18wpm_700hz", 700, 0.88d, true, true, 24);
+        assertCoverageCase("usb_nominal_cq_18wpm_700hz", 700, 0.88d, true, true, 24, null, "CQ", "BI9CLT");
     }
 
     @Test
     public void usbAudioCoverageCase_lowLevel18wpm700hz_staysStronglyDecodable() {
-        assertCoverageCase("usb_low_level_cq_18wpm_700hz", 700, 0.78d, true, true, 22);
+        assertCoverageCase("usb_low_level_cq_18wpm_700hz", 700, 0.78d, true, true, 22, null, "CQ", "BI9CLT");
     }
 
     @Test
     public void usbAudioCoverageCase_hotLevel18wpm700hz_staysStronglyDecodable() {
-        assertCoverageCase("usb_hot_level_cq_18wpm_700hz", 700, 0.78d, true, true, 22);
+        assertCoverageCase("usb_hot_level_cq_18wpm_700hz", 700, 0.78d, true, true, 22, null, "CQ", "BI9CLT");
     }
 
     @Test
     public void usbAudioCoverageCase_offset20wpm600hz_staysDecodable() {
-        assertCoverageCase("usb_freq_offset_cq_20wpm_600hz", 600, 0.65d, true, true, 20);
+        assertCoverageCase("usb_freq_offset_cq_20wpm_600hz", 600, 0.65d, true, true, 20, null, "CQ", "BI9CLT");
     }
 
     @Test
     public void usbAudioCoverageCase_offset20wpm800hz_staysDecodable() {
-        assertCoverageCase("usb_freq_offset_cq_20wpm_800hz", 800, 0.65d, true, true, 20);
+        assertCoverageCase("usb_freq_offset_cq_20wpm_800hz", 800, 0.65d, true, true, 20, null, "CQ", "BI9CLT");
     }
 
     @Test
     public void usbAudioCoverageCase_nearbyTone18wpm700hz_staysDecodable() {
-        assertCoverageCase("usb_nearby_tone_cq_18wpm_700hz", 700, 0.60d, true, true, 18);
+        assertCoverageCase("usb_nearby_tone_cq_18wpm_700hz", 700, 0.60d, true, true, 18, null, "CQ", "BI9CLT");
     }
 
     @Test
     public void usbAudioCoverageCase_hum18wpm700hz_staysStronglyDecodable() {
-        assertCoverageCase("usb_hum_cq_18wpm_700hz", 700, 0.74d, true, true, 20);
+        assertCoverageCase("usb_hum_cq_18wpm_700hz", 700, 0.74d, true, true, 20, null, "CQ", "BI9CLT");
     }
 
     @Test
@@ -193,6 +240,9 @@ public final class CwUserCaptureCoverageTest {
         String decodedText = bundle.decoderSnapshot.decodedText() == null
                 ? ""
                 : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText().replace('\u25A1', '?');
 
         assertNotNull(summary, result);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
@@ -201,22 +251,71 @@ public final class CwUserCaptureCoverageTest {
         assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 18);
         assertTrue(summary, decodedText.contains("CQ"));
         assertTrue(summary, containsCallsignCore(decodedText));
+        assertTrue(summary, normalizedDecodedText.contains("CQ"));
+        assertTrue(summary, normalizedDecodedText.contains("BI9CLT"));
         assertTrue(summary, bundle.clippedSampleRatio > 0.0d);
     }
 
     @Test
     public void userRecordedStyleCoverageCase_noise30wpm700hz_staysTrackedAsFastBoundaryCase() {
-        assertCoverageCase("user_noise_cq_30wpm_700hz", 700, 0.0d, false, false, 6);
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_noise_cq_30wpm_700hz");
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String decodedText = bundle.decoderSnapshot.decodedText() == null
+                ? ""
+                : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 8);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 8);
+        assertEqualsWithTolerance(
+                summary + "\neffectiveTrackedToneHz",
+                700,
+                bundle.signalSnapshot.effectiveTrackedToneFrequencyHz(),
+                35
+        );
+        assertTrue(summary, result.textTokenRecall() >= 0.75d);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 18);
+        assertDecodedFragmentCount(summary, decodedText, "CQ", 2);
+        assertDecodedFragmentPresent(summary, decodedText, "DE");
+        assertDecodedFragmentCount(summary, decodedText, "BI9CLT", 2);
+        assertDecodedFragmentPresent(summary, decodedText, "PSE");
+        assertDecodedFragmentPresent(summary, decodedText, "K");
     }
 
     @Test
     public void userRecordedStyleCoverageCase_noise25wpm700hz_staysDecodable() {
-        assertCoverageCase("user_noise_cq_25wpm_700hz", 700, 0.35d, true, true, 12);
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_noise_cq_25wpm_700hz");
+        CwFixtureEvaluationResult result = bundle.result;
+        String summary = renderDebugSummary(result, bundle);
+        String decodedText = bundle.decoderSnapshot.decodedText() == null
+                ? ""
+                : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+
+        assertNotNull(summary, result);
+        assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 2500.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 8);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 8);
+        assertEqualsWithTolerance(
+                summary + "\neffectiveTrackedToneHz",
+                700,
+                bundle.signalSnapshot.effectiveTrackedToneFrequencyHz(),
+                35
+        );
+        assertTrue(summary, result.textTokenRecall() >= 0.35d);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 12);
+        assertDecodedFragmentCount(summary, decodedText, "CQ", 3);
+        assertDecodedFragmentPresent(summary, decodedText, "DE");
+        assertDecodedFragmentPresent(summary, decodedText, "PSE");
+        assertDecodedFragmentCount(summary, decodedText, "I9", 3);
     }
 
     @Test
     public void userRecordedStyleCoverageCase_noise20wpm700hz_staysDecodable() {
-        assertCoverageCase("user_noise_cq_20wpm_700hz", 700, 0.40d, true, true, 14);
+        assertCoverageCase("user_noise_cq_20wpm_700hz", 700, 0.40d, true, true, 14, null, new String[0], "BI9CLT");
     }
 
     @Test
@@ -275,8 +374,10 @@ public final class CwUserCaptureCoverageTest {
         assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 12);
         assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 12);
         assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 8);
+        assertDecodedFragmentCount(summary, decodedText, "VVV", 2);
         assertTrue(summary, countCharacter(decodedText, 'V') >= 3);
         assertTrue(summary, countCharacter(decodedText, ' ') >= 3);
+        assertDecodedFragmentPresent(summary, decodedText, "SK");
         assertTrue(summary, decodedText.contains("BI9CXX") || decodedText.contains("9CXX"));
     }
 
@@ -590,12 +691,62 @@ public final class CwUserCaptureCoverageTest {
             int minDecodedCharacters,
             Integer preferredToneOverrideHz
     ) {
+        assertCoverageCase(
+                scenarioId,
+                expectedToneHz,
+                minTextTokenRecall,
+                requiresCq,
+                requiresCallsignCore,
+                minDecodedCharacters,
+                preferredToneOverrideHz,
+                new String[0],
+                new String[0]
+        );
+    }
+
+    private void assertCoverageCase(
+            String scenarioId,
+            int expectedToneHz,
+            double minTextTokenRecall,
+            boolean requiresCq,
+            boolean requiresCallsignCore,
+            int minDecodedCharacters,
+            Integer preferredToneOverrideHz,
+            String... requiredNormalizedFragments
+    ) {
+        assertCoverageCase(
+                scenarioId,
+                expectedToneHz,
+                minTextTokenRecall,
+                requiresCq,
+                requiresCallsignCore,
+                minDecodedCharacters,
+                preferredToneOverrideHz,
+                requiredNormalizedFragments,
+                new String[0]
+        );
+    }
+
+    private void assertCoverageCase(
+            String scenarioId,
+            int expectedToneHz,
+            double minTextTokenRecall,
+            boolean requiresCq,
+            boolean requiresCallsignCore,
+            int minDecodedCharacters,
+            Integer preferredToneOverrideHz,
+            String[] requiredNormalizedFragments,
+            String... requiredDecodedFragments
+    ) {
         OfflineEvalBundle bundle = evaluateOfflineBundle(scenarioId, preferredToneOverrideHz);
         CwFixtureEvaluationResult result = bundle.result;
         String summary = renderDebugSummary(result, bundle);
         String decodedText = bundle.decoderSnapshot.decodedText() == null
                 ? ""
                 : bundle.decoderSnapshot.decodedText().replace('\u25A1', '?');
+        String normalizedDecodedText = result.actualNormalizedText() == null
+                ? ""
+                : result.actualNormalizedText().replace('\u25A1', '?');
 
         assertNotNull(summary, result);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
@@ -603,6 +754,12 @@ public final class CwUserCaptureCoverageTest {
         assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 8);
         assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 8);
         assertTrue(summary, bundle.signalSnapshot.maxConsecutiveLockedFrames() >= 4);
+        assertEqualsWithTolerance(
+                summary + "\neffectiveTrackedToneHz",
+                expectedToneHz,
+                bundle.signalSnapshot.effectiveTrackedToneFrequencyHz(),
+                35
+        );
         assertTrue(summary, result.textTokenRecall() >= minTextTokenRecall);
         assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= minDecodedCharacters);
         if (requiresCq) {
@@ -610,6 +767,14 @@ public final class CwUserCaptureCoverageTest {
         }
         if (requiresCallsignCore) {
             assertTrue(summary, containsCallsignCore(decodedText));
+        }
+        for (String fragment : requiredNormalizedFragments) {
+            assertTrue(summary + "\nmissingNormalizedFragment=" + fragment,
+                    normalizedDecodedText.contains(fragment));
+        }
+        for (String fragment : requiredDecodedFragments) {
+            assertTrue(summary + "\nmissingDecodedFragment=" + fragment,
+                    decodedText.contains(fragment));
         }
     }
 
@@ -804,6 +969,21 @@ public final class CwUserCaptureCoverageTest {
             searchFrom = foundAt + fragment.length();
         }
         return count;
+    }
+
+    private void assertDecodedFragmentPresent(String summary, String decodedText, String fragment) {
+        assertTrue(summary + "\nmissingDecodedFragment=" + fragment, decodedText.contains(fragment));
+    }
+
+    private void assertDecodedFragmentCount(String summary, String decodedText, String fragment, int minimumCount) {
+        int actualCount = countSubstring(decodedText, fragment);
+        assertTrue(
+                summary
+                        + "\nfragment=" + fragment
+                        + " expectedCount>=" + minimumCount
+                        + " actualCount=" + actualCount,
+                actualCount >= minimumCount
+        );
     }
 
     private double tokenWindowRecall(String expectedText, String actualText, double startFraction, double endFraction) {

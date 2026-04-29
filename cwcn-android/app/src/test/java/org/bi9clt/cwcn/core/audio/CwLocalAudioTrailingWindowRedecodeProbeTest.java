@@ -28,8 +28,40 @@ public final class CwLocalAudioTrailingWindowRedecodeProbeTest {
         );
     }
 
+    @Test
+    public void hypothesisProbe_printsProblemRecordingToneBeliefState() {
+        printHypothesisBySuffix("(2)");
+        printHypothesisBySuffix("(3)");
+        printHypothesisBySuffix("(8)");
+    }
+
     private void probeBySuffix(String sourceLabelSuffix, String expectedText) {
         probe(findSourceLabelBySuffix(sourceLabelSuffix), expectedText);
+    }
+
+    private void printHypothesisBySuffix(String sourceLabelSuffix) {
+        LocalAudioDecodeTestSupport.OfflineDetailedProbeResult detailedResult = requireResult(findSourceLabelBySuffix(sourceLabelSuffix));
+        LocalAudioDecodeTestSupport.OfflineProbeResult baseline = detailedResult.probeResult();
+        String summary = baseline.sourceLabel()
+                + "\ntrackedTone=" + baseline.signalSnapshot().targetToneFrequencyHz()
+                + " trackedDisplay=" + baseline.signalSnapshot().effectiveTrackedToneFrequencyHz()
+                + " hypTone=" + baseline.signalSnapshot().toneHypothesisFrequencyHz()
+                + " hypConf=" + String.format(Locale.US, "%.2f", baseline.signalSnapshot().toneHypothesisConfidence())
+                + " hypFrames=" + baseline.signalSnapshot().toneHypothesisSupportFrames()
+                + " hypIdle=" + baseline.signalSnapshot().toneHypothesisIdleFrames()
+                + " hypSource=" + baseline.signalSnapshot().toneHypothesisSource()
+                + "\nprefWinner=" + baseline.signalSnapshot().preferredWindowWinnerFrequencyHz()
+                + " wideWinner=" + baseline.signalSnapshot().wideScanWinnerFrequencyHz()
+                + " acqWinner=" + baseline.signalSnapshot().acquisitionWinnerFrequencyHz()
+                + " acqSource=" + baseline.signalSnapshot().acquisitionWinnerSource()
+                + "\nacqDetail=" + baseline.signalSnapshot().acquisitionDecisionDetail()
+                + "\nprefTop=" + baseline.signalSnapshot().preferredWindowTopCandidatesSummary()
+                + "\nwideTop=" + baseline.signalSnapshot().wideScanTopCandidatesSummary();
+        System.out.println(summary);
+        assertTrue(summary,
+                baseline.signalSnapshot().toneHypothesisSupportFrames() > 0
+                        || ("NONE".equals(baseline.signalSnapshot().toneHypothesisSource())
+                        && baseline.signalSnapshot().effectiveTrackedToneFrequencyHz() >= 560));
     }
 
     private void probe(String sourceLabel, String expectedText) {

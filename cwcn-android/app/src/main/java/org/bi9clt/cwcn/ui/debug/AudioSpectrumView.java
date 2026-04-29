@@ -21,6 +21,8 @@ public final class AudioSpectrumView extends View {
     private final Paint curvePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint preferredPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint trackedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint hypothesisPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint hypothesisGuardPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint preferredWinnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint wideWinnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint acquisitionWinnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -28,6 +30,8 @@ public final class AudioSpectrumView extends View {
     private final Paint peakPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint noisePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint decodeRefPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint decodeRefBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint markerLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint markerLabelBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path curvePath = new Path();
@@ -63,6 +67,12 @@ public final class AudioSpectrumView extends View {
         trackedPaint.setColor(Color.parseColor("#F4B04F"));
         trackedPaint.setStrokeWidth(dp(2));
 
+        hypothesisPaint.setColor(Color.parseColor("#D96CFF"));
+        hypothesisPaint.setStrokeWidth(dp(1.5f));
+
+        hypothesisGuardPaint.setColor(Color.parseColor("#1DE9B6"));
+        hypothesisGuardPaint.setStrokeWidth(dp(2.5f));
+
         preferredWinnerPaint.setColor(Color.parseColor("#4FC3F7"));
         preferredWinnerPaint.setStrokeWidth(dp(1.5f));
 
@@ -83,6 +93,13 @@ public final class AudioSpectrumView extends View {
 
         textPaint.setColor(Color.parseColor("#C9D4E3"));
         textPaint.setTextSize(dp(11));
+
+        decodeRefPaint.setColor(Color.parseColor("#F4B04F"));
+        decodeRefPaint.setTextSize(dp(10));
+        decodeRefPaint.setFakeBoldText(true);
+
+        decodeRefBackgroundPaint.setStyle(Paint.Style.FILL);
+        decodeRefBackgroundPaint.setColor(Color.parseColor("#33F4B04F"));
 
         markerLabelPaint.setColor(Color.parseColor("#F4F7FB"));
         markerLabelPaint.setTextSize(dp(9));
@@ -122,6 +139,7 @@ public final class AudioSpectrumView extends View {
         drawNoiseLine(canvas, left, top, right, bottom, maxMagnitude);
         drawCurve(canvas, left, top, right, bottom, maxMagnitude);
         drawMarkers(canvas, left, top, right, bottom);
+        drawDecodeReferenceBadge(canvas, left, top);
         drawLegend(canvas, left, top, right, bottom);
     }
 
@@ -153,7 +171,23 @@ public final class AudioSpectrumView extends View {
         drawMarker(canvas, snapshot.wideScanWinnerToneHz(), "WS", minHz, maxHz, left, top, right, bottom, wideWinnerPaint, 2);
         drawMarker(canvas, snapshot.acquisitionWinnerToneHz(), "AQ", minHz, maxHz, left, top, right, bottom, acquisitionWinnerPaint, 3);
         drawMarker(canvas, snapshot.finalAdoptedToneHz(), "AD", minHz, maxHz, left, top, right, bottom, finalAdoptedPaint, 4);
-        drawMarker(canvas, snapshot.trackedToneHz(), "TRK", minHz, maxHz, left, top, right, bottom, trackedPaint, 5);
+        drawMarker(canvas, snapshot.hypothesisToneHz(), "HYP", minHz, maxHz, left, top, right, bottom, hypothesisPaint, 5);
+        if (snapshot.hypothesisGuardEnabled() && snapshot.hypothesisGuardAppliedToneHz() > 0) {
+            drawMarker(
+                    canvas,
+                    snapshot.hypothesisGuardAppliedToneHz(),
+                    snapshot.hypothesisGuardApplied() ? "HG!" : "HG",
+                    minHz,
+                    maxHz,
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    hypothesisGuardPaint,
+                    6
+            );
+        }
+        drawMarker(canvas, snapshot.trackedToneHz(), "TRK", minHz, maxHz, left, top, right, bottom, trackedPaint, 7);
     }
 
     private void drawMarker(
@@ -234,6 +268,25 @@ public final class AudioSpectrumView extends View {
         canvas.drawCircle(peakX, peakY, dp(3), peakPaint);
     }
 
+    private void drawDecodeReferenceBadge(Canvas canvas, float left, float top) {
+        String label = "Decode Ref: TRK";
+        float textWidth = decodeRefPaint.measureText(label);
+        float badgeLeft = left + dp(6);
+        float badgeTop = top + dp(6);
+        float badgeRight = badgeLeft + textWidth + dp(10);
+        float badgeBottom = badgeTop + dp(16);
+        canvas.drawRoundRect(
+                badgeLeft,
+                badgeTop,
+                badgeRight,
+                badgeBottom,
+                dp(5),
+                dp(5),
+                decodeRefBackgroundPaint
+        );
+        canvas.drawText(label, badgeLeft + dp(5), badgeBottom - dp(4), decodeRefPaint);
+    }
+
     private void drawLegend(Canvas canvas, float left, float top, float right, float bottom) {
         String leftLabel = snapshot.frequenciesHz()[0] + " Hz";
         String rightLabel = snapshot.frequenciesHz()[snapshot.frequenciesHz().length - 1] + " Hz";
@@ -241,6 +294,9 @@ public final class AudioSpectrumView extends View {
         String noiseLabel = "Noise " + Math.round(snapshot.noiseFloorMagnitude())
                 + " | " + snapshot.acquisitionWinnerSource()
                 + " -> " + snapshot.finalAdoptedSource();
+        if (snapshot.hypothesisGuardEnabled()) {
+            noiseLabel += " | HG " + snapshot.hypothesisGuardAppliedToneHz() + " Hz";
+        }
         canvas.drawText(leftLabel, left, bottom + dp(14), textPaint);
         float rightLabelWidth = textPaint.measureText(rightLabel);
         canvas.drawText(rightLabel, right - rightLabelWidth, bottom + dp(14), textPaint);

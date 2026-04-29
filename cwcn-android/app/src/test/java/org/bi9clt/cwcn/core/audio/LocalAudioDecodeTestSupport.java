@@ -70,9 +70,11 @@ final class LocalAudioDecodeTestSupport {
         CwDecoder decoder = new CwDecoder();
         CwInterpreter interpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
         QsoStateMachine qsoStateMachine = new QsoStateMachine();
+        ArrayList<AudioFrame> capturedFrames = new ArrayList<>();
         ArrayList<CwToneEvent> capturedToneEvents = new ArrayList<>();
         ArrayList<CwTimingEvent> capturedTimingEvents = new ArrayList<>();
         ArrayList<CwDecodeEvent> capturedDecodeEvents = new ArrayList<>();
+        ArrayList<FrameSignalTrace> frameSignalTraces = new ArrayList<>();
 
         short[] samples = waveData.samples();
         int sampleRateHz = waveData.sampleRateHz();
@@ -82,8 +84,10 @@ final class LocalAudioDecodeTestSupport {
             short[] frameSamples = new short[frameLength];
             System.arraycopy(samples, offset, frameSamples, 0, frameLength);
             AudioFrame frame = buildFrameForProbe(frameSamples, sampleRateHz, sampleOffset);
+            capturedFrames.add(frame);
             List<CwToneEvent> toneEvents = signalProcessor.process(frame);
             capturedToneEvents.addAll(toneEvents);
+            frameSignalTraces.add(new FrameSignalTrace(frame.capturedAtMs(), signalProcessor.snapshot()));
             drainToneEvents(
                     toneEvents,
                     timingModel,
@@ -122,9 +126,11 @@ final class LocalAudioDecodeTestSupport {
         );
         return new OfflineDetailedProbeResult(
                 probeResult,
+                capturedFrames,
                 capturedToneEvents,
                 capturedTimingEvents,
                 capturedDecodeEvents,
+                frameSignalTraces,
                 flushTimestampMs
         );
     }
@@ -457,27 +463,37 @@ final class LocalAudioDecodeTestSupport {
 
     static final class OfflineDetailedProbeResult {
         private final OfflineProbeResult probeResult;
+        private final List<AudioFrame> frames;
         private final List<CwToneEvent> toneEvents;
         private final List<CwTimingEvent> timingEvents;
         private final List<CwDecodeEvent> decodeEvents;
+        private final List<FrameSignalTrace> frameSignalTraces;
         private final long flushTimestampMs;
 
         private OfflineDetailedProbeResult(
                 OfflineProbeResult probeResult,
+                List<AudioFrame> frames,
                 List<CwToneEvent> toneEvents,
                 List<CwTimingEvent> timingEvents,
                 List<CwDecodeEvent> decodeEvents,
+                List<FrameSignalTrace> frameSignalTraces,
                 long flushTimestampMs
         ) {
             this.probeResult = probeResult;
+            this.frames = frames;
             this.toneEvents = toneEvents;
             this.timingEvents = timingEvents;
             this.decodeEvents = decodeEvents;
+            this.frameSignalTraces = frameSignalTraces;
             this.flushTimestampMs = flushTimestampMs;
         }
 
         OfflineProbeResult probeResult() {
             return probeResult;
+        }
+
+        List<AudioFrame> frames() {
+            return frames;
         }
 
         List<CwToneEvent> toneEvents() {
@@ -492,8 +508,298 @@ final class LocalAudioDecodeTestSupport {
             return decodeEvents;
         }
 
+        List<FrameSignalTrace> frameSignalTraces() {
+            return frameSignalTraces;
+        }
+
         long flushTimestampMs() {
             return flushTimestampMs;
+        }
+    }
+
+    static FrontEndDisagreementProfile evaluateFrontEndDisagreementProfile(
+            OfflineDetailedProbeResult detailedProbeResult,
+            int disagreementThresholdHz
+    ) {
+        int observedHypothesisFrames = 0;
+        int rawTargetDisagreementFrames = 0;
+        int effectiveTrackedDisagreementFrames = 0;
+        int rawTargetNearRepresentativeFrames = 0;
+        int hypothesisNearRepresentativeFrames = 0;
+        int effectiveTrackedNearRepresentativeFrames = 0;
+        CwSignalSnapshot finalSnapshot = detailedProbeResult.probeResult().signalSnapshot();
+
+        for (FrameSignalTrace frameSignalTrace : detailedProbeResult.frameSignalTraces()) {
+            CwSignalSnapshot snapshot = frameSignalTrace.snapshot();
+            if (snapshot.toneHypothesisSupportFrames() <= 0 || "NONE".equals(snapshot.toneHypothesisSource())) {
+                continue;
+            }
+            observedHypothesisFrames += 1;
+            int hypothesisToneHz = snapshot.toneHypothesisFrequencyHz();
+            if (Math.abs(snapshot.targetToneFrequencyHz() - hypothesisToneHz) >= disagreementThresholdHz) {
+                rawTargetDisagreementFrames += 1;
+            }
+            if (Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - hypothesisToneHz) >= disagreementThresholdHz) {
+                effectiveTrackedDisagreementFrames += 1;
+            }
+            if (snapshot.representativeLockedToneFrameCount() > 0) {
+                int representativeToneHz = snapshot.representativeLockedToneFrequencyHz();
+                if (Math.abs(snapshot.targetToneFrequencyHz() - representativeToneHz) <= 30) {
+                    rawTargetNearRepresentativeFrames += 1;
+                }
+                if (Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - representativeToneHz) <= 30) {
+                    effectiveTrackedNearRepresentativeFrames += 1;
+                }
+                if (Math.abs(hypothesisToneHz - representativeToneHz) <= 30) {
+                    hypothesisNearRepresentativeFrames += 1;
+                }
+            }
+        }
+
+        return new FrontEndDisagreementProfile(
+                detailedProbeResult.probeResult().sourceLabel(),
+                disagreementThresholdHz,
+                observedHypothesisFrames,
+                rawTargetDisagreementFrames,
+                effectiveTrackedDisagreementFrames,
+                rawTargetNearRepresentativeFrames,
+                effectiveTrackedNearRepresentativeFrames,
+                hypothesisNearRepresentativeFrames,
+                finalSnapshot.representativeCompetitionObservationCount(),
+                finalSnapshot.representativeCompetitionTrackedWinFrames(),
+                finalSnapshot.representativeCompetitionHypothesisWinFrames(),
+                finalSnapshot.representativeCompetitionHypothesisMaxWinStreak(),
+                finalSnapshot.activeCenterCompetitionObservationCount(),
+                finalSnapshot.activeCenterCompetitionTrackedWinFrames(),
+                finalSnapshot.activeCenterCompetitionHypothesisWinFrames(),
+                finalSnapshot.activeCenterCompetitionHypothesisMaxWinStreak()
+        );
+    }
+
+    static ForcedToneReplayResult replayForcedTrackedToneDecode(OfflineDetailedProbeResult detailedProbeResult) {
+        return replayForcedSnapshotToneDecode(detailedProbeResult, false);
+    }
+
+    static ForcedToneReplayResult replayForcedHypothesisToneDecode(OfflineDetailedProbeResult detailedProbeResult) {
+        return replayForcedSnapshotToneDecode(detailedProbeResult, true);
+    }
+
+    private static ForcedToneReplayResult replayForcedSnapshotToneDecode(
+            OfflineDetailedProbeResult detailedProbeResult,
+            boolean hypothesisMode
+    ) {
+        CwSignalProcessor signalProcessor = new CwSignalProcessor();
+        CwHybridTimingModel timingModel = new CwHybridTimingModel();
+        CwDecoder decoder = new CwDecoder();
+        CwInterpreter interpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
+        QsoStateMachine qsoStateMachine = new QsoStateMachine();
+        ArrayList<CwToneEvent> replayedToneEvents = new ArrayList<>();
+        ArrayList<CwTimingEvent> replayedTimingEvents = new ArrayList<>();
+        ArrayList<CwDecodeEvent> replayedDecodeEvents = new ArrayList<>();
+        int lastForcedFrequencyHz = 650;
+
+        for (int index = 0; index < detailedProbeResult.frames().size(); index++) {
+            AudioFrame frame = detailedProbeResult.frames().get(index);
+            CwSignalSnapshot snapshot = detailedProbeResult.frameSignalTraces().get(index).snapshot();
+            int forcedFrequencyHz;
+            if (hypothesisMode) {
+                if (snapshot.toneHypothesisSupportFrames() > 0 && !"NONE".equals(snapshot.toneHypothesisSource())) {
+                    forcedFrequencyHz = snapshot.toneHypothesisFrequencyHz();
+                    lastForcedFrequencyHz = forcedFrequencyHz;
+                } else {
+                    forcedFrequencyHz = lastForcedFrequencyHz;
+                }
+            } else {
+                forcedFrequencyHz = snapshot.targetToneFrequencyHz() > 0
+                        ? snapshot.targetToneFrequencyHz()
+                        : lastForcedFrequencyHz;
+                lastForcedFrequencyHz = forcedFrequencyHz;
+            }
+            List<CwToneEvent> toneEvents = signalProcessor.processForcedToneForTesting(frame, forcedFrequencyHz);
+            replayedToneEvents.addAll(toneEvents);
+            drainToneEvents(
+                    toneEvents,
+                    timingModel,
+                    decoder,
+                    interpreter,
+                    qsoStateMachine,
+                    replayedTimingEvents,
+                    replayedDecodeEvents
+            );
+        }
+
+        List<CwTimingEvent> flushedTimingEvents = timingModel.flushPendingGap(detailedProbeResult.flushTimestampMs());
+        replayedTimingEvents.addAll(flushedTimingEvents);
+        drainTimingEvents(flushedTimingEvents, decoder, interpreter, qsoStateMachine, replayedDecodeEvents);
+        drainDecodeEvents(
+                decoder.flushPendingCharacter(detailedProbeResult.flushTimestampMs()),
+                interpreter,
+                qsoStateMachine,
+                replayedDecodeEvents
+        );
+
+        return new ForcedToneReplayResult(
+                detailedProbeResult.probeResult().sourceLabel(),
+                hypothesisMode ? "HYP" : "TRK",
+                lastForcedFrequencyHz,
+                sanitize(decoder.snapshot().decodedText()),
+                replayedToneEvents,
+                replayedTimingEvents,
+                replayedDecodeEvents,
+                decoder.snapshot(),
+                interpreter.snapshot()
+        );
+    }
+
+    static final class FrameSignalTrace {
+        private final long timestampMs;
+        private final CwSignalSnapshot snapshot;
+
+        private FrameSignalTrace(long timestampMs, CwSignalSnapshot snapshot) {
+            this.timestampMs = timestampMs;
+            this.snapshot = snapshot;
+        }
+
+        long timestampMs() {
+            return timestampMs;
+        }
+
+        CwSignalSnapshot snapshot() {
+            return snapshot;
+        }
+    }
+
+    static final class FrontEndDisagreementProfile {
+        private final String sourceLabel;
+        private final int disagreementThresholdHz;
+        private final int observedHypothesisFrames;
+        private final int rawTargetDisagreementFrames;
+        private final int effectiveTrackedDisagreementFrames;
+        private final int rawTargetNearRepresentativeFrames;
+        private final int effectiveTrackedNearRepresentativeFrames;
+        private final int hypothesisNearRepresentativeFrames;
+        private final int representativeCompetitionObservationCount;
+        private final int representativeCompetitionTrackedWinFrames;
+        private final int representativeCompetitionHypothesisWinFrames;
+        private final int representativeCompetitionHypothesisMaxWinStreak;
+        private final int activeCenterCompetitionObservationCount;
+        private final int activeCenterCompetitionTrackedWinFrames;
+        private final int activeCenterCompetitionHypothesisWinFrames;
+        private final int activeCenterCompetitionHypothesisMaxWinStreak;
+
+        private FrontEndDisagreementProfile(
+                String sourceLabel,
+                int disagreementThresholdHz,
+                int observedHypothesisFrames,
+                int rawTargetDisagreementFrames,
+                int effectiveTrackedDisagreementFrames,
+                int rawTargetNearRepresentativeFrames,
+                int effectiveTrackedNearRepresentativeFrames,
+                int hypothesisNearRepresentativeFrames,
+                int representativeCompetitionObservationCount,
+                int representativeCompetitionTrackedWinFrames,
+                int representativeCompetitionHypothesisWinFrames,
+                int representativeCompetitionHypothesisMaxWinStreak,
+                int activeCenterCompetitionObservationCount,
+                int activeCenterCompetitionTrackedWinFrames,
+                int activeCenterCompetitionHypothesisWinFrames,
+                int activeCenterCompetitionHypothesisMaxWinStreak
+        ) {
+            this.sourceLabel = sourceLabel;
+            this.disagreementThresholdHz = disagreementThresholdHz;
+            this.observedHypothesisFrames = observedHypothesisFrames;
+            this.rawTargetDisagreementFrames = rawTargetDisagreementFrames;
+            this.effectiveTrackedDisagreementFrames = effectiveTrackedDisagreementFrames;
+            this.rawTargetNearRepresentativeFrames = rawTargetNearRepresentativeFrames;
+            this.effectiveTrackedNearRepresentativeFrames = effectiveTrackedNearRepresentativeFrames;
+            this.hypothesisNearRepresentativeFrames = hypothesisNearRepresentativeFrames;
+            this.representativeCompetitionObservationCount = representativeCompetitionObservationCount;
+            this.representativeCompetitionTrackedWinFrames = representativeCompetitionTrackedWinFrames;
+            this.representativeCompetitionHypothesisWinFrames = representativeCompetitionHypothesisWinFrames;
+            this.representativeCompetitionHypothesisMaxWinStreak = representativeCompetitionHypothesisMaxWinStreak;
+            this.activeCenterCompetitionObservationCount = activeCenterCompetitionObservationCount;
+            this.activeCenterCompetitionTrackedWinFrames = activeCenterCompetitionTrackedWinFrames;
+            this.activeCenterCompetitionHypothesisWinFrames = activeCenterCompetitionHypothesisWinFrames;
+            this.activeCenterCompetitionHypothesisMaxWinStreak = activeCenterCompetitionHypothesisMaxWinStreak;
+        }
+
+        int observedHypothesisFrames() {
+            return observedHypothesisFrames;
+        }
+
+        int rawTargetDisagreementFrames() {
+            return rawTargetDisagreementFrames;
+        }
+
+        int effectiveTrackedDisagreementFrames() {
+            return effectiveTrackedDisagreementFrames;
+        }
+
+        int rawTargetNearRepresentativeFrames() {
+            return rawTargetNearRepresentativeFrames;
+        }
+
+        int effectiveTrackedNearRepresentativeFrames() {
+            return effectiveTrackedNearRepresentativeFrames;
+        }
+
+        int hypothesisNearRepresentativeFrames() {
+            return hypothesisNearRepresentativeFrames;
+        }
+
+        int representativeCompetitionObservationCount() {
+            return representativeCompetitionObservationCount;
+        }
+
+        int representativeCompetitionTrackedWinFrames() {
+            return representativeCompetitionTrackedWinFrames;
+        }
+
+        int representativeCompetitionHypothesisWinFrames() {
+            return representativeCompetitionHypothesisWinFrames;
+        }
+
+        int representativeCompetitionHypothesisMaxWinStreak() {
+            return representativeCompetitionHypothesisMaxWinStreak;
+        }
+
+        int activeCenterCompetitionObservationCount() {
+            return activeCenterCompetitionObservationCount;
+        }
+
+        int activeCenterCompetitionTrackedWinFrames() {
+            return activeCenterCompetitionTrackedWinFrames;
+        }
+
+        int activeCenterCompetitionHypothesisWinFrames() {
+            return activeCenterCompetitionHypothesisWinFrames;
+        }
+
+        int activeCenterCompetitionHypothesisMaxWinStreak() {
+            return activeCenterCompetitionHypothesisMaxWinStreak;
+        }
+
+        String renderSummary() {
+            return String.format(
+                    Locale.US,
+                    "%s threshold=%dHz hypFrames=%d rawDisagree=%d effDisagree=%d rawNearRep=%d effNearRep=%d hypNearRep=%d repComp(obs=%d trk=%d hyp=%d maxHyp=%d) actComp(obs=%d trk=%d hyp=%d maxHyp=%d)",
+                    sourceLabel,
+                    disagreementThresholdHz,
+                    observedHypothesisFrames,
+                    rawTargetDisagreementFrames,
+                    effectiveTrackedDisagreementFrames,
+                    rawTargetNearRepresentativeFrames,
+                    effectiveTrackedNearRepresentativeFrames,
+                    hypothesisNearRepresentativeFrames,
+                    representativeCompetitionObservationCount,
+                    representativeCompetitionTrackedWinFrames,
+                    representativeCompetitionHypothesisWinFrames,
+                    representativeCompetitionHypothesisMaxWinStreak,
+                    activeCenterCompetitionObservationCount,
+                    activeCenterCompetitionTrackedWinFrames,
+                    activeCenterCompetitionHypothesisWinFrames,
+                    activeCenterCompetitionHypothesisMaxWinStreak
+            );
         }
     }
 
@@ -557,6 +863,66 @@ final class LocalAudioDecodeTestSupport {
 
         List<CwDecodeEvent> decodeEvents() {
             return decodeEvents;
+        }
+    }
+
+    static final class ForcedToneReplayResult {
+        private final String sourceLabel;
+        private final String mode;
+        private final int lastForcedFrequencyHz;
+        private final String decodedText;
+        private final List<CwToneEvent> toneEvents;
+        private final List<CwTimingEvent> timingEvents;
+        private final List<CwDecodeEvent> decodeEvents;
+        private final CwDecoderSnapshot decoderSnapshot;
+        private final CwInterpreterSnapshot interpreterSnapshot;
+
+        private ForcedToneReplayResult(
+                String sourceLabel,
+                String mode,
+                int lastForcedFrequencyHz,
+                String decodedText,
+                List<CwToneEvent> toneEvents,
+                List<CwTimingEvent> timingEvents,
+                List<CwDecodeEvent> decodeEvents,
+                CwDecoderSnapshot decoderSnapshot,
+                CwInterpreterSnapshot interpreterSnapshot
+        ) {
+            this.sourceLabel = sourceLabel;
+            this.mode = mode;
+            this.lastForcedFrequencyHz = lastForcedFrequencyHz;
+            this.decodedText = decodedText;
+            this.toneEvents = toneEvents;
+            this.timingEvents = timingEvents;
+            this.decodeEvents = decodeEvents;
+            this.decoderSnapshot = decoderSnapshot;
+            this.interpreterSnapshot = interpreterSnapshot;
+        }
+
+        String renderSummary() {
+            return String.format(
+                    Locale.US,
+                    "%s %s forcedLast=%dHz text=%s tone=%d timing=%d decode=%d",
+                    sourceLabel,
+                    mode,
+                    lastForcedFrequencyHz,
+                    decodedText,
+                    toneEvents.size(),
+                    timingEvents.size(),
+                    decodeEvents.size()
+            );
+        }
+
+        String decodedText() {
+            return decodedText;
+        }
+
+        CwDecoderSnapshot decoderSnapshot() {
+            return decoderSnapshot;
+        }
+
+        CwInterpreterSnapshot interpreterSnapshot() {
+            return interpreterSnapshot;
         }
     }
 }

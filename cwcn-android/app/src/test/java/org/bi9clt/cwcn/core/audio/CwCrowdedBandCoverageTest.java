@@ -19,6 +19,7 @@ import org.junit.Test;
 
 import java.util.List;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -51,6 +52,7 @@ public final class CwCrowdedBandCoverageTest {
 
         assertNotNull(summary, bundle.result);
         assertNotEquals(summary, "RUN", bundle.result.likelyBottleneckCode());
+        assertEquals(summary, "GOOD", bundle.result.frontEndQualityCode());
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 10000.0d);
         assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 40);
         assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 40);
@@ -58,7 +60,7 @@ public final class CwCrowdedBandCoverageTest {
         assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 700) <= 20);
         assertTrue(summary, bundle.signalSnapshot.lockedFrameRatio() >= 0.70d);
         assertTrue(summary, bundle.timingSnapshot.estimatedWpm() <= 12);
-        assertTrue(summary, bundle.result.textTokenRecall() <= 0.20d);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 4);
     }
 
     @Test
@@ -68,13 +70,14 @@ public final class CwCrowdedBandCoverageTest {
 
         assertNotNull(summary, bundle.result);
         assertNotEquals(summary, "RUN", bundle.result.likelyBottleneckCode());
+        assertEquals(summary, "GOOD", bundle.result.frontEndQualityCode());
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 10000.0d);
         assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 20);
         assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 20);
         assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 700) <= 20);
         assertTrue(summary, bundle.signalSnapshot.lockedFrameRatio() >= 0.70d);
         assertTrue(summary, bundle.timingSnapshot.estimatedWpm() <= 20);
-        assertTrue(summary, bundle.result.textTokenRecall() <= 0.35d);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 4);
     }
 
     @Test
@@ -94,6 +97,67 @@ public final class CwCrowdedBandCoverageTest {
         assertTrue(summary, bundle.signalSnapshot.lockedFrameRatio() >= 0.70d);
         assertTrue(summary, interfererFingerprint >= 1 || bundle.result.textTokenRecall() <= 0.20d);
         assertTrue(summary, interfererFingerprint >= targetFingerprint || bundle.result.textTokenRecall() <= 0.30d);
+    }
+
+    @Test
+    public void clearDifferentToneReplyEventuallyHandsOffToSecondOperatorTone() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_two_tone_reply_clear_handoff_680_760hz", 680);
+        String summary = renderSummary(bundle);
+        String decodedText = sanitize(bundle.decoderSnapshot.decodedText());
+        int firstOperatorFingerprint = countSubstring(decodedText, "BI9CLT")
+                + countSubstring(decodedText, "CQ")
+                + countSubstring(decodedText, "PSE");
+        int secondOperatorFingerprint = countSubstring(decodedText, "JA1ABC")
+                + countSubstring(decodedText, "TNX")
+                + countSubstring(decodedText, "CALL")
+                + countSubstring(decodedText, "BK");
+
+        assertNotNull(summary, bundle.result);
+        assertNotEquals(summary, "RUN", bundle.result.likelyBottleneckCode());
+        assertNotEquals(summary, "SEARCH_FALLBACK", bundle.signalSnapshot.finalAdoptedSource());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 9000.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 16);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 16);
+        assertTrue(summary, bundle.signalSnapshot.lockedFrameRatio() >= 0.60d);
+        assertTrue(summary, bundle.signalSnapshot.maxConsecutiveLockedFrames() >= 10);
+        assertTrue(summary, Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 760) <= 30);
+        assertTrue(summary, firstOperatorFingerprint >= 1 || bundle.result.textTokenRecall() >= 0.18d);
+        assertTrue(summary, secondOperatorFingerprint >= 1 || bundle.signalSnapshot.targetToneFrequencyHz() >= 730);
+    }
+
+    @Test
+    public void shortGapDifferentToneReplyStaysNearActiveOperatorPairWithoutWildThrash() {
+        OfflineEvalBundle bundle = evaluateOfflineBundle("user_two_tone_reply_short_gap_680_760hz", 680);
+        String summary = renderSummary(bundle);
+        String decodedText = sanitize(bundle.decoderSnapshot.decodedText());
+        int firstOperatorFingerprint = countSubstring(decodedText, "BI9CLT")
+                + countSubstring(decodedText, "CQ")
+                + countSubstring(decodedText, "PSE");
+        int secondOperatorFingerprint = countSubstring(decodedText, "JA1ABC")
+                + countSubstring(decodedText, "TNX")
+                + countSubstring(decodedText, "CALL")
+                + countSubstring(decodedText, "BK")
+                + countSubstring(decodedText, "GM");
+        int distanceToEitherToneHz = Math.min(
+                Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 680),
+                Math.abs(bundle.signalSnapshot.targetToneFrequencyHz() - 760)
+        );
+
+        assertNotNull(summary, bundle.result);
+        assertNotEquals(summary, "RUN", bundle.result.likelyBottleneckCode());
+        assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 9000.0d);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 16);
+        assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 16);
+        assertTrue(summary, bundle.signalSnapshot.lockedFrameRatio() >= 0.52d);
+        assertTrue(summary, bundle.signalSnapshot.maxConsecutiveLockedFrames() >= 8);
+        assertTrue(summary, distanceToEitherToneHz <= 35);
+        assertTrue(summary, firstOperatorFingerprint >= 1 || secondOperatorFingerprint >= 1);
+        assertTrue(
+                summary,
+                secondOperatorFingerprint >= 1
+                        || bundle.signalSnapshot.targetToneFrequencyHz() >= 730
+                        || bundle.decoderSnapshot.totalCharacters() >= 6
+        );
     }
 
     @Test

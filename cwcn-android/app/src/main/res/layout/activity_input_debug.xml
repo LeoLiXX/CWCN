@@ -135,12 +135,33 @@
                 android:textSize="13sp"
                 android:visibility="gone" />
 
+            <TextView
+                android:id="@+id/localFolderStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:lineSpacingExtra="3dp"
+                android:padding="12dp"
+                android:text="No batch folder selected."
+                android:textColor="@color/cwcn_body"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
             <Button
                 android:id="@+id/selectLocalFileButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:text="Choose Local Audio File"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/selectLocalFolderButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Choose Local Audio Folder"
                 android:visibility="gone" />
 
             <TextView
@@ -298,6 +319,30 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/toggleHypothesisGuardButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Hyp Guard OFF" />
+
+            <Button
+                android:id="@+id/runBatchAnalysisButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Run All RX Batch" />
+
+            <TextView
+                android:id="@+id/batchRunStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:lineSpacingExtra="3dp"
+                android:text="Batch run idle."
                 android:textColor="@color/cwcn_subtitle"
                 android:textSize="13sp" />
 

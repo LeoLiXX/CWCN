@@ -980,6 +980,94 @@ public final class CwFixtureLibrary {
                     )
             )),
             new CwFixtureScenario(
+                    "user_two_tone_reply_clear_handoff_680_760hz",
+                    "User Two-Tone Reply Clear Handoff 680/760Hz",
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("CQ CQ DE BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    680,
+                    18000,
+                    1100,
+                    0.05d,
+                    2100,
+                    0.0d,
+                    0.0d,
+                    0.05d,
+                    0.02d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.05d, 0.02d, 0.01d, 1.01d, 1.05d, 1.12d, 0, 0.0d)
+                    ),
+                    250,
+                    420,
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "Two-operator dialogue / different tone handoff",
+                            "Late reply should allow eventual retarget",
+                            "Front-end continuity should stay sticky until the new OP is really present"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "CHECK",
+                    "Exercises a realistic two-tone conversation handoff: the first OP calls on 680Hz, then a second OP replies later on 760Hz after a clear gap. This should eventually permit tone migration, but only after the new sender is truly active."
+            ).withKeyedInterferers(Collections.singletonList(
+                    new CwFixtureScenario.KeyedInterfererProfile(
+                            "BI9CLT DE JA1ABC TNX CALL BK",
+                            18,
+                            760,
+                            17000,
+                            5200
+                    )
+            )),
+            new CwFixtureScenario(
+                    "user_two_tone_reply_short_gap_680_760hz",
+                    "User Two-Tone Reply Short Gap 680/760Hz",
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("CQ CQ DE BI9CLT BI9CLT PSE K"),
+                    1800,
+                    18,
+                    680,
+                    18000,
+                    1500,
+                    0.06d,
+                    2100,
+                    0.0d,
+                    0.0d,
+                    0.06d,
+                    0.03d,
+                    5,
+                    6,
+                    Collections.singletonList(
+                            new PartTimingProfile(1.00d, 1.03d, 0.06d, 0.03d, 0.01d, 1.01d, 1.05d, 1.10d, 0, 0.0d)
+                    ),
+                    250,
+                    420,
+                    "CQ CQ DE BI9CLT BI9CLT PSE K",
+                    Collections.singletonList("BI9CLT"),
+                    Arrays.asList(
+                            "Two-operator dialogue / different tone handoff",
+                            "Short-gap reply can be messy but should remain observable",
+                            "Avoid wild retune drift outside the active operator pair"
+                    ),
+                    QsoPhase.CALLING_CQ,
+                    null,
+                    null,
+                    "CHECK",
+                    "Exercises a harder two-tone handoff where the second OP answers on 760Hz with only a short pause after the original 680Hz CQ. Early behavior may still be imperfect, but target tracking should stay near the two active operator tones rather than drifting arbitrarily."
+            ).withKeyedInterferers(Collections.singletonList(
+                    new CwFixtureScenario.KeyedInterfererProfile(
+                            "BI9CLT DE JA1ABC GM TNX CALL BK",
+                            18,
+                            760,
+                            16000,
+                            3900
+                    )
+            )),
+            new CwFixtureScenario(
                     "user_hum_noise_adjacent_cluster_cq_700hz",
                     "User Hum Noise Adjacent Cluster CQ 700Hz",
                     "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K",

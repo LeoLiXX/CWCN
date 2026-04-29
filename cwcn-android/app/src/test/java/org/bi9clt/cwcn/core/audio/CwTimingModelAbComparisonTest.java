@@ -28,7 +28,7 @@ public final class CwTimingModelAbComparisonTest {
         // mainline raw-copy coverage tests. Keep it aligned with bench-useful raw recall.
         assertComparisonStaysHealthy("user_noise_cq_20wpm_700hz", 0.75d, 30, 0.75d, 30);
         assertComparisonStaysHealthy("user_noise_cq_25wpm_700hz", 0.66d, 30, 0.66d, 29);
-        assertComparisonStaysBenchObservable("user_noise_cq_30wpm_700hz", 20, 8);
+        assertComparisonStaysFastCqSkeletonHealthy("user_noise_cq_30wpm_700hz", 0.80d, 24, 0.95d, 24);
         assertComparisonStaysBenchObservableWithRecall("user_speed_sweep_vvv_700hz", 22, 0.80d, 18, 0.45d);
     }
 
@@ -86,6 +86,48 @@ public final class CwTimingModelAbComparisonTest {
         assertTrue(summary, !"RUN".equals(adaptive.result.likelyBottleneckCode()));
         assertTrue(summary, baseline.decoderCharacters >= minBaselineCharacters);
         assertTrue(summary, adaptive.decoderCharacters >= minAdaptiveCharacters);
+    }
+
+    private void assertComparisonStaysFastCqSkeletonHealthy(
+            String scenarioId,
+            double minBaselineRecall,
+            int minBaselineCharacters,
+            double minAdaptiveRecall,
+            int minAdaptiveCharacters
+    ) {
+        OfflineEvalBundle baseline = evaluateOfflineBundle(scenarioId, false);
+        OfflineEvalBundle adaptive = evaluateOfflineBundle(scenarioId, true);
+        String baselineText = sanitize(baseline.decodedText);
+        String adaptiveText = sanitize(adaptive.decodedText);
+        String summary = scenarioId
+                + "\nA recall=" + baseline.result.textTokenRecall()
+                + " chars=" + baseline.decoderCharacters
+                + " wpm=" + baseline.timingSnapshot.estimatedWpm()
+                + " text=" + baselineText
+                + "\nB recall=" + adaptive.result.textTokenRecall()
+                + " chars=" + adaptive.decoderCharacters
+                + " wpm=" + adaptive.timingSnapshot.estimatedWpm()
+                + " text=" + adaptiveText;
+
+        System.out.println(summary);
+        assertTrue(summary, baseline.result.completed());
+        assertTrue(summary, adaptive.result.completed());
+        assertTrue(summary, !"RUN".equals(baseline.result.likelyBottleneckCode()));
+        assertTrue(summary, !"RUN".equals(adaptive.result.likelyBottleneckCode()));
+        assertTrue(summary, baseline.result.textTokenRecall() >= minBaselineRecall);
+        assertTrue(summary, baseline.decoderCharacters >= minBaselineCharacters);
+        assertTrue(summary, adaptive.result.textTokenRecall() >= minAdaptiveRecall);
+        assertTrue(summary, adaptive.decoderCharacters >= minAdaptiveCharacters);
+        assertTrue(summary, countSubstring(baselineText, "CQ") >= 2);
+        assertTrue(summary, countSubstring(adaptiveText, "CQ") >= 3);
+        assertTrue(summary, baselineText.contains("DE"));
+        assertTrue(summary, adaptiveText.contains("DE"));
+        assertTrue(summary, countSubstring(baselineText, "BI9CLT") >= 2);
+        assertTrue(summary, countSubstring(adaptiveText, "BI9CLT") >= 3);
+        assertTrue(summary, baselineText.contains("PSE"));
+        assertTrue(summary, adaptiveText.contains("PSE"));
+        assertTrue(summary, baselineText.contains("K"));
+        assertTrue(summary, adaptiveText.contains("K"));
     }
 
     private void assertComparisonStaysBenchObservableWithRecall(
@@ -166,6 +208,27 @@ public final class CwTimingModelAbComparisonTest {
                 decoder.snapshot().decodedText() == null ? "" : decoder.snapshot().decodedText(),
                 decoder.snapshot().totalCharacters()
         );
+    }
+
+    private String sanitize(String text) {
+        return text == null ? "" : text.replace('\u25A1', '?');
+    }
+
+    private int countSubstring(String text, String fragment) {
+        if (text == null || text.isEmpty() || fragment == null || fragment.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int searchFrom = 0;
+        while (searchFrom >= 0 && searchFrom < text.length()) {
+            int foundAt = text.indexOf(fragment, searchFrom);
+            if (foundAt < 0) {
+                break;
+            }
+            count += 1;
+            searchFrom = foundAt + fragment.length();
+        }
+        return count;
     }
 
     private void drainTimingEvents(

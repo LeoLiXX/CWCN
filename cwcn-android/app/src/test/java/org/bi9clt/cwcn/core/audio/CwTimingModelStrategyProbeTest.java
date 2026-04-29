@@ -84,9 +84,22 @@ public final class CwTimingModelStrategyProbeTest {
         assertTrue(summary, baseline.result.completed());
         assertTrue(summary, adaptive.result.completed());
         assertTrue(summary, hybrid.result.completed());
+        assertTrue(summary, baseline.decoderCharacters >= 24);
+        assertTrue(summary, adaptive.decoderCharacters >= 24);
         assertTrue(summary, hybrid.decoderCharacters >= 30);
+        assertTrue(summary, baseline.result.textTokenRecall() >= 0.80d);
+        assertTrue(summary, adaptive.result.textTokenRecall() >= 0.95d);
         assertTrue(summary, hybrid.result.textTokenRecall() >= 0.99d);
         assertTrue(summary, hybrid.result.textTokenRecall() >= baseline.result.textTokenRecall());
+        assertTrue(summary, countSubstring(baseline.decodedText, "CQ") >= 2);
+        assertTrue(summary, countSubstring(adaptive.decodedText, "CQ") >= 3);
+        assertTrue(summary, countSubstring(hybrid.decodedText, "CQ") >= 3);
+        assertTrue(summary, countSubstring(baseline.decodedText, "BI9CLT") >= 2);
+        assertTrue(summary, countSubstring(adaptive.decodedText, "BI9CLT") >= 3);
+        assertTrue(summary, countSubstring(hybrid.decodedText, "BI9CLT") >= 3);
+        assertTrue(summary, baseline.decodedText.contains("PSE"));
+        assertTrue(summary, adaptive.decodedText.contains("PSE"));
+        assertTrue(summary, hybrid.decodedText.contains("PSE"));
     }
 
     private void assertHybridKeepsSpeedSweepStable() {
@@ -161,10 +174,31 @@ public final class CwTimingModelStrategyProbeTest {
         return new OfflineEvalBundle(
                 result,
                 timingAdapter.snapshot(),
-                decoder.snapshot().decodedText() == null ? "" : decoder.snapshot().decodedText(),
+                sanitize(decoder.snapshot().decodedText()),
                 decoder.snapshot().totalCharacters(),
                 timingAdapter.strategyName()
         );
+    }
+
+    private String sanitize(String text) {
+        return text == null ? "" : text.replace('\u25A1', '?');
+    }
+
+    private int countSubstring(String text, String fragment) {
+        if (text == null || text.isEmpty() || fragment == null || fragment.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int searchFrom = 0;
+        while (searchFrom >= 0 && searchFrom < text.length()) {
+            int foundAt = text.indexOf(fragment, searchFrom);
+            if (foundAt < 0) {
+                break;
+            }
+            count += 1;
+            searchFrom = foundAt + fragment.length();
+        }
+        return count;
     }
 
     private void drainTimingEvents(
