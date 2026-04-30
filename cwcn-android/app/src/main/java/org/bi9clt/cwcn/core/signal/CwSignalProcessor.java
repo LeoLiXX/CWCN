@@ -336,7 +336,8 @@ public final class CwSignalProcessor {
                         silenceStartedAtMs = estimateCrossingTimestamp(timestampMs, releaseThreshold, detectionLevel, false);
                     }
                 }
-                if (timestampMs - silenceStartedAtMs >= TONE_OFF_HANG_MS) {
+                long frameEndTimestampMs = timestampMs + estimateFrameDurationMs(frame);
+                if (frameEndTimestampMs - silenceStartedAtMs >= TONE_OFF_HANG_MS) {
                     toneActive = false;
                     long toneEndedAtMs = Math.max(toneStartedAtMs, silenceStartedAtMs);
                     long durationMs = Math.max(0L, toneEndedAtMs - toneStartedAtMs);
@@ -456,7 +457,8 @@ public final class CwSignalProcessor {
                         silenceStartedAtMs = estimateCrossingTimestamp(timestampMs, releaseThreshold, detectionLevel, false);
                     }
                 }
-                if (timestampMs - silenceStartedAtMs >= TONE_OFF_HANG_MS) {
+                long frameEndTimestampMs = timestampMs + estimateFrameDurationMs(frame);
+                if (frameEndTimestampMs - silenceStartedAtMs >= TONE_OFF_HANG_MS) {
                     toneActive = false;
                     long toneEndedAtMs = Math.max(toneStartedAtMs, silenceStartedAtMs);
                     long durationMs = Math.max(0L, toneEndedAtMs - toneStartedAtMs);

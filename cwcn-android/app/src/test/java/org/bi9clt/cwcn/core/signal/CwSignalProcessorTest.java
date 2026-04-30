@@ -784,6 +784,100 @@ public final class CwSignalProcessorTest {
     }
 
     @Test
+    public void probeWeakValleyMergeBoundary() {
+        double[] valleyAmplitudes = new double[]{
+                0.0d, 300.0d, 600.0d, 900.0d, 1200.0d, 1500.0d, 1800.0d, 2400.0d, 2700.0d, 3000.0d, 3600.0d
+        };
+        for (double valleyAmplitude : valleyAmplitudes) {
+            CwSignalSnapshot snapshot = runWeakValleySequence(valleyAmplitude);
+            System.out.println(
+                    "valleyAmp=" + valleyAmplitude
+                            + " on=" + snapshot.totalToneOnEvents()
+                            + " off=" + snapshot.totalToneOffEvents()
+                            + " toneActive=" + snapshot.toneActive()
+                            + " lock=" + snapshot.targetToneLocked()
+                            + " thr=" + snapshot.currentThreshold() + "/" + snapshot.releaseThreshold()
+                            + " floor=" + snapshot.noiseFloorEstimate() + "/" + snapshot.signalFloorEstimate()
+                            + " toneRms=" + String.format("%.1f", snapshot.lastToneRmsAmplitude())
+                            + " rms=" + String.format("%.1f", snapshot.lastRmsAmplitude())
+                            + " last="
+                            + (snapshot.lastEvent() == null
+                            ? "-"
+                            : snapshot.lastEvent().type() + "@" + snapshot.lastEvent().timestampMs()
+                            + "/" + snapshot.lastEvent().toneDurationMs())
+            );
+        }
+    }
+
+    @Test
+    public void weakValleyAt1800StillSplitsIntoTwoToneRuns() {
+        CwSignalSnapshot snapshot = runWeakValleySequence(1800.0d);
+
+        String debug = "on=" + snapshot.totalToneOnEvents()
+                + " off=" + snapshot.totalToneOffEvents()
+                + " last=" + (snapshot.lastEvent() == null
+                ? "-"
+                : snapshot.lastEvent().type() + "@" + snapshot.lastEvent().timestampMs()
+                + "/" + snapshot.lastEvent().toneDurationMs());
+        assertEquals(debug, 2, snapshot.totalToneOnEvents());
+        assertEquals(debug, 2, snapshot.totalToneOffEvents());
+        assertTrue(debug, snapshot.lastEvent() != null);
+        assertEquals(debug, CwToneEvent.Type.TONE_OFF, snapshot.lastEvent().type());
+        assertTrue(debug, snapshot.lastEvent().toneDurationMs() <= 90L);
+    }
+
+    @Test
+    public void shallowValleyAt2400NowSplitsIntoTwoToneRuns() {
+        CwSignalSnapshot snapshot = runWeakValleySequence(2400.0d);
+
+        String debug = "on=" + snapshot.totalToneOnEvents()
+                + " off=" + snapshot.totalToneOffEvents()
+                + " last=" + (snapshot.lastEvent() == null
+                ? "-"
+                : snapshot.lastEvent().type() + "@" + snapshot.lastEvent().timestampMs()
+                + "/" + snapshot.lastEvent().toneDurationMs());
+        assertEquals(debug, 2, snapshot.totalToneOnEvents());
+        assertEquals(debug, 2, snapshot.totalToneOffEvents());
+        assertTrue(debug, snapshot.lastEvent() != null);
+        assertEquals(debug, CwToneEvent.Type.TONE_OFF, snapshot.lastEvent().type());
+        assertTrue(debug, snapshot.lastEvent().toneDurationMs() <= 90L);
+    }
+
+    @Test
+    public void valleyAt3000StillMergesIntoSingleToneRun() {
+        CwSignalSnapshot snapshot = runWeakValleySequence(3000.0d);
+
+        String debug = "on=" + snapshot.totalToneOnEvents()
+                + " off=" + snapshot.totalToneOffEvents()
+                + " last=" + (snapshot.lastEvent() == null
+                ? "-"
+                : snapshot.lastEvent().type() + "@" + snapshot.lastEvent().timestampMs()
+                + "/" + snapshot.lastEvent().toneDurationMs());
+        assertEquals(debug, 1, snapshot.totalToneOnEvents());
+        assertEquals(debug, 1, snapshot.totalToneOffEvents());
+        assertTrue(debug, snapshot.lastEvent() != null);
+        assertEquals(debug, CwToneEvent.Type.TONE_OFF, snapshot.lastEvent().type());
+        assertTrue(debug, snapshot.lastEvent().toneDurationMs() >= 150L);
+    }
+
+    @Test
+    public void valleyAt2700AlreadyMergesIntoSingleToneRun() {
+        CwSignalSnapshot snapshot = runWeakValleySequence(2700.0d);
+
+        String debug = "on=" + snapshot.totalToneOnEvents()
+                + " off=" + snapshot.totalToneOffEvents()
+                + " last=" + (snapshot.lastEvent() == null
+                ? "-"
+                : snapshot.lastEvent().type() + "@" + snapshot.lastEvent().timestampMs()
+                + "/" + snapshot.lastEvent().toneDurationMs());
+        assertEquals(debug, 1, snapshot.totalToneOnEvents());
+        assertEquals(debug, 1, snapshot.totalToneOffEvents());
+        assertTrue(debug, snapshot.lastEvent() != null);
+        assertEquals(debug, CwToneEvent.Type.TONE_OFF, snapshot.lastEvent().type());
+        assertTrue(debug, snapshot.lastEvent().toneDurationMs() >= 150L);
+    }
+
+    @Test
     public void longFrameGapForcesToneOffAndClearsLockState() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(650);
@@ -1153,6 +1247,19 @@ public final class CwSignalProcessorTest {
         processFramesCollecting(processor, 1, 600.0d, 3200.0d, 540.0d, 18000.0d, 21);
         processFramesCollecting(processor, 1, 600.0d, 3200.0d, 540.0d, 18000.0d, 22);
         processFramesCollecting(processor, 1, 600.0d, 3200.0d, 540.0d, 18000.0d, 23);
+        return processor.snapshot();
+    }
+
+    private CwSignalSnapshot runWeakValleySequence(double valleyAmplitude) {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFramesCollecting(processor, 8, 0.0d, 0.0d, 0);
+        processFramesCollecting(processor, 4, 670.0d, 16000.0d, 8);
+        processFramesCollecting(processor, 2, 670.0d, valleyAmplitude, 12);
+        processFramesCollecting(processor, 4, 670.0d, 16000.0d, 14);
+        processFramesCollecting(processor, 4, 0.0d, 0.0d, 18);
+
         return processor.snapshot();
     }
 
