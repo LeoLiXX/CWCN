@@ -21,6 +21,11 @@ public final class CwLocalAudioFrontEndProfileTest {
 
         assertTrue(summary, profile.observedHypothesisFrames() > 0);
         assertTrue(summary, profile.rawTargetDisagreementFrames() > 0);
+        assertTrue(summary, summary.contains("guard("));
+        assertTrue(summary, summary.contains("trkSplit("));
+        assertTrue(summary, summary.contains("rawConsensus("));
+        assertTrue(summary, profile.trackedToneSplitSegmentCount() > 0);
+        assertTrue(summary, profile.rawConsensusOutlierSegmentCount() > 0);
     }
 
     @Test
@@ -35,6 +40,9 @@ public final class CwLocalAudioFrontEndProfileTest {
                 summary,
                 profile.effectiveTrackedDisagreementFrames() <= profile.rawTargetDisagreementFrames()
         );
+        assertTrue(summary, summary.contains("guard("));
+        assertTrue(summary, summary.contains("trkSplit("));
+        assertTrue(summary, summary.contains("rawConsensus("));
     }
 
     @Test
@@ -47,6 +55,9 @@ public final class CwLocalAudioFrontEndProfileTest {
                 summary,
                 profile.observedHypothesisFrames() == 0 || profile.rawTargetDisagreementFrames() >= 0
         );
+        assertTrue(summary, summary.contains("guard("));
+        assertTrue(summary, summary.contains("trkSplit("));
+        assertTrue(summary, summary.contains("rawConsensus("));
     }
 
     private static LocalAudioDecodeTestSupport.FrontEndDisagreementProfile evaluate(String sourceLabel) {

@@ -29,10 +29,14 @@ public final class CwLocalAudioForcedToneDecodeProbeTest {
         for (LocalAudioDecodeTestSupport.OfflineDetailedProbeResult detailed : DETAILED_RESULTS.values()) {
             LocalAudioDecodeTestSupport.ForcedToneReplayResult trackedReplay =
                     LocalAudioDecodeTestSupport.replayForcedTrackedToneDecode(detailed);
+            LocalAudioDecodeTestSupport.ForcedToneReplayResult effectiveReplay =
+                    LocalAudioDecodeTestSupport.replayForcedEffectiveTrackedToneDecode(detailed);
             LocalAudioDecodeTestSupport.ForcedToneReplayResult hypothesisReplay =
                     LocalAudioDecodeTestSupport.replayForcedHypothesisToneDecode(detailed);
-            if (!trackedReplay.decodedText().equals(hypothesisReplay.decodedText())) {
-                printComparison(detailed, trackedReplay, hypothesisReplay);
+            if (!trackedReplay.decodedText().equals(hypothesisReplay.decodedText())
+                    || !trackedReplay.decodedText().equals(effectiveReplay.decodedText())
+                    || !effectiveReplay.decodedText().equals(hypothesisReplay.decodedText())) {
+                printComparison(detailed, trackedReplay, effectiveReplay, hypothesisReplay);
             }
         }
     }
@@ -45,19 +49,23 @@ public final class CwLocalAudioForcedToneDecodeProbeTest {
     private static void printComparison(LocalAudioDecodeTestSupport.OfflineDetailedProbeResult detailed) {
         LocalAudioDecodeTestSupport.ForcedToneReplayResult trackedReplay =
                 LocalAudioDecodeTestSupport.replayForcedTrackedToneDecode(detailed);
+        LocalAudioDecodeTestSupport.ForcedToneReplayResult effectiveReplay =
+                LocalAudioDecodeTestSupport.replayForcedEffectiveTrackedToneDecode(detailed);
         LocalAudioDecodeTestSupport.ForcedToneReplayResult hypothesisReplay =
                 LocalAudioDecodeTestSupport.replayForcedHypothesisToneDecode(detailed);
-        printComparison(detailed, trackedReplay, hypothesisReplay);
+        printComparison(detailed, trackedReplay, effectiveReplay, hypothesisReplay);
     }
 
     private static void printComparison(
             LocalAudioDecodeTestSupport.OfflineDetailedProbeResult detailed,
             LocalAudioDecodeTestSupport.ForcedToneReplayResult trackedReplay,
+            LocalAudioDecodeTestSupport.ForcedToneReplayResult effectiveReplay,
             LocalAudioDecodeTestSupport.ForcedToneReplayResult hypothesisReplay
     ) {
         System.out.println("==== " + detailed.probeResult().sourceLabel() + " ====");
         System.out.println("base=" + detailed.probeResult().decodedText());
         System.out.println(trackedReplay.renderSummary());
+        System.out.println(effectiveReplay.renderSummary());
         System.out.println(hypothesisReplay.renderSummary());
     }
 

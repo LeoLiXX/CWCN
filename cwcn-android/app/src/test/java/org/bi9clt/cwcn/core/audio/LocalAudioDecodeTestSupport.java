@@ -64,8 +64,16 @@ final class LocalAudioDecodeTestSupport {
     }
 
     static OfflineDetailedProbeResult decodeWavFileDetailed(Path wavFile) throws IOException {
+        return decodeWavFileDetailed(wavFile, false);
+    }
+
+    static OfflineDetailedProbeResult decodeWavFileDetailed(
+            Path wavFile,
+            boolean experimentalHypothesisGuardEnabled
+    ) throws IOException {
         WaveDataProbe waveData = readWaveFileForProbe(wavFile);
         CwSignalProcessor signalProcessor = new CwSignalProcessor();
+        signalProcessor.setExperimentalHypothesisGuardEnabled(experimentalHypothesisGuardEnabled);
         CwHybridTimingModel timingModel = new CwHybridTimingModel();
         CwDecoder decoder = new CwDecoder();
         CwInterpreter interpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
@@ -521,21 +529,204 @@ final class LocalAudioDecodeTestSupport {
             OfflineDetailedProbeResult detailedProbeResult,
             int disagreementThresholdHz
     ) {
+        ArrayList<TrackedToneSplitSegment> trackedToneSplitSegments = new ArrayList<>();
+        ArrayList<RawConsensusOutlierSegment> rawConsensusOutlierSegments = new ArrayList<>();
         int observedHypothesisFrames = 0;
         int rawTargetDisagreementFrames = 0;
         int effectiveTrackedDisagreementFrames = 0;
         int rawTargetNearRepresentativeFrames = 0;
         int hypothesisNearRepresentativeFrames = 0;
         int effectiveTrackedNearRepresentativeFrames = 0;
+        int guardObservedFrames = 0;
+        int guardHoldFrames = 0;
+        int guardOpenFrames = 0;
+        int guardMidHoldFrames = 0;
+        int guardFarHoldFrames = 0;
+        int guardMaxRemainingScans = 0;
+        int guardMaxObservedScans = 0;
+        int lastGuardCandidateFrequencyHz = 0;
+        int lastGuardDriftHz = 0;
+        int lastGuardRemainingScans = 0;
+        String lastGuardBand = "NONE";
+        long splitStartTimestampMs = -1L;
+        long splitEndTimestampMs = -1L;
+        int splitFrameCount = 0;
+        int splitRawToneSumHz = 0;
+        int splitEffectiveToneSumHz = 0;
+        int splitHypothesisToneSumHz = 0;
+        int splitRepresentativeToneSumHz = 0;
+        int splitActiveCenterToneSumHz = 0;
+        int splitRawToneLastHz = 0;
+        int splitEffectiveToneLastHz = 0;
+        int splitHypothesisToneLastHz = 0;
+        int splitRepresentativeToneLastHz = 0;
+        int splitActiveCenterToneLastHz = 0;
+        long rawConsensusStartTimestampMs = -1L;
+        long rawConsensusEndTimestampMs = -1L;
+        int rawConsensusFrameCount = 0;
+        int rawConsensusToneSumHz = 0;
+        int rawConsensusRawToneSumHz = 0;
+        int rawConsensusEffectiveToneSumHz = 0;
+        int rawConsensusHypothesisToneSumHz = 0;
+        int rawConsensusRepresentativeToneSumHz = 0;
+        int rawConsensusActiveCenterToneSumHz = 0;
+        int rawConsensusToneLastHz = 0;
+        int rawConsensusRawToneLastHz = 0;
+        int rawConsensusEffectiveToneLastHz = 0;
+        int rawConsensusHypothesisToneLastHz = 0;
+        int rawConsensusRepresentativeToneLastHz = 0;
+        int rawConsensusActiveCenterToneLastHz = 0;
         CwSignalSnapshot finalSnapshot = detailedProbeResult.probeResult().signalSnapshot();
 
         for (FrameSignalTrace frameSignalTrace : detailedProbeResult.frameSignalTraces()) {
             CwSignalSnapshot snapshot = frameSignalTrace.snapshot();
+            int rawToneHz = snapshot.targetToneFrequencyHz();
+            int effectiveToneHz = snapshot.effectiveTrackedToneFrequencyHz();
+            int hypothesisToneHz = snapshot.toneHypothesisFrequencyHz();
+            int representativeSplitToneHz = snapshot.representativeLockedToneFrequencyHz();
+            int activeCenterToneHz = snapshot.activeAcquisitionCenterFrequencyHz();
+            int consensusToneHz = consensusToneHz(
+                    representativeSplitToneHz,
+                    activeCenterToneHz,
+                    hypothesisToneHz
+            );
+            boolean splitFrame = rawToneHz > 0
+                    && effectiveToneHz > 0
+                    && Math.abs(rawToneHz - effectiveToneHz) >= disagreementThresholdHz;
+            boolean rawConsensusOutlierFrame = consensusToneHz > 0
+                    && rawToneHz > 0
+                    && effectiveToneHz > 0
+                    && Math.abs(rawToneHz - consensusToneHz) >= disagreementThresholdHz
+                    && Math.abs(effectiveToneHz - consensusToneHz) <= 30;
+            if (splitFrame) {
+                if (splitFrameCount == 0) {
+                    splitStartTimestampMs = frameSignalTrace.timestampMs();
+                }
+                splitEndTimestampMs = frameSignalTrace.timestampMs();
+                splitFrameCount += 1;
+                splitRawToneSumHz += rawToneHz;
+                splitEffectiveToneSumHz += effectiveToneHz;
+                splitHypothesisToneSumHz += hypothesisToneHz;
+                splitRepresentativeToneSumHz += representativeSplitToneHz;
+                splitActiveCenterToneSumHz += activeCenterToneHz;
+                splitRawToneLastHz = rawToneHz;
+                splitEffectiveToneLastHz = effectiveToneHz;
+                splitHypothesisToneLastHz = hypothesisToneHz;
+                splitRepresentativeToneLastHz = representativeSplitToneHz;
+                splitActiveCenterToneLastHz = activeCenterToneHz;
+            } else if (splitFrameCount > 0) {
+                trackedToneSplitSegments.add(new TrackedToneSplitSegment(
+                        splitStartTimestampMs,
+                        splitEndTimestampMs,
+                        splitFrameCount,
+                        splitRawToneSumHz / splitFrameCount,
+                        splitEffectiveToneSumHz / splitFrameCount,
+                        splitHypothesisToneSumHz / splitFrameCount,
+                        splitRepresentativeToneSumHz / splitFrameCount,
+                        splitActiveCenterToneSumHz / splitFrameCount,
+                        splitRawToneLastHz,
+                        splitEffectiveToneLastHz,
+                        splitHypothesisToneLastHz,
+                        splitRepresentativeToneLastHz,
+                        splitActiveCenterToneLastHz
+                ));
+                splitStartTimestampMs = -1L;
+                splitEndTimestampMs = -1L;
+                splitFrameCount = 0;
+                splitRawToneSumHz = 0;
+                splitEffectiveToneSumHz = 0;
+                splitHypothesisToneSumHz = 0;
+                splitRepresentativeToneSumHz = 0;
+                splitActiveCenterToneSumHz = 0;
+                splitRawToneLastHz = 0;
+                splitEffectiveToneLastHz = 0;
+                splitHypothesisToneLastHz = 0;
+                splitRepresentativeToneLastHz = 0;
+                splitActiveCenterToneLastHz = 0;
+            }
+            if (rawConsensusOutlierFrame) {
+                if (rawConsensusFrameCount == 0) {
+                    rawConsensusStartTimestampMs = frameSignalTrace.timestampMs();
+                }
+                rawConsensusEndTimestampMs = frameSignalTrace.timestampMs();
+                rawConsensusFrameCount += 1;
+                rawConsensusToneSumHz += consensusToneHz;
+                rawConsensusRawToneSumHz += rawToneHz;
+                rawConsensusEffectiveToneSumHz += effectiveToneHz;
+                rawConsensusHypothesisToneSumHz += hypothesisToneHz;
+                rawConsensusRepresentativeToneSumHz += representativeSplitToneHz;
+                rawConsensusActiveCenterToneSumHz += activeCenterToneHz;
+                rawConsensusToneLastHz = consensusToneHz;
+                rawConsensusRawToneLastHz = rawToneHz;
+                rawConsensusEffectiveToneLastHz = effectiveToneHz;
+                rawConsensusHypothesisToneLastHz = hypothesisToneHz;
+                rawConsensusRepresentativeToneLastHz = representativeSplitToneHz;
+                rawConsensusActiveCenterToneLastHz = activeCenterToneHz;
+            } else if (rawConsensusFrameCount > 0) {
+                rawConsensusOutlierSegments.add(new RawConsensusOutlierSegment(
+                        rawConsensusStartTimestampMs,
+                        rawConsensusEndTimestampMs,
+                        rawConsensusFrameCount,
+                        rawConsensusToneSumHz / rawConsensusFrameCount,
+                        rawConsensusRawToneSumHz / rawConsensusFrameCount,
+                        rawConsensusEffectiveToneSumHz / rawConsensusFrameCount,
+                        rawConsensusHypothesisToneSumHz / rawConsensusFrameCount,
+                        rawConsensusRepresentativeToneSumHz / rawConsensusFrameCount,
+                        rawConsensusActiveCenterToneSumHz / rawConsensusFrameCount,
+                        rawConsensusToneLastHz,
+                        rawConsensusRawToneLastHz,
+                        rawConsensusEffectiveToneLastHz,
+                        rawConsensusHypothesisToneLastHz,
+                        rawConsensusRepresentativeToneLastHz,
+                        rawConsensusActiveCenterToneLastHz
+                ));
+                rawConsensusStartTimestampMs = -1L;
+                rawConsensusEndTimestampMs = -1L;
+                rawConsensusFrameCount = 0;
+                rawConsensusToneSumHz = 0;
+                rawConsensusRawToneSumHz = 0;
+                rawConsensusEffectiveToneSumHz = 0;
+                rawConsensusHypothesisToneSumHz = 0;
+                rawConsensusRepresentativeToneSumHz = 0;
+                rawConsensusActiveCenterToneSumHz = 0;
+                rawConsensusToneLastHz = 0;
+                rawConsensusRawToneLastHz = 0;
+                rawConsensusEffectiveToneLastHz = 0;
+                rawConsensusHypothesisToneLastHz = 0;
+                rawConsensusRepresentativeToneLastHz = 0;
+                rawConsensusActiveCenterToneLastHz = 0;
+            }
+            if (snapshot.lockedRetuneGuardRequiredScans() > 0
+                    || snapshot.lockedRetuneGuardCandidateFrequencyHz() > 0
+                    || snapshot.lockedRetuneGuardHolding()) {
+                guardObservedFrames += 1;
+                lastGuardCandidateFrequencyHz = snapshot.lockedRetuneGuardCandidateFrequencyHz();
+                lastGuardDriftHz = snapshot.lockedRetuneGuardDriftHz();
+                lastGuardRemainingScans = snapshot.lockedRetuneGuardRemainingScans();
+                lastGuardBand = snapshot.lockedRetuneGuardBand();
+                guardMaxRemainingScans = Math.max(
+                        guardMaxRemainingScans,
+                        snapshot.lockedRetuneGuardRemainingScans()
+                );
+                guardMaxObservedScans = Math.max(
+                        guardMaxObservedScans,
+                        snapshot.lockedRetuneGuardObservedScans()
+                );
+                if (snapshot.lockedRetuneGuardHolding()) {
+                    guardHoldFrames += 1;
+                    if ("FAR".equals(snapshot.lockedRetuneGuardBand())) {
+                        guardFarHoldFrames += 1;
+                    } else if ("MID".equals(snapshot.lockedRetuneGuardBand())) {
+                        guardMidHoldFrames += 1;
+                    }
+                } else {
+                    guardOpenFrames += 1;
+                }
+            }
             if (snapshot.toneHypothesisSupportFrames() <= 0 || "NONE".equals(snapshot.toneHypothesisSource())) {
                 continue;
             }
             observedHypothesisFrames += 1;
-            int hypothesisToneHz = snapshot.toneHypothesisFrequencyHz();
             if (Math.abs(snapshot.targetToneFrequencyHz() - hypothesisToneHz) >= disagreementThresholdHz) {
                 rawTargetDisagreementFrames += 1;
             }
@@ -555,6 +746,42 @@ final class LocalAudioDecodeTestSupport {
                 }
             }
         }
+        if (splitFrameCount > 0) {
+            trackedToneSplitSegments.add(new TrackedToneSplitSegment(
+                    splitStartTimestampMs,
+                    splitEndTimestampMs,
+                    splitFrameCount,
+                    splitRawToneSumHz / splitFrameCount,
+                    splitEffectiveToneSumHz / splitFrameCount,
+                    splitHypothesisToneSumHz / splitFrameCount,
+                    splitRepresentativeToneSumHz / splitFrameCount,
+                    splitActiveCenterToneSumHz / splitFrameCount,
+                    splitRawToneLastHz,
+                    splitEffectiveToneLastHz,
+                    splitHypothesisToneLastHz,
+                    splitRepresentativeToneLastHz,
+                    splitActiveCenterToneLastHz
+            ));
+        }
+        if (rawConsensusFrameCount > 0) {
+            rawConsensusOutlierSegments.add(new RawConsensusOutlierSegment(
+                    rawConsensusStartTimestampMs,
+                    rawConsensusEndTimestampMs,
+                    rawConsensusFrameCount,
+                    rawConsensusToneSumHz / rawConsensusFrameCount,
+                    rawConsensusRawToneSumHz / rawConsensusFrameCount,
+                    rawConsensusEffectiveToneSumHz / rawConsensusFrameCount,
+                    rawConsensusHypothesisToneSumHz / rawConsensusFrameCount,
+                    rawConsensusRepresentativeToneSumHz / rawConsensusFrameCount,
+                    rawConsensusActiveCenterToneSumHz / rawConsensusFrameCount,
+                    rawConsensusToneLastHz,
+                    rawConsensusRawToneLastHz,
+                    rawConsensusEffectiveToneLastHz,
+                    rawConsensusHypothesisToneLastHz,
+                    rawConsensusRepresentativeToneLastHz,
+                    rawConsensusActiveCenterToneLastHz
+            ));
+        }
 
         return new FrontEndDisagreementProfile(
                 detailedProbeResult.probeResult().sourceLabel(),
@@ -572,21 +799,67 @@ final class LocalAudioDecodeTestSupport {
                 finalSnapshot.activeCenterCompetitionObservationCount(),
                 finalSnapshot.activeCenterCompetitionTrackedWinFrames(),
                 finalSnapshot.activeCenterCompetitionHypothesisWinFrames(),
-                finalSnapshot.activeCenterCompetitionHypothesisMaxWinStreak()
+                finalSnapshot.activeCenterCompetitionHypothesisMaxWinStreak(),
+                guardObservedFrames,
+                guardHoldFrames,
+                guardOpenFrames,
+                guardMidHoldFrames,
+                guardFarHoldFrames,
+                guardMaxRemainingScans,
+                guardMaxObservedScans,
+                lastGuardCandidateFrequencyHz,
+                lastGuardDriftHz,
+                lastGuardRemainingScans,
+                lastGuardBand,
+                trackedToneSplitSegments,
+                rawConsensusOutlierSegments
         );
     }
 
+    private static int consensusToneHz(int representativeToneHz, int activeCenterToneHz, int hypothesisToneHz) {
+        int sumHz = 0;
+        int count = 0;
+        int minHz = Integer.MAX_VALUE;
+        int maxHz = Integer.MIN_VALUE;
+        if (representativeToneHz > 0) {
+            sumHz += representativeToneHz;
+            count += 1;
+            minHz = Math.min(minHz, representativeToneHz);
+            maxHz = Math.max(maxHz, representativeToneHz);
+        }
+        if (activeCenterToneHz > 0) {
+            sumHz += activeCenterToneHz;
+            count += 1;
+            minHz = Math.min(minHz, activeCenterToneHz);
+            maxHz = Math.max(maxHz, activeCenterToneHz);
+        }
+        if (hypothesisToneHz > 0) {
+            sumHz += hypothesisToneHz;
+            count += 1;
+            minHz = Math.min(minHz, hypothesisToneHz);
+            maxHz = Math.max(maxHz, hypothesisToneHz);
+        }
+        if (count < 2 || maxHz - minHz > 30) {
+            return 0;
+        }
+        return sumHz / count;
+    }
+
     static ForcedToneReplayResult replayForcedTrackedToneDecode(OfflineDetailedProbeResult detailedProbeResult) {
-        return replayForcedSnapshotToneDecode(detailedProbeResult, false);
+        return replayForcedSnapshotToneDecode(detailedProbeResult, ForcedToneMode.TRK);
+    }
+
+    static ForcedToneReplayResult replayForcedEffectiveTrackedToneDecode(OfflineDetailedProbeResult detailedProbeResult) {
+        return replayForcedSnapshotToneDecode(detailedProbeResult, ForcedToneMode.EFF);
     }
 
     static ForcedToneReplayResult replayForcedHypothesisToneDecode(OfflineDetailedProbeResult detailedProbeResult) {
-        return replayForcedSnapshotToneDecode(detailedProbeResult, true);
+        return replayForcedSnapshotToneDecode(detailedProbeResult, ForcedToneMode.HYP);
     }
 
     private static ForcedToneReplayResult replayForcedSnapshotToneDecode(
             OfflineDetailedProbeResult detailedProbeResult,
-            boolean hypothesisMode
+            ForcedToneMode mode
     ) {
         CwSignalProcessor signalProcessor = new CwSignalProcessor();
         CwHybridTimingModel timingModel = new CwHybridTimingModel();
@@ -602,18 +875,30 @@ final class LocalAudioDecodeTestSupport {
             AudioFrame frame = detailedProbeResult.frames().get(index);
             CwSignalSnapshot snapshot = detailedProbeResult.frameSignalTraces().get(index).snapshot();
             int forcedFrequencyHz;
-            if (hypothesisMode) {
-                if (snapshot.toneHypothesisSupportFrames() > 0 && !"NONE".equals(snapshot.toneHypothesisSource())) {
-                    forcedFrequencyHz = snapshot.toneHypothesisFrequencyHz();
+            switch (mode) {
+                case HYP:
+                    if (snapshot.toneHypothesisSupportFrames() > 0 && !"NONE".equals(snapshot.toneHypothesisSource())) {
+                        forcedFrequencyHz = snapshot.toneHypothesisFrequencyHz();
+                        lastForcedFrequencyHz = forcedFrequencyHz;
+                    } else {
+                        forcedFrequencyHz = lastForcedFrequencyHz;
+                    }
+                    break;
+                case EFF:
+                    forcedFrequencyHz = snapshot.effectiveTrackedToneFrequencyHz() > 0
+                            ? snapshot.effectiveTrackedToneFrequencyHz()
+                            : (snapshot.targetToneFrequencyHz() > 0
+                            ? snapshot.targetToneFrequencyHz()
+                            : lastForcedFrequencyHz);
                     lastForcedFrequencyHz = forcedFrequencyHz;
-                } else {
-                    forcedFrequencyHz = lastForcedFrequencyHz;
-                }
-            } else {
-                forcedFrequencyHz = snapshot.targetToneFrequencyHz() > 0
-                        ? snapshot.targetToneFrequencyHz()
-                        : lastForcedFrequencyHz;
-                lastForcedFrequencyHz = forcedFrequencyHz;
+                    break;
+                case TRK:
+                default:
+                    forcedFrequencyHz = snapshot.targetToneFrequencyHz() > 0
+                            ? snapshot.targetToneFrequencyHz()
+                            : lastForcedFrequencyHz;
+                    lastForcedFrequencyHz = forcedFrequencyHz;
+                    break;
             }
             List<CwToneEvent> toneEvents = signalProcessor.processForcedToneForTesting(frame, forcedFrequencyHz);
             replayedToneEvents.addAll(toneEvents);
@@ -640,7 +925,7 @@ final class LocalAudioDecodeTestSupport {
 
         return new ForcedToneReplayResult(
                 detailedProbeResult.probeResult().sourceLabel(),
-                hypothesisMode ? "HYP" : "TRK",
+                mode.name(),
                 lastForcedFrequencyHz,
                 sanitize(decoder.snapshot().decodedText()),
                 replayedToneEvents,
@@ -649,6 +934,12 @@ final class LocalAudioDecodeTestSupport {
                 decoder.snapshot(),
                 interpreter.snapshot()
         );
+    }
+
+    private enum ForcedToneMode {
+        TRK,
+        EFF,
+        HYP
     }
 
     static final class FrameSignalTrace {
@@ -686,6 +977,19 @@ final class LocalAudioDecodeTestSupport {
         private final int activeCenterCompetitionTrackedWinFrames;
         private final int activeCenterCompetitionHypothesisWinFrames;
         private final int activeCenterCompetitionHypothesisMaxWinStreak;
+        private final int guardObservedFrames;
+        private final int guardHoldFrames;
+        private final int guardOpenFrames;
+        private final int guardMidHoldFrames;
+        private final int guardFarHoldFrames;
+        private final int guardMaxRemainingScans;
+        private final int guardMaxObservedScans;
+        private final int lastGuardCandidateFrequencyHz;
+        private final int lastGuardDriftHz;
+        private final int lastGuardRemainingScans;
+        private final String lastGuardBand;
+        private final List<TrackedToneSplitSegment> trackedToneSplitSegments;
+        private final List<RawConsensusOutlierSegment> rawConsensusOutlierSegments;
 
         private FrontEndDisagreementProfile(
                 String sourceLabel,
@@ -703,7 +1007,20 @@ final class LocalAudioDecodeTestSupport {
                 int activeCenterCompetitionObservationCount,
                 int activeCenterCompetitionTrackedWinFrames,
                 int activeCenterCompetitionHypothesisWinFrames,
-                int activeCenterCompetitionHypothesisMaxWinStreak
+                int activeCenterCompetitionHypothesisMaxWinStreak,
+                int guardObservedFrames,
+                int guardHoldFrames,
+                int guardOpenFrames,
+                int guardMidHoldFrames,
+                int guardFarHoldFrames,
+                int guardMaxRemainingScans,
+                int guardMaxObservedScans,
+                int lastGuardCandidateFrequencyHz,
+                int lastGuardDriftHz,
+                int lastGuardRemainingScans,
+                String lastGuardBand,
+                List<TrackedToneSplitSegment> trackedToneSplitSegments,
+                List<RawConsensusOutlierSegment> rawConsensusOutlierSegments
         ) {
             this.sourceLabel = sourceLabel;
             this.disagreementThresholdHz = disagreementThresholdHz;
@@ -721,6 +1038,19 @@ final class LocalAudioDecodeTestSupport {
             this.activeCenterCompetitionTrackedWinFrames = activeCenterCompetitionTrackedWinFrames;
             this.activeCenterCompetitionHypothesisWinFrames = activeCenterCompetitionHypothesisWinFrames;
             this.activeCenterCompetitionHypothesisMaxWinStreak = activeCenterCompetitionHypothesisMaxWinStreak;
+            this.guardObservedFrames = guardObservedFrames;
+            this.guardHoldFrames = guardHoldFrames;
+            this.guardOpenFrames = guardOpenFrames;
+            this.guardMidHoldFrames = guardMidHoldFrames;
+            this.guardFarHoldFrames = guardFarHoldFrames;
+            this.guardMaxRemainingScans = guardMaxRemainingScans;
+            this.guardMaxObservedScans = guardMaxObservedScans;
+            this.lastGuardCandidateFrequencyHz = lastGuardCandidateFrequencyHz;
+            this.lastGuardDriftHz = lastGuardDriftHz;
+            this.lastGuardRemainingScans = lastGuardRemainingScans;
+            this.lastGuardBand = lastGuardBand == null ? "NONE" : lastGuardBand;
+            this.trackedToneSplitSegments = trackedToneSplitSegments;
+            this.rawConsensusOutlierSegments = rawConsensusOutlierSegments;
         }
 
         int observedHypothesisFrames() {
@@ -779,10 +1109,80 @@ final class LocalAudioDecodeTestSupport {
             return activeCenterCompetitionHypothesisMaxWinStreak;
         }
 
+        int guardObservedFrames() {
+            return guardObservedFrames;
+        }
+
+        int guardHoldFrames() {
+            return guardHoldFrames;
+        }
+
+        int guardOpenFrames() {
+            return guardOpenFrames;
+        }
+
+        int guardMidHoldFrames() {
+            return guardMidHoldFrames;
+        }
+
+        int guardFarHoldFrames() {
+            return guardFarHoldFrames;
+        }
+
+        int guardMaxRemainingScans() {
+            return guardMaxRemainingScans;
+        }
+
+        int guardMaxObservedScans() {
+            return guardMaxObservedScans;
+        }
+
+        int lastGuardCandidateFrequencyHz() {
+            return lastGuardCandidateFrequencyHz;
+        }
+
+        int lastGuardDriftHz() {
+            return lastGuardDriftHz;
+        }
+
+        int lastGuardRemainingScans() {
+            return lastGuardRemainingScans;
+        }
+
+        String lastGuardBand() {
+            return lastGuardBand;
+        }
+
+        int trackedToneSplitSegmentCount() {
+            return trackedToneSplitSegments.size();
+        }
+
+        int trackedToneSplitMaxFrames() {
+            int maxFrames = 0;
+            for (TrackedToneSplitSegment segment : trackedToneSplitSegments) {
+                maxFrames = Math.max(maxFrames, segment.frameCount());
+            }
+            return maxFrames;
+        }
+
+        int rawConsensusOutlierSegmentCount() {
+            return rawConsensusOutlierSegments.size();
+        }
+
+        int rawConsensusOutlierMaxFrames() {
+            int maxFrames = 0;
+            for (RawConsensusOutlierSegment segment : rawConsensusOutlierSegments) {
+                maxFrames = Math.max(maxFrames, segment.frameCount());
+            }
+            return maxFrames;
+        }
+
         String renderSummary() {
+            String splitSummary = renderTrackedToneSplitSummary();
+            String rawConsensusSummary = renderRawConsensusSummary();
             return String.format(
                     Locale.US,
-                    "%s threshold=%dHz hypFrames=%d rawDisagree=%d effDisagree=%d rawNearRep=%d effNearRep=%d hypNearRep=%d repComp(obs=%d trk=%d hyp=%d maxHyp=%d) actComp(obs=%d trk=%d hyp=%d maxHyp=%d)",
+                    "%s threshold=%dHz hypFrames=%d rawDisagree=%d effDisagree=%d rawNearRep=%d effNearRep=%d hypNearRep=%d repComp(obs=%d trk=%d hyp=%d maxHyp=%d) actComp(obs=%d trk=%d hyp=%d maxHyp=%d) guard(obs=%d hold=%d open=%d mid=%d far=%d last=%s cand=%dHz drift=%dHz remain=%d maxRemain=%d maxSeen=%d) %s %s",
                     sourceLabel,
                     disagreementThresholdHz,
                     observedHypothesisFrames,
@@ -798,7 +1198,210 @@ final class LocalAudioDecodeTestSupport {
                     activeCenterCompetitionObservationCount,
                     activeCenterCompetitionTrackedWinFrames,
                     activeCenterCompetitionHypothesisWinFrames,
-                    activeCenterCompetitionHypothesisMaxWinStreak
+                    activeCenterCompetitionHypothesisMaxWinStreak,
+                    guardObservedFrames,
+                    guardHoldFrames,
+                    guardOpenFrames,
+                    guardMidHoldFrames,
+                    guardFarHoldFrames,
+                    lastGuardBand,
+                    lastGuardCandidateFrequencyHz,
+                    lastGuardDriftHz,
+                    lastGuardRemainingScans,
+                    guardMaxRemainingScans,
+                    guardMaxObservedScans,
+                    splitSummary,
+                    rawConsensusSummary
+            );
+        }
+
+        private String renderTrackedToneSplitSummary() {
+            if (trackedToneSplitSegments.isEmpty()) {
+                return "trkSplit(seg=0)";
+            }
+            ArrayList<TrackedToneSplitSegment> sortedSegments = new ArrayList<>(trackedToneSplitSegments);
+            sortedSegments.sort(Comparator.comparingInt(TrackedToneSplitSegment::frameCount).reversed());
+            StringBuilder builder = new StringBuilder();
+            builder.append("trkSplit(seg=").append(trackedToneSplitSegments.size())
+                    .append(" maxFrames=").append(trackedToneSplitMaxFrames())
+                    .append(" top=");
+            int limit = Math.min(3, sortedSegments.size());
+            for (int index = 0; index < limit; index++) {
+                if (index > 0) {
+                    builder.append(";");
+                }
+                builder.append(sortedSegments.get(index).renderSummary());
+            }
+            builder.append(")");
+            return builder.toString();
+        }
+
+        private String renderRawConsensusSummary() {
+            if (rawConsensusOutlierSegments.isEmpty()) {
+                return "rawConsensus(seg=0)";
+            }
+            ArrayList<RawConsensusOutlierSegment> sortedSegments = new ArrayList<>(rawConsensusOutlierSegments);
+            sortedSegments.sort(Comparator.comparingInt(RawConsensusOutlierSegment::frameCount).reversed());
+            StringBuilder builder = new StringBuilder();
+            builder.append("rawConsensus(seg=").append(rawConsensusOutlierSegments.size())
+                    .append(" maxFrames=").append(rawConsensusOutlierMaxFrames())
+                    .append(" top=");
+            int limit = Math.min(3, sortedSegments.size());
+            for (int index = 0; index < limit; index++) {
+                if (index > 0) {
+                    builder.append(";");
+                }
+                builder.append(sortedSegments.get(index).renderSummary());
+            }
+            builder.append(")");
+            return builder.toString();
+        }
+    }
+
+    static final class TrackedToneSplitSegment {
+        private final long startTimestampMs;
+        private final long endTimestampMs;
+        private final int frameCount;
+        private final int averageRawToneHz;
+        private final int averageEffectiveToneHz;
+        private final int averageHypothesisToneHz;
+        private final int averageRepresentativeToneHz;
+        private final int averageActiveCenterToneHz;
+        private final int lastRawToneHz;
+        private final int lastEffectiveToneHz;
+        private final int lastHypothesisToneHz;
+        private final int lastRepresentativeToneHz;
+        private final int lastActiveCenterToneHz;
+
+        private TrackedToneSplitSegment(
+                long startTimestampMs,
+                long endTimestampMs,
+                int frameCount,
+                int averageRawToneHz,
+                int averageEffectiveToneHz,
+                int averageHypothesisToneHz,
+                int averageRepresentativeToneHz,
+                int averageActiveCenterToneHz,
+                int lastRawToneHz,
+                int lastEffectiveToneHz,
+                int lastHypothesisToneHz,
+                int lastRepresentativeToneHz,
+                int lastActiveCenterToneHz
+        ) {
+            this.startTimestampMs = startTimestampMs;
+            this.endTimestampMs = endTimestampMs;
+            this.frameCount = frameCount;
+            this.averageRawToneHz = averageRawToneHz;
+            this.averageEffectiveToneHz = averageEffectiveToneHz;
+            this.averageHypothesisToneHz = averageHypothesisToneHz;
+            this.averageRepresentativeToneHz = averageRepresentativeToneHz;
+            this.averageActiveCenterToneHz = averageActiveCenterToneHz;
+            this.lastRawToneHz = lastRawToneHz;
+            this.lastEffectiveToneHz = lastEffectiveToneHz;
+            this.lastHypothesisToneHz = lastHypothesisToneHz;
+            this.lastRepresentativeToneHz = lastRepresentativeToneHz;
+            this.lastActiveCenterToneHz = lastActiveCenterToneHz;
+        }
+
+        int frameCount() {
+            return frameCount;
+        }
+
+        String renderSummary() {
+            return String.format(
+                    Locale.US,
+                    "%d-%dms/%df raw=%d eff=%d hyp=%d rep=%d act=%d last=%d/%d/%d/%d/%d",
+                    startTimestampMs,
+                    endTimestampMs,
+                    frameCount,
+                    averageRawToneHz,
+                    averageEffectiveToneHz,
+                    averageHypothesisToneHz,
+                    averageRepresentativeToneHz,
+                    averageActiveCenterToneHz,
+                    lastRawToneHz,
+                    lastEffectiveToneHz,
+                    lastHypothesisToneHz,
+                    lastRepresentativeToneHz,
+                    lastActiveCenterToneHz
+            );
+        }
+    }
+
+    static final class RawConsensusOutlierSegment {
+        private final long startTimestampMs;
+        private final long endTimestampMs;
+        private final int frameCount;
+        private final int averageConsensusToneHz;
+        private final int averageRawToneHz;
+        private final int averageEffectiveToneHz;
+        private final int averageHypothesisToneHz;
+        private final int averageRepresentativeToneHz;
+        private final int averageActiveCenterToneHz;
+        private final int lastConsensusToneHz;
+        private final int lastRawToneHz;
+        private final int lastEffectiveToneHz;
+        private final int lastHypothesisToneHz;
+        private final int lastRepresentativeToneHz;
+        private final int lastActiveCenterToneHz;
+
+        private RawConsensusOutlierSegment(
+                long startTimestampMs,
+                long endTimestampMs,
+                int frameCount,
+                int averageConsensusToneHz,
+                int averageRawToneHz,
+                int averageEffectiveToneHz,
+                int averageHypothesisToneHz,
+                int averageRepresentativeToneHz,
+                int averageActiveCenterToneHz,
+                int lastConsensusToneHz,
+                int lastRawToneHz,
+                int lastEffectiveToneHz,
+                int lastHypothesisToneHz,
+                int lastRepresentativeToneHz,
+                int lastActiveCenterToneHz
+        ) {
+            this.startTimestampMs = startTimestampMs;
+            this.endTimestampMs = endTimestampMs;
+            this.frameCount = frameCount;
+            this.averageConsensusToneHz = averageConsensusToneHz;
+            this.averageRawToneHz = averageRawToneHz;
+            this.averageEffectiveToneHz = averageEffectiveToneHz;
+            this.averageHypothesisToneHz = averageHypothesisToneHz;
+            this.averageRepresentativeToneHz = averageRepresentativeToneHz;
+            this.averageActiveCenterToneHz = averageActiveCenterToneHz;
+            this.lastConsensusToneHz = lastConsensusToneHz;
+            this.lastRawToneHz = lastRawToneHz;
+            this.lastEffectiveToneHz = lastEffectiveToneHz;
+            this.lastHypothesisToneHz = lastHypothesisToneHz;
+            this.lastRepresentativeToneHz = lastRepresentativeToneHz;
+            this.lastActiveCenterToneHz = lastActiveCenterToneHz;
+        }
+
+        int frameCount() {
+            return frameCount;
+        }
+
+        String renderSummary() {
+            return String.format(
+                    Locale.US,
+                    "%d-%dms/%df cns=%d raw=%d eff=%d hyp=%d rep=%d act=%d last=%d/%d/%d/%d/%d/%d",
+                    startTimestampMs,
+                    endTimestampMs,
+                    frameCount,
+                    averageConsensusToneHz,
+                    averageRawToneHz,
+                    averageEffectiveToneHz,
+                    averageHypothesisToneHz,
+                    averageRepresentativeToneHz,
+                    averageActiveCenterToneHz,
+                    lastConsensusToneHz,
+                    lastRawToneHz,
+                    lastEffectiveToneHz,
+                    lastHypothesisToneHz,
+                    lastRepresentativeToneHz,
+                    lastActiveCenterToneHz
             );
         }
     }
@@ -915,6 +1518,30 @@ final class LocalAudioDecodeTestSupport {
 
         String decodedText() {
             return decodedText;
+        }
+
+        String sourceLabel() {
+            return sourceLabel;
+        }
+
+        String mode() {
+            return mode;
+        }
+
+        int lastForcedFrequencyHz() {
+            return lastForcedFrequencyHz;
+        }
+
+        List<CwToneEvent> toneEvents() {
+            return toneEvents;
+        }
+
+        List<CwTimingEvent> timingEvents() {
+            return timingEvents;
+        }
+
+        List<CwDecodeEvent> decodeEvents() {
+            return decodeEvents;
         }
 
         CwDecoderSnapshot decoderSnapshot() {

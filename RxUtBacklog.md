@@ -330,3 +330,18 @@ Current generator limitation:
 - Even making the target branch clearly stronger is not yet enough to recover the intended text reliably.
 - That means "stronger signal first" is still only a future strategy direction; today the pipeline is mostly proving branch ambiguity, not solving it.
 - That is still useful, because the different sequences make it obvious whether future work is actually choosing one branch or just smearing both.
+
+## 2026-04-30 Immediate Next Work
+
+Branch decision after recording `(8)` front-end probes:
+
+- Stop using recording `(8)` as a direct RX-tuning target.
+- Treat it as source / recording-chain evidence, not as a clean decoder truth source.
+- Keep the new local-audio probes for observability, but move active engineering back to controllable synthetic tests.
+
+Next execution order:
+
+1. Add a synthetic `weak valley / merged tone` front-end regression in [CwSignalProcessorTest.java](/d:/Workshop/CWCN/cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/signal/CwSignalProcessorTest.java).
+2. Use that case to study whether current `release` behavior is too sticky around shallow valleys.
+3. Tighten mainline red-line assertions for clean / stable / 30WPM cases before any front-end behavior change.
+4. Prefer future work on controllable synthetic distortion and cleaner fixtures over further tuning against noisy phone-to-PC recordings.

@@ -62,6 +62,13 @@ public final class CwSignalSnapshot {
     private final int maxConsecutiveToneActiveUnlockedFrames;
     private final int pendingRetuneCandidateFrequencyHz;
     private final int pendingRetuneCandidateStableScans;
+    private final boolean lockedRetuneGuardHolding;
+    private final int lockedRetuneGuardCandidateFrequencyHz;
+    private final int lockedRetuneGuardDriftHz;
+    private final int lockedRetuneGuardObservedScans;
+    private final int lockedRetuneGuardRequiredScans;
+    private final int lockedRetuneGuardRemainingScans;
+    private final String lockedRetuneGuardBand;
     private final int preferredWindowWinnerFrequencyHz;
     private final int wideScanWinnerFrequencyHz;
     private final int acquisitionWinnerFrequencyHz;
@@ -227,6 +234,13 @@ public final class CwSignalSnapshot {
                 maxConsecutiveToneActiveUnlockedFrames,
                 pendingRetuneCandidateFrequencyHz,
                 pendingRetuneCandidateStableScans,
+                false,
+                0,
+                0,
+                0,
+                0,
+                0,
+                "NONE",
                 preferredWindowWinnerFrequencyHz,
                 wideScanWinnerFrequencyHz,
                 acquisitionWinnerFrequencyHz,
@@ -318,6 +332,226 @@ public final class CwSignalSnapshot {
             int maxConsecutiveToneActiveUnlockedFrames,
             int pendingRetuneCandidateFrequencyHz,
             int pendingRetuneCandidateStableScans,
+            boolean lockedRetuneGuardHolding,
+            int lockedRetuneGuardCandidateFrequencyHz,
+            int lockedRetuneGuardDriftHz,
+            int lockedRetuneGuardObservedScans,
+            int lockedRetuneGuardRequiredScans,
+            int lockedRetuneGuardRemainingScans,
+            String lockedRetuneGuardBand,
+            int preferredWindowWinnerFrequencyHz,
+            int wideScanWinnerFrequencyHz,
+            int acquisitionWinnerFrequencyHz,
+            int finalAdoptedFrequencyHz,
+            double preferredWindowWinnerToneRms,
+            double wideScanWinnerToneRms,
+            double acquisitionWinnerToneRms,
+            double finalAdoptedToneRms,
+            double preferredWindowWinnerSelectionScore,
+            double wideScanWinnerSelectionScore,
+            double acquisitionWinnerSelectionScore,
+            double finalAdoptedSelectionScore,
+            double preferredWindowWinnerConfidence,
+            double wideScanWinnerConfidence,
+            double acquisitionWinnerConfidence,
+            double finalAdoptedConfidence,
+            int preferredWindowRunnerUpFrequencyHz,
+            int wideScanRunnerUpFrequencyHz,
+            int acquisitionRunnerUpFrequencyHz,
+            double preferredWindowRunnerUpSelectionScore,
+            double wideScanRunnerUpSelectionScore,
+            double acquisitionRunnerUpSelectionScore,
+            int previousTargetBeforeScanFrequencyHz,
+            double previousTargetBeforeScanToneRms,
+            double previousTargetBeforeScanSelectionScore,
+            boolean previousTargetBeforeScanLocked,
+            boolean preferredWindowWinnerLocked,
+            boolean wideScanWinnerLocked,
+            boolean acquisitionWinnerLocked,
+            boolean finalAdoptedLocked,
+            String acquisitionWinnerSource,
+            String finalAdoptedSource,
+            String acquisitionDecisionDetail,
+            String finalAdoptionDetail,
+            String preferredWindowTopCandidatesSummary,
+            String wideScanTopCandidatesSummary,
+            int totalToneOnEvents,
+            int totalToneOffEvents,
+            int frameGapResetCount,
+            long lastFrameGapMs,
+            long lastFrameGapResetThresholdMs,
+            long worstFrameGapMs,
+            long lastFrameGapResetAtMs,
+            CwToneEvent lastEvent,
+            boolean legacyDefaultsMarker
+    ) {
+        this(
+                recentHistoryFrameCount,
+                recentFrontEndStateHistory,
+                recentTrackingOffsetHistoryHz,
+                toneActive,
+                targetToneLocked,
+                preferredToneFrequencyHz,
+                targetToneFrequencyHz,
+                preferredToneFrequencyHz,
+                targetToneFrequencyHz,
+                0.0d,
+                0,
+                0,
+                "NONE",
+                false,
+                false,
+                false,
+                0,
+                0,
+                0,
+                "DISABLED",
+                representativeLockedToneFrequencyHz,
+                representativeLockedToneFrameCount,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                currentThreshold,
+                releaseThreshold,
+                noiseFloorEstimate,
+                signalFloorEstimate,
+                lastRmsAmplitude,
+                lastToneRmsAmplitude,
+                lastWidebandResidualRmsAmplitude,
+                toneDominanceRatio,
+                narrowbandIsolationRatio,
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                processedFrameCount,
+                lockedFrameCount,
+                toneActiveFrameCount,
+                toneActiveUnlockedFrameCount,
+                consecutiveLockedFrames,
+                maxConsecutiveLockedFrames,
+                consecutiveToneActiveUnlockedFrames,
+                maxConsecutiveToneActiveUnlockedFrames,
+                pendingRetuneCandidateFrequencyHz,
+                pendingRetuneCandidateStableScans,
+                false,
+                0,
+                0,
+                0,
+                0,
+                0,
+                "NONE",
+                preferredWindowWinnerFrequencyHz,
+                wideScanWinnerFrequencyHz,
+                acquisitionWinnerFrequencyHz,
+                finalAdoptedFrequencyHz,
+                preferredWindowWinnerToneRms,
+                wideScanWinnerToneRms,
+                acquisitionWinnerToneRms,
+                finalAdoptedToneRms,
+                preferredWindowWinnerSelectionScore,
+                wideScanWinnerSelectionScore,
+                acquisitionWinnerSelectionScore,
+                finalAdoptedSelectionScore,
+                preferredWindowWinnerLocked,
+                wideScanWinnerLocked,
+                acquisitionWinnerLocked,
+                finalAdoptedLocked,
+                acquisitionWinnerSource,
+                finalAdoptedSource,
+                totalToneOnEvents,
+                totalToneOffEvents,
+                frameGapResetCount,
+                lastFrameGapMs,
+                lastFrameGapResetThresholdMs,
+                worstFrameGapMs,
+                lastFrameGapResetAtMs,
+                lastEvent
+        );
+    }
+
+    public CwSignalSnapshot(
+            int recentHistoryFrameCount,
+            char[] recentFrontEndStateHistory,
+            int[] recentTrackingOffsetHistoryHz,
+            boolean toneActive,
+            boolean targetToneLocked,
+            int preferredToneFrequencyHz,
+            int targetToneFrequencyHz,
+            int acquisitionReferenceFrequencyHz,
+            int toneHypothesisFrequencyHz,
+            double toneHypothesisConfidence,
+            int toneHypothesisSupportFrames,
+            int toneHypothesisIdleFrames,
+            String toneHypothesisSource,
+            boolean hypothesisGuardExperimentEnabled,
+            boolean hypothesisGuardEligible,
+            boolean hypothesisGuardApplied,
+            int hypothesisGuardAppliedFrequencyHz,
+            int hypothesisGuardApplyCount,
+            int hypothesisGuardHistorySpanHz,
+            String hypothesisGuardDecision,
+            int representativeLockedToneFrequencyHz,
+            int representativeLockedToneFrameCount,
+            int activeWindowObservationCount,
+            int activeAcquisitionCenterFrequencyHz,
+            int activeAcquisitionCenterHitCount,
+            int activeHypothesisObservationCount,
+            int activeHypothesisCenterFrequencyHz,
+            int activeHypothesisCenterHitCount,
+            int representativeCompetitionObservationCount,
+            int representativeCompetitionTrackedWinFrames,
+            int representativeCompetitionHypothesisWinFrames,
+            int representativeCompetitionTieFrames,
+            int representativeCompetitionHypothesisCurrentWinStreak,
+            int representativeCompetitionHypothesisMaxWinStreak,
+            int activeCenterCompetitionObservationCount,
+            int activeCenterCompetitionTrackedWinFrames,
+            int activeCenterCompetitionHypothesisWinFrames,
+            int activeCenterCompetitionTieFrames,
+            int activeCenterCompetitionHypothesisCurrentWinStreak,
+            int activeCenterCompetitionHypothesisMaxWinStreak,
+            int currentThreshold,
+            int releaseThreshold,
+            int noiseFloorEstimate,
+            int signalFloorEstimate,
+            double lastRmsAmplitude,
+            double lastToneRmsAmplitude,
+            double lastWidebandResidualRmsAmplitude,
+            double toneDominanceRatio,
+            double narrowbandIsolationRatio,
+            double peakToneRmsAmplitude,
+            double peakNarrowbandIsolationRatio,
+            int processedFrameCount,
+            int lockedFrameCount,
+            int toneActiveFrameCount,
+            int toneActiveUnlockedFrameCount,
+            int consecutiveLockedFrames,
+            int maxConsecutiveLockedFrames,
+            int consecutiveToneActiveUnlockedFrames,
+            int maxConsecutiveToneActiveUnlockedFrames,
+            int pendingRetuneCandidateFrequencyHz,
+            int pendingRetuneCandidateStableScans,
+            boolean lockedRetuneGuardHolding,
+            int lockedRetuneGuardCandidateFrequencyHz,
+            int lockedRetuneGuardDriftHz,
+            int lockedRetuneGuardObservedScans,
+            int lockedRetuneGuardRequiredScans,
+            int lockedRetuneGuardRemainingScans,
+            String lockedRetuneGuardBand,
             int preferredWindowWinnerFrequencyHz,
             int wideScanWinnerFrequencyHz,
             int acquisitionWinnerFrequencyHz,
@@ -407,6 +641,13 @@ public final class CwSignalSnapshot {
                 maxConsecutiveToneActiveUnlockedFrames,
                 pendingRetuneCandidateFrequencyHz,
                 pendingRetuneCandidateStableScans,
+                lockedRetuneGuardHolding,
+                lockedRetuneGuardCandidateFrequencyHz,
+                lockedRetuneGuardDriftHz,
+                lockedRetuneGuardObservedScans,
+                lockedRetuneGuardRequiredScans,
+                lockedRetuneGuardRemainingScans,
+                lockedRetuneGuardBand,
                 preferredWindowWinnerFrequencyHz,
                 wideScanWinnerFrequencyHz,
                 acquisitionWinnerFrequencyHz,
@@ -516,6 +757,13 @@ public final class CwSignalSnapshot {
             int maxConsecutiveToneActiveUnlockedFrames,
             int pendingRetuneCandidateFrequencyHz,
             int pendingRetuneCandidateStableScans,
+            boolean lockedRetuneGuardHolding,
+            int lockedRetuneGuardCandidateFrequencyHz,
+            int lockedRetuneGuardDriftHz,
+            int lockedRetuneGuardObservedScans,
+            int lockedRetuneGuardRequiredScans,
+            int lockedRetuneGuardRemainingScans,
+            String lockedRetuneGuardBand,
             int preferredWindowWinnerFrequencyHz,
             int wideScanWinnerFrequencyHz,
             int acquisitionWinnerFrequencyHz,
@@ -626,6 +874,13 @@ public final class CwSignalSnapshot {
         this.maxConsecutiveToneActiveUnlockedFrames = maxConsecutiveToneActiveUnlockedFrames;
         this.pendingRetuneCandidateFrequencyHz = pendingRetuneCandidateFrequencyHz;
         this.pendingRetuneCandidateStableScans = pendingRetuneCandidateStableScans;
+        this.lockedRetuneGuardHolding = lockedRetuneGuardHolding;
+        this.lockedRetuneGuardCandidateFrequencyHz = lockedRetuneGuardCandidateFrequencyHz;
+        this.lockedRetuneGuardDriftHz = lockedRetuneGuardDriftHz;
+        this.lockedRetuneGuardObservedScans = lockedRetuneGuardObservedScans;
+        this.lockedRetuneGuardRequiredScans = lockedRetuneGuardRequiredScans;
+        this.lockedRetuneGuardRemainingScans = lockedRetuneGuardRemainingScans;
+        this.lockedRetuneGuardBand = lockedRetuneGuardBand == null ? "NONE" : lockedRetuneGuardBand;
         this.preferredWindowWinnerFrequencyHz = preferredWindowWinnerFrequencyHz;
         this.wideScanWinnerFrequencyHz = wideScanWinnerFrequencyHz;
         this.acquisitionWinnerFrequencyHz = acquisitionWinnerFrequencyHz;
@@ -925,6 +1180,34 @@ public final class CwSignalSnapshot {
 
     public int pendingRetuneCandidateStableScans() {
         return pendingRetuneCandidateStableScans;
+    }
+
+    public boolean lockedRetuneGuardHolding() {
+        return lockedRetuneGuardHolding;
+    }
+
+    public int lockedRetuneGuardCandidateFrequencyHz() {
+        return lockedRetuneGuardCandidateFrequencyHz;
+    }
+
+    public int lockedRetuneGuardDriftHz() {
+        return lockedRetuneGuardDriftHz;
+    }
+
+    public int lockedRetuneGuardObservedScans() {
+        return lockedRetuneGuardObservedScans;
+    }
+
+    public int lockedRetuneGuardRequiredScans() {
+        return lockedRetuneGuardRequiredScans;
+    }
+
+    public int lockedRetuneGuardRemainingScans() {
+        return lockedRetuneGuardRemainingScans;
+    }
+
+    public String lockedRetuneGuardBand() {
+        return lockedRetuneGuardBand;
     }
 
     public int preferredWindowWinnerFrequencyHz() {

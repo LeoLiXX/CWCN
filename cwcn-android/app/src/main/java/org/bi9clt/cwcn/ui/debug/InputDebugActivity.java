@@ -1721,6 +1721,15 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + " | score " + String.format(Locale.US, "%.1f", snapshot.acquisitionRunnerUpSelectionScore())
                 : "not captured")
                 + "\nAcquisition Decision: " + snapshot.acquisitionDecisionDetail()
+                + "\nRetune Guard: " + (snapshot.lockedRetuneGuardHolding() ? "HOLD" : "OPEN")
+                + " | band " + snapshot.lockedRetuneGuardBand()
+                + " | cand " + (snapshot.lockedRetuneGuardCandidateFrequencyHz() > 0
+                ? snapshot.lockedRetuneGuardCandidateFrequencyHz() + " Hz"
+                : "none")
+                + " | drift " + snapshot.lockedRetuneGuardDriftHz() + " Hz"
+                + " | seen " + snapshot.lockedRetuneGuardObservedScans()
+                + "/" + snapshot.lockedRetuneGuardRequiredScans()
+                + " | remain " + snapshot.lockedRetuneGuardRemainingScans()
                 + "\nFinal Adopted: " + renderDisplayToneWithRaw(
                 snapshot.effectiveFinalAdoptedFrequencyHz(),
                 snapshot.finalAdoptedFrequencyHz()

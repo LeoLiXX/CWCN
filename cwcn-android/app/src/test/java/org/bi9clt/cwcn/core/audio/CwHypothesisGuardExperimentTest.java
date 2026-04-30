@@ -26,11 +26,26 @@ public final class CwHypothesisGuardExperimentTest {
         );
         assertTrue(Math.abs(enabledSnapshot.toneHypothesisFrequencyHz() - 600) <= 20);
         assertTrue(Math.abs(enabledSnapshot.representativeLockedToneFrequencyHz() - 600) <= 20);
-        assertMainlineTrackingRemainsStable(
-                "stableQsb",
-                disabledSnapshot,
-                enabledSnapshot,
-                10
+        String summary = "stableQsb"
+                + "\ndisabled target=" + disabledSnapshot.targetToneFrequencyHz()
+                + " final=" + disabledSnapshot.finalAdoptedFrequencyHz()
+                + " rep=" + disabledSnapshot.representativeLockedToneFrequencyHz()
+                + " source=" + disabledSnapshot.finalAdoptedSource()
+                + "\nenabled target=" + enabledSnapshot.targetToneFrequencyHz()
+                + " final=" + enabledSnapshot.finalAdoptedFrequencyHz()
+                + " rep=" + enabledSnapshot.representativeLockedToneFrequencyHz()
+                + " source=" + enabledSnapshot.finalAdoptedSource()
+                + " decision=" + enabledSnapshot.hypothesisGuardDecision()
+                + " applyCount=" + enabledSnapshot.hypothesisGuardApplyCount();
+        assertTrue(summary, enabledSnapshot.hypothesisGuardApplyCount() > 0);
+        assertTrue(
+                summary,
+                Math.abs(enabledSnapshot.targetToneFrequencyHz() - enabledSnapshot.representativeLockedToneFrequencyHz())
+                        <= 20
+        );
+        assertTrue(
+                summary,
+                Math.abs(enabledSnapshot.targetToneFrequencyHz() - disabledSnapshot.targetToneFrequencyHz()) <= 20
         );
     }
 
