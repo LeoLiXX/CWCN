@@ -236,12 +236,16 @@ public final class CwSignalProcessorTest {
             CwSignalSnapshot snapshot = processor.snapshot();
             String debug = "tone=" + toneHz
                     + " target=" + snapshot.targetToneFrequencyHz()
+                    + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
                     + " final=" + snapshot.finalAdoptedFrequencyHz()
+                    + " winner=" + snapshot.acquisitionWinnerFrequencyHz()
                     + " locked=" + snapshot.targetToneLocked();
             assertTrue(debug, snapshot.toneActive());
             assertTrue(debug, snapshot.targetToneLocked());
             assertTrue(debug, Math.abs(snapshot.targetToneFrequencyHz() - toneHz) <= 20);
+            assertTrue(debug, Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - toneHz) <= 20);
             assertTrue(debug, Math.abs(snapshot.finalAdoptedFrequencyHz() - toneHz) <= 20);
+            assertTrue(debug, Math.abs(snapshot.acquisitionWinnerFrequencyHz() - toneHz) <= 20);
         }
     }
 
@@ -257,13 +261,16 @@ public final class CwSignalProcessorTest {
             CwSignalSnapshot snapshot = processor.snapshot();
             String debug = "tone=" + toneHz
                     + " target=" + snapshot.targetToneFrequencyHz()
+                    + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
                     + " final=" + snapshot.finalAdoptedFrequencyHz()
                     + " pref=" + snapshot.preferredToneFrequencyHz()
                     + " winner=" + snapshot.acquisitionWinnerFrequencyHz();
             assertTrue(debug, snapshot.toneActive());
             assertTrue(debug, snapshot.targetToneLocked());
             assertTrue(debug, Math.abs(snapshot.targetToneFrequencyHz() - toneHz) <= 20);
+            assertTrue(debug, Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - toneHz) <= 20);
             assertTrue(debug, Math.abs(snapshot.finalAdoptedFrequencyHz() - toneHz) <= 20);
+            assertTrue(debug, Math.abs(snapshot.acquisitionWinnerFrequencyHz() - toneHz) <= 20);
         }
     }
 
@@ -278,9 +285,14 @@ public final class CwSignalProcessorTest {
         CwSignalSnapshot snapshot = processor.snapshot();
         assertTrue(snapshot.targetToneLocked());
         assertTrue("target=" + snapshot.targetToneFrequencyHz()
+                        + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
+                        + " final=" + snapshot.finalAdoptedFrequencyHz()
                         + " winner=" + snapshot.acquisitionWinnerFrequencyHz()
                         + " source=" + snapshot.acquisitionWinnerSource(),
                 Math.abs(snapshot.targetToneFrequencyHz() - 670) <= 20);
+        assertTrue("effective=" + snapshot.effectiveTrackedToneFrequencyHz(), Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - 670) <= 20);
+        assertTrue("final=" + snapshot.finalAdoptedFrequencyHz(), Math.abs(snapshot.finalAdoptedFrequencyHz() - 670) <= 20);
+        assertTrue("winner=" + snapshot.acquisitionWinnerFrequencyHz(), Math.abs(snapshot.acquisitionWinnerFrequencyHz() - 670) <= 20);
         assertTrue(snapshot.toneDominanceRatio() >= 0.25d);
         assertEquals(650, snapshot.preferredToneFrequencyHz());
     }
@@ -495,9 +507,19 @@ public final class CwSignalProcessorTest {
         processFrames(processor, 12, 700.0d, 17000.0d);
 
         CwSignalSnapshot snapshot = processor.snapshot();
-        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.toneActive());
-        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.targetToneLocked());
-        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        String debug = "target=" + snapshot.targetToneFrequencyHz()
+                + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
+                + " final=" + snapshot.finalAdoptedFrequencyHz()
+                + " winner=" + snapshot.acquisitionWinnerFrequencyHz()
+                + " source=" + snapshot.acquisitionWinnerSource();
+        assertTrue(debug, snapshot.toneActive());
+        assertTrue(debug, snapshot.targetToneLocked());
+        assertTrue(debug, Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertTrue(debug, Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - 700) <= 20);
+        assertTrue(debug, Math.abs(snapshot.finalAdoptedFrequencyHz() - 700) <= 20);
+        assertEquals(debug, "PREFERRED_WINDOW", snapshot.acquisitionWinnerSource());
+        assertTrue(debug, Math.abs(snapshot.acquisitionWinnerFrequencyHz() - snapshot.preferredToneFrequencyHz()) <= 40);
+        assertTrue(debug, Math.abs(snapshot.acquisitionWinnerFrequencyHz() - snapshot.targetToneFrequencyHz()) >= 100);
         assertEquals(450, snapshot.preferredToneFrequencyHz());
     }
 
@@ -510,9 +532,17 @@ public final class CwSignalProcessorTest {
         processFrames(processor, 12, 700.0d, 17000.0d);
 
         CwSignalSnapshot snapshot = processor.snapshot();
-        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.toneActive());
-        assertTrue("target=" + snapshot.targetToneFrequencyHz(), snapshot.targetToneLocked());
-        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        String debug = "target=" + snapshot.targetToneFrequencyHz()
+                + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
+                + " final=" + snapshot.finalAdoptedFrequencyHz()
+                + " winner=" + snapshot.acquisitionWinnerFrequencyHz()
+                + " source=" + snapshot.acquisitionWinnerSource();
+        assertTrue(debug, snapshot.toneActive());
+        assertTrue(debug, snapshot.targetToneLocked());
+        assertTrue(debug, Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertTrue(debug, Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - 700) <= 20);
+        assertTrue(debug, Math.abs(snapshot.finalAdoptedFrequencyHz() - 700) <= 20);
+        assertTrue(debug, Math.abs(snapshot.acquisitionWinnerFrequencyHz() - 700) <= 20);
         assertEquals(850, snapshot.preferredToneFrequencyHz());
     }
 
@@ -677,14 +707,15 @@ public final class CwSignalProcessorTest {
 
         processFrames(processor, 8, 0.0d, 0.0d);
         processFrames(processor, 4, 670.0d, 16000.0d);
-        processFrames(processor, 1, 0.0d, 0.0d);
-        List<CwToneEvent> toneOffEvents = processFramesCollecting(processor, 1, 0.0d, 0.0d, 13);
+        List<CwToneEvent> toneOffEvents = processFramesCollecting(processor, 1, 0.0d, 0.0d, 12);
+        List<CwToneEvent> nextFrameEvents = processFramesCollecting(processor, 1, 0.0d, 0.0d, 13);
 
         assertEquals(1, toneOffEvents.size());
         CwToneEvent toneOff = toneOffEvents.get(0);
         assertEquals(CwToneEvent.Type.TONE_OFF, toneOff.type());
         assertTrue(toneOff.timestampMs() < (13 * frameDurationMs()));
         assertTrue(toneOff.toneDurationMs() < (5 * frameDurationMs()));
+        assertTrue(nextFrameEvents.isEmpty());
     }
 
     @Test
@@ -756,7 +787,7 @@ public final class CwSignalProcessorTest {
                 670.0d,
                 18000.0d,
                 0,
-                FRAME_SIZE / 8
+                8
         );
         List<CwToneEvent> events = new java.util.ArrayList<>(processor.process(transitionFrame));
 
@@ -779,8 +810,121 @@ public final class CwSignalProcessorTest {
 
         assertEquals(1, events.size());
         assertEquals(CwToneEvent.Type.TONE_OFF, events.get(0).type());
-        assertTrue(events.get(0).timestampMs() >= (12 * frameDurationMs()));
+        assertTrue(events.get(0).timestampMs() >= (12 * frameDurationMs()) - 1L);
         assertTrue(events.get(0).timestampMs() <= (13 * frameDurationMs()) + 6L);
+    }
+
+    @Test
+    public void longSameFrameSilenceCanEmitToneOffWithoutWaitingForNextFrame() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFramesCollecting(processor, 4, 670.0d, 18000.0d, 8);
+        AudioFrame transitionFrame = buildPartialFrame(
+                12 * frameDurationMs(),
+                12 * FRAME_SIZE,
+                670.0d,
+                18000.0d,
+                0,
+                FRAME_SIZE / 16
+        );
+
+        List<CwToneEvent> transitionEvents = new java.util.ArrayList<>(processor.process(transitionFrame));
+        List<CwToneEvent> nextFrameEvents = processor.process(buildFrame(
+                13 * frameDurationMs(),
+                13 * FRAME_SIZE,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d
+        ));
+
+        assertEquals(1, transitionEvents.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, transitionEvents.get(0).type());
+        assertTrue(transitionEvents.get(0).timestampMs() >= (12 * frameDurationMs()));
+        assertTrue(transitionEvents.get(0).timestampMs() < (13 * frameDurationMs()));
+        assertTrue(nextFrameEvents.isEmpty());
+    }
+
+    @Test
+    public void eighthFrameTailStillNeedsNextFrameToEmitToneOff() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+
+        processFrames(processor, 8, 0.0d, 0.0d);
+        processFramesCollecting(processor, 4, 670.0d, 18000.0d, 8);
+        AudioFrame transitionFrame = buildPartialFrame(
+                12 * frameDurationMs(),
+                12 * FRAME_SIZE,
+                670.0d,
+                18000.0d,
+                0,
+                FRAME_SIZE / 8
+        );
+
+        List<CwToneEvent> transitionEvents = new java.util.ArrayList<>(processor.process(transitionFrame));
+        List<CwToneEvent> nextFrameEvents = processor.process(buildFrame(
+                13 * frameDurationMs(),
+                13 * FRAME_SIZE,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d
+        ));
+
+        assertTrue(transitionEvents.isEmpty());
+        assertEquals(1, nextFrameEvents.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, nextFrameEvents.get(0).type());
+        assertTrue(nextFrameEvents.get(0).timestampMs() >= (12 * frameDurationMs()));
+        assertTrue(nextFrameEvents.get(0).timestampMs() <= (13 * frameDurationMs()) + 6L);
+    }
+
+    @Test
+    public void probeSameFrameToneOffBoundaryWithinTransitionFrame() {
+        int[] toneEndSamples = new int[]{FRAME_SIZE / 2, FRAME_SIZE / 4, FRAME_SIZE / 8, FRAME_SIZE / 16, 8, 4};
+        for (int toneEndSample : toneEndSamples) {
+            CwSignalProcessor processor = new CwSignalProcessor();
+            processor.setPreferredToneFrequencyHz(650);
+
+            processFrames(processor, 8, 0.0d, 0.0d);
+            processFramesCollecting(processor, 4, 670.0d, 18000.0d, 8);
+            AudioFrame transitionFrame = buildPartialFrame(
+                    12 * frameDurationMs(),
+                    12 * FRAME_SIZE,
+                    670.0d,
+                    18000.0d,
+                    0,
+                    toneEndSample
+            );
+
+            List<CwToneEvent> transitionEvents = new java.util.ArrayList<>(processor.process(transitionFrame));
+            CwSignalSnapshot transitionSnapshot = processor.snapshot();
+            List<CwToneEvent> nextFrameEvents = processor.process(buildFrame(
+                    13 * frameDurationMs(),
+                    13 * FRAME_SIZE,
+                    0.0d,
+                    0.0d,
+                    0.0d,
+                    0.0d
+            ));
+
+            System.out.println(
+                    "toneEndSample=" + toneEndSample
+                            + " transitionEvents=" + transitionEvents.size()
+                            + " nextFrameEvents=" + nextFrameEvents.size()
+                            + " toneActive=" + transitionSnapshot.toneActive()
+                            + " thr=" + transitionSnapshot.currentThreshold() + "/" + transitionSnapshot.releaseThreshold()
+                            + " toneRms=" + String.format("%.1f", transitionSnapshot.lastToneRmsAmplitude())
+                            + " rms=" + String.format("%.1f", transitionSnapshot.lastRmsAmplitude())
+                            + " last="
+                            + (transitionSnapshot.lastEvent() == null
+                            ? "-"
+                            : transitionSnapshot.lastEvent().type() + "@"
+                            + transitionSnapshot.lastEvent().timestampMs() + "/"
+                            + transitionSnapshot.lastEvent().toneDurationMs())
+            );
+        }
     }
 
     @Test
@@ -1061,9 +1205,12 @@ public final class CwSignalProcessorTest {
         assertTrue(snapshot.toneActive());
         assertTrue(snapshot.targetToneLocked());
         assertTrue("target=" + snapshot.targetToneFrequencyHz()
+                        + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
                         + " final=" + snapshot.finalAdoptedFrequencyHz()
                         + " prefRunner=" + snapshot.preferredWindowRunnerUpFrequencyHz(),
                 Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertTrue("effective=" + snapshot.effectiveTrackedToneFrequencyHz(), Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - 700) <= 20);
+        assertTrue("final=" + snapshot.finalAdoptedFrequencyHz(), Math.abs(snapshot.finalAdoptedFrequencyHz() - 700) <= 20);
     }
 
     @Test
@@ -1086,8 +1233,10 @@ public final class CwSignalProcessorTest {
                         + " winner=" + snapshot.acquisitionWinnerFrequencyHz()
                         + " source=" + snapshot.acquisitionWinnerSource(),
                 Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertTrue("final=" + snapshot.finalAdoptedFrequencyHz(), Math.abs(snapshot.finalAdoptedFrequencyHz() - 700) <= 20);
     }
 
+    @Test
     public void lockedToneCanReleaseAndRetuneAfterPreviousSignalDisappears() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(650);
@@ -1100,11 +1249,18 @@ public final class CwSignalProcessorTest {
         CwSignalSnapshot snapshot = processor.snapshot();
         assertTrue(snapshot.toneActive());
         assertTrue("target=" + snapshot.targetToneFrequencyHz()
+                        + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
                         + " final=" + snapshot.finalAdoptedFrequencyHz()
                         + " source=" + snapshot.finalAdoptedSource(),
                 snapshot.targetToneLocked());
         assertTrue(!snapshot.lockedRetuneGuardHolding());
         assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 620) <= 20);
+        assertTrue("final=" + snapshot.finalAdoptedFrequencyHz(), Math.abs(snapshot.finalAdoptedFrequencyHz() - 620) <= 20);
+        assertTrue("effective=" + snapshot.effectiveTrackedToneFrequencyHz(), Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - 700) <= 20);
+        assertTrue(
+                "target=" + snapshot.targetToneFrequencyHz() + " effective=" + snapshot.effectiveTrackedToneFrequencyHz(),
+                Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - snapshot.targetToneFrequencyHz()) >= 40
+        );
     }
 
     @Test
@@ -1120,7 +1276,12 @@ public final class CwSignalProcessorTest {
 
         CwSignalSnapshot snapshot = processor.snapshot();
         assertTrue(snapshot.targetToneLocked());
-        assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 710) <= 20);
+        assertTrue("target=" + snapshot.targetToneFrequencyHz()
+                        + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
+                        + " final=" + snapshot.finalAdoptedFrequencyHz(),
+                Math.abs(snapshot.targetToneFrequencyHz() - 710) <= 20);
+        assertTrue("effective=" + snapshot.effectiveTrackedToneFrequencyHz(), Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - 710) <= 20);
+        assertTrue("final=" + snapshot.finalAdoptedFrequencyHz(), Math.abs(snapshot.finalAdoptedFrequencyHz() - 710) <= 20);
         assertEquals(500, snapshot.preferredToneFrequencyHz());
     }
 
@@ -1139,6 +1300,7 @@ public final class CwSignalProcessorTest {
                         + " conf=" + snapshot.finalAdoptedConfidence(),
                 snapshot.targetToneLocked());
         assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 690) <= 20);
+        assertTrue("final=" + snapshot.finalAdoptedFrequencyHz(), Math.abs(snapshot.finalAdoptedFrequencyHz() - 690) <= 20);
         assertTrue(snapshot.finalAdoptedConfidence() > 0.0d);
     }
 
@@ -1155,10 +1317,13 @@ public final class CwSignalProcessorTest {
 
         CwSignalSnapshot snapshot = processor.snapshot();
         assertTrue("target=" + snapshot.targetToneFrequencyHz()
+                        + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
                         + " final=" + snapshot.finalAdoptedFrequencyHz()
                         + " source=" + snapshot.finalAdoptedSource(),
                 snapshot.targetToneLocked());
         assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 720) <= 20);
+        assertTrue("effective=" + snapshot.effectiveTrackedToneFrequencyHz(), Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - 720) <= 20);
+        assertTrue("final=" + snapshot.finalAdoptedFrequencyHz(), Math.abs(snapshot.finalAdoptedFrequencyHz() - 720) <= 20);
         assertEquals(500, snapshot.preferredToneFrequencyHz());
     }
 
@@ -1188,12 +1353,16 @@ public final class CwSignalProcessorTest {
         CwSignalSnapshot snapshot = processor.snapshot();
         assertTrue(snapshot.toneActive());
         assertTrue("target=" + snapshot.targetToneFrequencyHz()
+                        + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
                         + " final=" + snapshot.finalAdoptedFrequencyHz()
                         + " wide=" + snapshot.wideScanWinnerFrequencyHz(),
                 snapshot.targetToneLocked());
         assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 700) <= 20);
+        assertTrue("effective=" + snapshot.effectiveTrackedToneFrequencyHz(), Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - 700) <= 20);
+        assertTrue("final=" + snapshot.finalAdoptedFrequencyHz(), Math.abs(snapshot.finalAdoptedFrequencyHz() - 700) <= 20);
     }
 
+    @Test
     public void stepToneSweepAcrossCommonCwRangeKeepsReacquiringLatestActualTone() {
         CwSignalProcessor processor = new CwSignalProcessor();
         processor.setPreferredToneFrequencyHz(700);
@@ -1207,13 +1376,83 @@ public final class CwSignalProcessorTest {
 
         CwSignalSnapshot snapshot = processor.snapshot();
         assertTrue("target=" + snapshot.targetToneFrequencyHz()
+                        + " effective=" + snapshot.effectiveTrackedToneFrequencyHz()
                         + " final=" + snapshot.finalAdoptedFrequencyHz()
                         + " winner=" + snapshot.acquisitionWinnerFrequencyHz()
                         + " source=" + snapshot.acquisitionWinnerSource(),
                 snapshot.targetToneLocked());
         assertTrue("target=" + snapshot.targetToneFrequencyHz(), Math.abs(snapshot.targetToneFrequencyHz() - 800) <= 20);
         assertTrue("final=" + snapshot.finalAdoptedFrequencyHz(), Math.abs(snapshot.finalAdoptedFrequencyHz() - 800) <= 20);
+        assertTrue("effective=" + snapshot.effectiveTrackedToneFrequencyHz(), Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - 700) <= 20);
+        assertTrue(
+                "target=" + snapshot.targetToneFrequencyHz() + " effective=" + snapshot.effectiveTrackedToneFrequencyHz(),
+                Math.abs(snapshot.effectiveTrackedToneFrequencyHz() - snapshot.targetToneFrequencyHz()) >= 60
+        );
         assertTrue(snapshot.maxConsecutiveLockedFrames() >= 4);
+    }
+
+    @Test
+    public void probeToneEventTimelineImpactWhenEffectiveTrackedLagsBehindTarget() {
+        probeForcedToneTimelineComparison(
+                "release-retune",
+                650,
+                buildReleaseAndRetuneFrames()
+        );
+        probeForcedToneTimelineComparison(
+                "step-sweep",
+                700,
+                buildStepSweepFrames()
+        );
+    }
+
+    @Test
+    public void probeFrameByFrameRetuneAndSweepStateTransitions() {
+        probeFrameByFrameStateTransitions("release-retune", 650, buildReleaseAndRetuneFrames());
+        probeFrameByFrameStateTransitions("step-sweep", 700, buildStepSweepFrames());
+    }
+
+    @Test
+    public void lockedRetuneCanMoveTargetAheadOfEffectiveWithoutExtraBoundaryChurn() {
+        BaselineToneReplay baseline = collectBaselineToneReplay(650, buildReleaseAndRetuneFrames());
+
+        assertEquals(renderToneEvents(baseline.events), 1, baseline.events.size());
+        assertEquals(CwToneEvent.Type.TONE_ON, baseline.events.get(0).type());
+        assertTrue("target=" + baseline.finalSnapshot.targetToneFrequencyHz(),
+                Math.abs(baseline.finalSnapshot.targetToneFrequencyHz() - 620) <= 20);
+        assertTrue("final=" + baseline.finalSnapshot.finalAdoptedFrequencyHz(),
+                Math.abs(baseline.finalSnapshot.finalAdoptedFrequencyHz() - 620) <= 20);
+        assertTrue("effective=" + baseline.finalSnapshot.effectiveTrackedToneFrequencyHz(),
+                Math.abs(baseline.finalSnapshot.effectiveTrackedToneFrequencyHz() - 700) <= 20);
+        assertTrue(
+                "target=" + baseline.finalSnapshot.targetToneFrequencyHz()
+                        + " effective=" + baseline.finalSnapshot.effectiveTrackedToneFrequencyHz(),
+                Math.abs(
+                        baseline.finalSnapshot.targetToneFrequencyHz()
+                                - baseline.finalSnapshot.effectiveTrackedToneFrequencyHz()
+                ) >= 40
+        );
+    }
+
+    @Test
+    public void stepSweepCanAdvanceTargetWhileEffectiveRemainsStableWithoutBoundaryChurn() {
+        BaselineToneReplay baseline = collectBaselineToneReplay(700, buildStepSweepFrames());
+
+        assertEquals(renderToneEvents(baseline.events), 1, baseline.events.size());
+        assertEquals(CwToneEvent.Type.TONE_ON, baseline.events.get(0).type());
+        assertTrue("target=" + baseline.finalSnapshot.targetToneFrequencyHz(),
+                Math.abs(baseline.finalSnapshot.targetToneFrequencyHz() - 800) <= 20);
+        assertTrue("final=" + baseline.finalSnapshot.finalAdoptedFrequencyHz(),
+                Math.abs(baseline.finalSnapshot.finalAdoptedFrequencyHz() - 800) <= 20);
+        assertTrue("effective=" + baseline.finalSnapshot.effectiveTrackedToneFrequencyHz(),
+                Math.abs(baseline.finalSnapshot.effectiveTrackedToneFrequencyHz() - 700) <= 20);
+        assertTrue(
+                "target=" + baseline.finalSnapshot.targetToneFrequencyHz()
+                        + " effective=" + baseline.finalSnapshot.effectiveTrackedToneFrequencyHz(),
+                Math.abs(
+                        baseline.finalSnapshot.targetToneFrequencyHz()
+                                - baseline.finalSnapshot.effectiveTrackedToneFrequencyHz()
+                ) >= 60
+        );
     }
 
     private void processFrames(
@@ -1471,5 +1710,214 @@ public final class CwSignalProcessorTest {
 
     private long frameDurationMs() {
         return Math.round(FRAME_SIZE * 1000.0d / SAMPLE_RATE_HZ);
+    }
+
+    private void probeForcedToneTimelineComparison(
+            String label,
+            int preferredToneHz,
+            List<AudioFrame> frames
+    ) {
+        BaselineToneReplay baseline = collectBaselineToneReplay(preferredToneHz, frames);
+        List<CwToneEvent> forcedTrackedEvents = replayForcedToneEvents(baseline, ForcedSnapshotTone.TRK);
+        List<CwToneEvent> forcedEffectiveEvents = replayForcedToneEvents(baseline, ForcedSnapshotTone.EFF);
+
+        int trackedMismatch = toneEventMismatchScore(baseline.events, forcedTrackedEvents);
+        int effectiveMismatch = toneEventMismatchScore(baseline.events, forcedEffectiveEvents);
+
+        System.out.println(
+                "scenario=" + label
+                        + "\nfinal target=" + baseline.finalSnapshot.targetToneFrequencyHz()
+                        + " effective=" + baseline.finalSnapshot.effectiveTrackedToneFrequencyHz()
+                        + " final=" + baseline.finalSnapshot.finalAdoptedFrequencyHz()
+                        + " source=" + baseline.finalSnapshot.finalAdoptedSource()
+                        + "\nactual=" + renderToneEvents(baseline.events)
+                        + "\ntrk=" + renderToneEvents(forcedTrackedEvents)
+                        + "\neff=" + renderToneEvents(forcedEffectiveEvents)
+                        + "\ntrkMismatch=" + trackedMismatch
+                        + " effMismatch=" + effectiveMismatch
+        );
+
+        assertTrue(label, !baseline.events.isEmpty());
+        assertTrue(label + " trackedMismatch=" + trackedMismatch + " effMismatch=" + effectiveMismatch,
+                effectiveMismatch < trackedMismatch);
+    }
+
+    private void probeFrameByFrameStateTransitions(
+            String label,
+            int preferredToneHz,
+            List<AudioFrame> frames
+    ) {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(preferredToneHz);
+
+        System.out.println("scenario=" + label + " frame-by-frame");
+        for (int index = 0; index < frames.size(); index++) {
+            AudioFrame frame = frames.get(index);
+            CwSignalSnapshot before = processor.snapshot();
+            List<CwToneEvent> events = processor.process(frame);
+            CwSignalSnapshot after = processor.snapshot();
+            System.out.println(
+                    "f=" + index
+                            + " ts=" + frame.capturedAtMs()
+                            + " before[target=" + before.targetToneFrequencyHz()
+                            + " eff=" + before.effectiveTrackedToneFrequencyHz()
+                            + " rep=" + before.representativeLockedToneFrequencyHz()
+                            + " repFrames=" + before.representativeLockedToneFrameCount()
+                            + " toneActive=" + before.toneActive()
+                            + " locked=" + before.targetToneLocked()
+                            + "] after[target=" + after.targetToneFrequencyHz()
+                            + " eff=" + after.effectiveTrackedToneFrequencyHz()
+                            + " rep=" + after.representativeLockedToneFrequencyHz()
+                            + " repFrames=" + after.representativeLockedToneFrameCount()
+                            + " final=" + after.finalAdoptedFrequencyHz()
+                            + " source=" + after.finalAdoptedSource()
+                            + " toneActive=" + after.toneActive()
+                            + " locked=" + after.targetToneLocked()
+                            + "] events=" + renderToneEvents(events)
+            );
+        }
+    }
+
+    private BaselineToneReplay collectBaselineToneReplay(
+            int preferredToneHz,
+            List<AudioFrame> frames
+    ) {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(preferredToneHz);
+
+        List<CwSignalSnapshot> snapshotsBeforeFrame = new java.util.ArrayList<>();
+        List<CwToneEvent> events = new java.util.ArrayList<>();
+        for (AudioFrame frame : frames) {
+            snapshotsBeforeFrame.add(processor.snapshot());
+            events.addAll(processor.process(frame));
+        }
+        return new BaselineToneReplay(frames, snapshotsBeforeFrame, events, processor.snapshot());
+    }
+
+    private List<CwToneEvent> replayForcedToneEvents(
+            BaselineToneReplay baseline,
+            ForcedSnapshotTone mode
+    ) {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        int lastForcedToneHz = 650;
+        List<CwToneEvent> events = new java.util.ArrayList<>();
+        for (int index = 0; index < baseline.frames.size(); index++) {
+            CwSignalSnapshot snapshot = baseline.snapshotsBeforeFrame.get(index);
+            int forcedToneHz;
+            if (mode == ForcedSnapshotTone.EFF) {
+                forcedToneHz = snapshot.effectiveTrackedToneFrequencyHz() > 0
+                        ? snapshot.effectiveTrackedToneFrequencyHz()
+                        : (snapshot.targetToneFrequencyHz() > 0
+                        ? snapshot.targetToneFrequencyHz()
+                        : lastForcedToneHz);
+            } else {
+                forcedToneHz = snapshot.targetToneFrequencyHz() > 0
+                        ? snapshot.targetToneFrequencyHz()
+                        : lastForcedToneHz;
+            }
+            lastForcedToneHz = forcedToneHz;
+            events.addAll(processor.processForcedToneForTesting(baseline.frames.get(index), forcedToneHz));
+        }
+        return events;
+    }
+
+    private List<AudioFrame> buildReleaseAndRetuneFrames() {
+        List<AudioFrame> frames = new java.util.ArrayList<>();
+        appendFrames(frames, 8, 0.0d, 0.0d, 0.0d, 0.0d, 0);
+        appendFrames(frames, 10, 700.0d, 15000.0d, 0.0d, 0.0d, 8);
+        appendFrames(frames, 1, 700.0d, 15000.0d, 620.0d, 22000.0d, 18);
+        appendFrames(frames, 6, 620.0d, 22000.0d, 0.0d, 0.0d, 19);
+        return frames;
+    }
+
+    private List<AudioFrame> buildStepSweepFrames() {
+        List<AudioFrame> frames = new java.util.ArrayList<>();
+        appendFrames(frames, 8, 0.0d, 0.0d, 0.0d, 0.0d, 0);
+        appendFrames(frames, 4, 700.0d, 15000.0d, 0.0d, 0.0d, 8);
+        appendFrames(frames, 4, 600.0d, 15000.0d, 0.0d, 0.0d, 12);
+        appendFrames(frames, 4, 650.0d, 15000.0d, 0.0d, 0.0d, 16);
+        appendFrames(frames, 4, 750.0d, 15000.0d, 0.0d, 0.0d, 20);
+        appendFrames(frames, 4, 800.0d, 15000.0d, 0.0d, 0.0d, 24);
+        return frames;
+    }
+
+    private void appendFrames(
+            List<AudioFrame> frames,
+            int frameCount,
+            double primaryFrequencyHz,
+            double primaryAmplitude,
+            double secondaryFrequencyHz,
+            double secondaryAmplitude,
+            int frameStartIndex
+    ) {
+        for (int frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+            int absoluteFrameIndex = frameStartIndex + frameIndex;
+            frames.add(buildFrame(
+                    absoluteFrameIndex * frameDurationMs(),
+                    absoluteFrameIndex * FRAME_SIZE,
+                    primaryFrequencyHz,
+                    primaryAmplitude,
+                    secondaryFrequencyHz,
+                    secondaryAmplitude
+            ));
+        }
+    }
+
+    private int toneEventMismatchScore(List<CwToneEvent> expected, List<CwToneEvent> actual) {
+        int score = Math.abs(expected.size() - actual.size()) * 1000;
+        int pairCount = Math.min(expected.size(), actual.size());
+        for (int index = 0; index < pairCount; index++) {
+            CwToneEvent left = expected.get(index);
+            CwToneEvent right = actual.get(index);
+            if (left.type() != right.type()) {
+                score += 500;
+            }
+            score += Math.abs((int) (left.timestampMs() - right.timestampMs()));
+            score += Math.abs((int) (left.toneDurationMs() - right.toneDurationMs()));
+        }
+        return score;
+    }
+
+    private String renderToneEvents(List<CwToneEvent> events) {
+        if (events.isEmpty()) {
+            return "(none)";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < events.size(); index++) {
+            if (index > 0) {
+                builder.append(" | ");
+            }
+            CwToneEvent event = events.get(index);
+            builder.append(event.type())
+                    .append("@")
+                    .append(event.timestampMs())
+                    .append("/")
+                    .append(event.toneDurationMs());
+        }
+        return builder.toString();
+    }
+
+    private enum ForcedSnapshotTone {
+        TRK,
+        EFF
+    }
+
+    private static final class BaselineToneReplay {
+        private final List<AudioFrame> frames;
+        private final List<CwSignalSnapshot> snapshotsBeforeFrame;
+        private final List<CwToneEvent> events;
+        private final CwSignalSnapshot finalSnapshot;
+
+        private BaselineToneReplay(
+                List<AudioFrame> frames,
+                List<CwSignalSnapshot> snapshotsBeforeFrame,
+                List<CwToneEvent> events,
+                CwSignalSnapshot finalSnapshot
+        ) {
+            this.frames = frames;
+            this.snapshotsBeforeFrame = snapshotsBeforeFrame;
+            this.events = events;
+            this.finalSnapshot = finalSnapshot;
+        }
     }
 }

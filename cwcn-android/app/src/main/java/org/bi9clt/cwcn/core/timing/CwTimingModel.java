@@ -47,7 +47,8 @@ public final class CwTimingModel {
                         gapClassification,
                         toneEvent.timestampMs(),
                         gapDurationMs,
-                        dotEstimateRounded()
+                        dotEstimateRounded(),
+                        intraGapEstimateRounded()
                 );
                 totalGapEvents += 1;
                 lastTimingEvent = gapEvent;
@@ -63,7 +64,8 @@ public final class CwTimingModel {
                 classifyTone(toneDurationMs),
                 toneEvent.timestampMs(),
                 toneDurationMs,
-                dotEstimateRounded()
+                dotEstimateRounded(),
+                intraGapEstimateRounded()
         );
         totalToneEvents += 1;
         lastToneOffTimestampMs = toneEvent.timestampMs();
@@ -90,7 +92,8 @@ public final class CwTimingModel {
                 gapClassification,
                 timestampMs,
                 gapDurationMs,
-                dotEstimateRounded()
+                dotEstimateRounded(),
+                intraGapEstimateRounded()
         );
         totalGapEvents += 1;
         lastTimingEvent = gapEvent;
@@ -185,6 +188,9 @@ public final class CwTimingModel {
         }
 
         if (classification == CwTimingEvent.Classification.LETTER_GAP) {
+            if (isAmbiguousLongLetterGap(gapDurationMs)) {
+                return;
+            }
             double inferredDot = gapDurationMs / 3.0d;
             intraGapEstimateMs = smoothEstimate(intraGapEstimateMs, inferredDot, gapSmoothing(inferredDot) * 0.75d);
             if (initialized) {
@@ -235,6 +241,16 @@ public final class CwTimingModel {
         return CwTimingEvent.Classification.UNKNOWN;
     }
 
+    private boolean isAmbiguousLongLetterGap(long gapDurationMs) {
+        if (gapDurationMs <= 0L || !isFastTimingContext()) {
+            return false;
+        }
+        double ratio = gapDurationMs / Math.max(1.0d, dotEstimateMs);
+        double intraRatio = gapDurationMs / Math.max(1.0d, intraGapEstimateMs);
+        return ratio >= WORD_GAP_DOT_RATIO_FALLBACK_MIN
+                && intraRatio < WORD_GAP_INTRA_RATIO_FALLBACK;
+    }
+
     private double smoothEstimate(double currentValue, double newValue, double smoothing) {
         return currentValue + ((newValue - currentValue) * smoothing);
     }
@@ -257,6 +273,10 @@ public final class CwTimingModel {
 
     private boolean isFastTimingContext() {
         return dotEstimateMs <= FAST_DOT_THRESHOLD_MS || intraGapEstimateMs <= FAST_DOT_THRESHOLD_MS;
+    }
+
+    private long intraGapEstimateRounded() {
+        return Math.max(1L, Math.round(intraGapEstimateMs));
     }
 
     private double limitGapDrivenDotShift(double currentDotMs, double gapDrivenDotMs) {

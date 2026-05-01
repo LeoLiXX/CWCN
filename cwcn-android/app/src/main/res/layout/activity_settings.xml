@@ -14,17 +14,16 @@
             android:id="@+id/titleText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Operate"
+            android:text="Settings"
             android:textColor="@color/cwcn_title"
             android:textSize="30sp"
             android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/subtitleText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Formal user-facing operating screen focused on rig readiness and live RX visibility."
+            android:text="Configuration and advanced controls live here so Home and Operate can stay focused on radio work."
             android:textColor="@color/cwcn_subtitle"
             android:textSize="15sp" />
 
@@ -38,11 +37,11 @@
             android:textStyle="bold" />
 
         <Button
-            android:id="@+id/backHomeButton"
+            android:id="@+id/backButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Back Home" />
+            android:text="Back" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -55,49 +54,13 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Live RX Session"
+                android:text="Station And Operating"
                 android:textColor="@color/cwcn_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/liveRxStatusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/liveRxTextText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:fontFamily="monospace"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Operating Status"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/operatingStatusText"
+                android:id="@+id/stationProfileText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -117,50 +80,26 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Radio Path"
+                android:text="Radio And Audio"
                 android:textColor="@color/cwcn_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/rigStatusText"
+                android:id="@+id/rigSettingsText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
                 android:textSize="14sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Primary Actions"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
 
             <Button
                 android:id="@+id/openRigSetupButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:text="Connect Radio" />
-
-            <Button
-                android:id="@+id/openSettingsButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Open Settings" />
+                android:text="Open Connect Radio" />
         </LinearLayout>
 
         <LinearLayout
@@ -174,19 +113,61 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Next Step"
+                android:text="Advanced / Developer"
                 android:textColor="@color/cwcn_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/nextActionText"
+                android:id="@+id/developerModeStatusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
                 android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/toggleDeveloperModeButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Enable Developer Mode" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/developerToolsPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Developer Tools"
+                android:textColor="@color/cwcn_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/developerToolsNoteText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/openDeveloperToolsButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Open Developer Tools" />
         </LinearLayout>
 
     </LinearLayout>

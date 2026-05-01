@@ -45,6 +45,9 @@
             android:name=".ui.home.HomeActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.developer.DeveloperToolsActivity"
             android:exported="false" />
         <activity

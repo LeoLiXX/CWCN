@@ -100,11 +100,15 @@ public final class CwFixtureEvaluationResult {
                 completed,
                 passed,
                 exactTextMatch,
+                exactTextMatch,
                 primaryCallsignScore,
+                textTokenRecall,
                 textTokenRecall,
                 callsignRecall,
                 hintRecall,
                 qsoSemanticScore,
+                expectedNormalizedText,
+                actualNormalizedText,
                 expectedNormalizedText,
                 actualNormalizedText,
                 expectedPhase,
@@ -115,6 +119,7 @@ public final class CwFixtureEvaluationResult {
                 actualRstRcvd,
                 actualCallsigns,
                 actualHints,
+                missingTextTokens,
                 missingTextTokens,
                 missingCallsigns,
                 missingHints,
@@ -131,7 +136,20 @@ public final class CwFixtureEvaluationResult {
                 0.0d,
                 0,
                 0,
-                0
+                0,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0L
         );
     }
 
@@ -179,11 +197,15 @@ public final class CwFixtureEvaluationResult {
                 completed,
                 passed,
                 exactTextMatch,
+                exactTextMatch,
                 primaryCallsignScore,
+                textTokenRecall,
                 textTokenRecall,
                 callsignRecall,
                 hintRecall,
                 qsoSemanticScore,
+                expectedNormalizedText,
+                actualNormalizedText,
                 expectedNormalizedText,
                 actualNormalizedText,
                 expectedPhase,
@@ -194,6 +216,7 @@ public final class CwFixtureEvaluationResult {
                 actualRstRcvd,
                 actualCallsigns,
                 actualHints,
+                missingTextTokens,
                 missingTextTokens,
                 missingCallsigns,
                 missingHints,
@@ -274,11 +297,15 @@ public final class CwFixtureEvaluationResult {
                 completed,
                 passed,
                 exactTextMatch,
+                exactTextMatch,
                 primaryCallsignScore,
+                textTokenRecall,
                 textTokenRecall,
                 callsignRecall,
                 hintRecall,
                 qsoSemanticScore,
+                expectedNormalizedText,
+                actualNormalizedText,
                 expectedNormalizedText,
                 actualNormalizedText,
                 expectedPhase,
@@ -289,6 +316,7 @@ public final class CwFixtureEvaluationResult {
                 actualRstRcvd,
                 actualCallsigns,
                 actualHints,
+                missingTextTokens,
                 missingTextTokens,
                 missingCallsigns,
                 missingHints,
@@ -375,65 +403,64 @@ public final class CwFixtureEvaluationResult {
             int frameGapResetCount,
             long worstFrameGapMs
     ) {
-        this.scenarioId = scenarioId;
-        this.scenarioDisplayName = scenarioDisplayName;
-        this.evaluatedAtEpochMs = evaluatedAtEpochMs;
-        this.completed = completed;
-        this.passed = passed;
-        this.exactTextMatch = exactTextMatch;
-        this.exactRawTextMatch = exactTextMatch;
-        this.exactNormalizedTextMatch = exactTextMatch;
-        this.primaryCallsignScore = primaryCallsignScore;
-        this.textTokenRecall = textTokenRecall;
-        this.rawTextTokenRecall = textTokenRecall;
-        this.normalizedTextTokenRecall = textTokenRecall;
-        this.callsignRecall = callsignRecall;
-        this.hintRecall = hintRecall;
-        this.qsoSemanticScore = qsoSemanticScore;
-        this.expectedRawText = expectedNormalizedText;
-        this.actualRawText = actualNormalizedText;
-        this.expectedNormalizedText = expectedNormalizedText;
-        this.actualNormalizedText = actualNormalizedText;
-        this.expectedPhase = expectedPhase;
-        this.actualPhase = actualPhase;
-        this.expectedRstSent = expectedRstSent;
-        this.actualRstSent = actualRstSent;
-        this.expectedRstRcvd = expectedRstRcvd;
-        this.actualRstRcvd = actualRstRcvd;
-        this.actualCallsigns = new ArrayList<>(actualCallsigns);
-        this.actualHints = new ArrayList<>(actualHints);
-        this.missingTextTokens = new ArrayList<>(missingTextTokens);
-        this.missingRawTextTokens = new ArrayList<>(missingTextTokens);
-        this.missingNormalizedTextTokens = new ArrayList<>(missingTextTokens);
-        this.missingCallsigns = new ArrayList<>(missingCallsigns);
-        this.missingHints = new ArrayList<>(missingHints);
-        this.failureReasons = new ArrayList<>(failureReasons);
-        this.normalizedTokenCount = normalizedTokenCount;
-        this.totalTokenCount = totalTokenCount;
-        this.normalizedTokenPairs = new ArrayList<>(normalizedTokenPairs);
-        this.finalToneLocked = finalToneLocked;
-        this.endedOnToneOffEvent = endedOnToneOffEvent;
-        this.peakToneRmsAmplitude = peakToneRmsAmplitude;
-        this.peakNarrowbandIsolationRatio = peakNarrowbandIsolationRatio;
-        this.lockedFrameRatio = lockedFrameRatio;
-        this.maxConsecutiveLockedFrames = maxConsecutiveLockedFrames;
-        this.toneActiveUnlockedFrameRatio = toneActiveUnlockedFrameRatio;
-        this.maxConsecutiveToneActiveUnlockedFrames = maxConsecutiveToneActiveUnlockedFrames;
-        this.preferredToneFrequencyHz = preferredToneFrequencyHz;
-        this.trackedToneFrequencyHz = trackedToneFrequencyHz;
-        this.lastRmsAmplitude = lastRmsAmplitude;
-        this.lastToneRmsAmplitude = lastToneRmsAmplitude;
-        this.lastWidebandResidualRmsAmplitude = lastWidebandResidualRmsAmplitude;
-        this.toneDominanceRatio = toneDominanceRatio;
-        this.narrowbandIsolationRatio = narrowbandIsolationRatio;
-        this.currentThreshold = currentThreshold;
-        this.releaseThreshold = releaseThreshold;
-        this.noiseFloorEstimate = noiseFloorEstimate;
-        this.signalFloorEstimate = signalFloorEstimate;
-        this.totalToneOnEvents = totalToneOnEvents;
-        this.totalToneOffEvents = totalToneOffEvents;
-        this.frameGapResetCount = frameGapResetCount;
-        this.worstFrameGapMs = worstFrameGapMs;
+        this(
+                scenarioId,
+                scenarioDisplayName,
+                evaluatedAtEpochMs,
+                completed,
+                passed,
+                exactTextMatch,
+                exactTextMatch,
+                primaryCallsignScore,
+                textTokenRecall,
+                textTokenRecall,
+                callsignRecall,
+                hintRecall,
+                qsoSemanticScore,
+                expectedNormalizedText,
+                actualNormalizedText,
+                expectedNormalizedText,
+                actualNormalizedText,
+                expectedPhase,
+                actualPhase,
+                expectedRstSent,
+                actualRstSent,
+                expectedRstRcvd,
+                actualRstRcvd,
+                actualCallsigns,
+                actualHints,
+                missingTextTokens,
+                missingTextTokens,
+                missingCallsigns,
+                missingHints,
+                failureReasons,
+                normalizedTokenCount,
+                totalTokenCount,
+                normalizedTokenPairs,
+                finalToneLocked,
+                endedOnToneOffEvent,
+                peakToneRmsAmplitude,
+                peakNarrowbandIsolationRatio,
+                lockedFrameRatio,
+                maxConsecutiveLockedFrames,
+                toneActiveUnlockedFrameRatio,
+                maxConsecutiveToneActiveUnlockedFrames,
+                preferredToneFrequencyHz,
+                trackedToneFrequencyHz,
+                lastRmsAmplitude,
+                lastToneRmsAmplitude,
+                lastWidebandResidualRmsAmplitude,
+                toneDominanceRatio,
+                narrowbandIsolationRatio,
+                currentThreshold,
+                releaseThreshold,
+                noiseFloorEstimate,
+                signalFloorEstimate,
+                totalToneOnEvents,
+                totalToneOffEvents,
+                frameGapResetCount,
+                worstFrameGapMs
+        );
     }
 
     public CwFixtureEvaluationResult(

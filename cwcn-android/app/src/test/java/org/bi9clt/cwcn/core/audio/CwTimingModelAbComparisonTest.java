@@ -26,10 +26,11 @@ public final class CwTimingModelAbComparisonTest {
     public void abComparisonCharacterizesFastUserCoverageFixtures() {
         // This A/B suite is a characterization probe, not a stricter gate than the
         // mainline raw-copy coverage tests. Keep it aligned with bench-useful raw recall.
-        assertComparisonStaysHealthy("user_noise_cq_20wpm_700hz", 0.75d, 30, 0.75d, 30);
-        assertComparisonStaysHealthy("user_noise_cq_25wpm_700hz", 0.66d, 30, 0.66d, 29);
+        assertComparisonStaysHealthy("user_noise_cq_20wpm_700hz", 0.90d, 30, 0.90d, 30);
+        assertComparisonStaysHealthy("user_noise_cq_25wpm_700hz", 0.95d, 30, 0.85d, 28);
         assertComparisonStaysFastCqSkeletonHealthy("user_noise_cq_30wpm_700hz", 0.80d, 24, 0.95d, 24);
         assertComparisonStaysBenchObservableWithRecall("user_speed_sweep_vvv_700hz", 22, 0.80d, 18, 0.45d);
+        assertComparisonStaysStrongSpeedShiftContinuity("user_speed_shift_jv3vv_700hz", 40, 0.90d, 40, 0.95d);
     }
 
     private void assertComparisonStaysHealthy(
@@ -158,6 +159,46 @@ public final class CwTimingModelAbComparisonTest {
         assertTrue(summary, baseline.result.textTokenRecall() >= minBaselineRecall);
         assertTrue(summary, adaptive.decoderCharacters >= minAdaptiveCharacters);
         assertTrue(summary, adaptive.result.textTokenRecall() >= minAdaptiveRecall);
+    }
+
+    private void assertComparisonStaysStrongSpeedShiftContinuity(
+            String scenarioId,
+            int minBaselineCharacters,
+            double minBaselineRecall,
+            int minAdaptiveCharacters,
+            double minAdaptiveRecall
+    ) {
+        OfflineEvalBundle baseline = evaluateOfflineBundle(scenarioId, false);
+        OfflineEvalBundle adaptive = evaluateOfflineBundle(scenarioId, true);
+        String baselineText = sanitize(baseline.decodedText);
+        String adaptiveText = sanitize(adaptive.decodedText);
+        String summary = scenarioId
+                + "\nA recall=" + baseline.result.textTokenRecall()
+                + " chars=" + baseline.decoderCharacters
+                + " wpm=" + baseline.timingSnapshot.estimatedWpm()
+                + " text=" + baselineText
+                + "\nB recall=" + adaptive.result.textTokenRecall()
+                + " chars=" + adaptive.decoderCharacters
+                + " wpm=" + adaptive.timingSnapshot.estimatedWpm()
+                + " text=" + adaptiveText;
+
+        System.out.println(summary);
+        assertTrue(summary, baseline.result.completed());
+        assertTrue(summary, adaptive.result.completed());
+        assertTrue(summary, !"RUN".equals(baseline.result.likelyBottleneckCode()));
+        assertTrue(summary, !"RUN".equals(adaptive.result.likelyBottleneckCode()));
+        assertTrue(summary, baseline.decoderCharacters >= minBaselineCharacters);
+        assertTrue(summary, baseline.result.textTokenRecall() >= minBaselineRecall);
+        assertTrue(summary, adaptive.decoderCharacters >= minAdaptiveCharacters);
+        assertTrue(summary, adaptive.result.textTokenRecall() >= minAdaptiveRecall);
+        assertTrue(summary, countSubstring(baselineText, "JV3VV") >= 3);
+        assertTrue(summary, countSubstring(adaptiveText, "JV3VV") >= 3);
+        assertTrue(summary, countSubstring(baselineText, "DX") >= 2);
+        assertTrue(summary, countSubstring(adaptiveText, "DX") >= 2);
+        assertTrue(summary, countSubstring(baselineText, "CQ") >= 3);
+        assertTrue(summary, countSubstring(adaptiveText, "CQ") >= 3);
+        assertTrue(summary, baselineText.contains("PAGE"));
+        assertTrue(summary, adaptiveText.contains("PAGE"));
     }
 
     private OfflineEvalBundle evaluateOfflineBundle(String scenarioId, boolean adaptiveTiming) {

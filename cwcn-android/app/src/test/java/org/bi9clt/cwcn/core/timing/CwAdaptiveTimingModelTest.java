@@ -62,20 +62,26 @@ public final class CwAdaptiveTimingModelTest {
 
         assertEquals(1, gapEvents.size());
         assertEquals(CwTimingEvent.Classification.WORD_GAP, gapEvents.get(0).classification());
+        assertTrue(gapEvents.get(0).ratioToDotEstimate() >= 3.15d);
+        assertTrue(gapEvents.get(0).ratioToIntraGapEstimate() >= 5.0d);
     }
 
     @Test
     public void stretchedLetterGapDoesNotPromoteToWordGapWithoutStrongIntraGapEvidence() throws Exception {
         CwAdaptiveTimingModel model = new CwAdaptiveTimingModel();
-        setDoubleField(model, "dotEstimateMs", 82.0d);
-        setDoubleField(model, "intraGapEstimateMs", 74.0d);
+        setDoubleField(model, "dotEstimateMs", 42.0d);
+        setDoubleField(model, "intraGapEstimateMs", 38.0d);
         setBooleanField(model, "initialized", true);
         setLongField(model, "lastToneOffTimestampMs", 100L);
 
-        List<CwTimingEvent> gapEvents = model.process(toneOn(380L));
+        List<CwTimingEvent> gapEvents = model.process(toneOn(240L));
 
         assertEquals(1, gapEvents.size());
         assertEquals(CwTimingEvent.Classification.LETTER_GAP, gapEvents.get(0).classification());
+        assertTrue(gapEvents.get(0).ratioToDotEstimate() > 3.15d);
+        assertTrue(gapEvents.get(0).ratioToIntraGapEstimate() < 5.0d);
+        assertTrue("dot=" + model.snapshot().dotEstimateMs(), model.snapshot().dotEstimateMs() <= 42L);
+        assertTrue("intra=" + model.snapshot().intraGapEstimateMs(), model.snapshot().intraGapEstimateMs() <= 38L);
     }
 
     private void setBooleanField(CwAdaptiveTimingModel model, String name, boolean value) throws Exception {

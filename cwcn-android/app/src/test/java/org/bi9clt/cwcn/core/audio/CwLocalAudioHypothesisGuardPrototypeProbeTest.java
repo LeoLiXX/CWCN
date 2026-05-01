@@ -3,25 +3,22 @@ package org.bi9clt.cwcn.core.audio;
 import org.junit.Test;
 
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
+import java.util.Locale;
 
 public final class CwLocalAudioHypothesisGuardPrototypeProbeTest {
-    private static final Map<String, LocalAudioDecodeTestSupport.OfflineDetailedProbeResult> BASELINE_RESULTS =
-            loadDetailedResults(false);
-    private static final Map<String, LocalAudioDecodeTestSupport.OfflineDetailedProbeResult> EXPERIMENT_RESULTS =
-            loadDetailedResults(true);
-
     @Test
     public void printPrototypeComparisonForKeyLocalRecordings() {
-        printComparison("录音 (2)");
+        printComparison("褰曢煶 (2)");
         printComparison("20260427_222505");
-        printComparison("录音 (8)");
+        printComparison("褰曢煶 (8)");
     }
 
     private static void printComparison(String sourceLabel) {
-        LocalAudioDecodeTestSupport.OfflineDetailedProbeResult baseline = requireResult(BASELINE_RESULTS, sourceLabel);
-        LocalAudioDecodeTestSupport.OfflineDetailedProbeResult experiment = requireResult(EXPERIMENT_RESULTS, sourceLabel);
+        LocalAudioDecodeTestSupport.OfflineDetailedProbeResult baseline =
+                loadDetailedResult(sourceLabel, false);
+        LocalAudioDecodeTestSupport.OfflineDetailedProbeResult experiment =
+                loadDetailedResult(sourceLabel, true);
         LocalAudioDecodeTestSupport.FrontEndDisagreementProfile baselineProfile =
                 LocalAudioDecodeTestSupport.evaluateFrontEndDisagreementProfile(baseline, 40);
         LocalAudioDecodeTestSupport.FrontEndDisagreementProfile experimentProfile =
@@ -57,46 +54,51 @@ public final class CwLocalAudioHypothesisGuardPrototypeProbeTest {
         System.out.println(LocalAudioDecodeTestSupport.replayForcedHypothesisToneDecode(detailed).renderSummary());
     }
 
-    private static Map<String, LocalAudioDecodeTestSupport.OfflineDetailedProbeResult> loadDetailedResults(
+    private static LocalAudioDecodeTestSupport.OfflineDetailedProbeResult loadDetailedResult(
+            String sourceLabel,
             boolean experimentalHypothesisGuardEnabled
     ) {
         try {
-            Map<String, LocalAudioDecodeTestSupport.OfflineDetailedProbeResult> results = new LinkedHashMap<>();
-            for (Path wavFile : LocalAudioDecodeTestSupport.listConvertedWavFiles()) {
-                LocalAudioDecodeTestSupport.OfflineDetailedProbeResult result =
-                        LocalAudioDecodeTestSupport.decodeWavFileDetailed(
-                                wavFile,
-                                experimentalHypothesisGuardEnabled
-                        );
-                results.put(result.probeResult().sourceLabel(), result);
-            }
-            return results;
+            return LocalAudioDecodeTestSupport.decodeWavFileDetailed(
+                    findWavFile(sourceLabel),
+                    experimentalHypothesisGuardEnabled
+            );
         } catch (Exception exception) {
-            throw new IllegalStateException("Failed to decode local TestAudio WAV fixtures", exception);
+            throw new IllegalStateException("Failed to decode local TestAudio WAV fixture: " + sourceLabel, exception);
         }
     }
 
-    private static LocalAudioDecodeTestSupport.OfflineDetailedProbeResult requireResult(
-            Map<String, LocalAudioDecodeTestSupport.OfflineDetailedProbeResult> results,
-            String sourceLabel
-    ) {
-        LocalAudioDecodeTestSupport.OfflineDetailedProbeResult result = results.get(sourceLabel);
-        if (result == null && sourceLabel != null) {
-            for (Map.Entry<String, LocalAudioDecodeTestSupport.OfflineDetailedProbeResult> entry : results.entrySet()) {
-                String candidateLabel = entry.getKey();
-                if (candidateLabel.equalsIgnoreCase(sourceLabel)
-                        || candidateLabel.endsWith(sourceLabel)
-                        || sourceLabel.endsWith(candidateLabel)
-                        || shareTrailingRecordingSuffix(candidateLabel, sourceLabel)) {
-                    result = entry.getValue();
-                    break;
+    private static Path findWavFile(String sourceLabel) {
+        try {
+            List<Path> wavFiles = LocalAudioDecodeTestSupport.listConvertedWavFiles();
+            for (Path wavFile : wavFiles) {
+                if (matchesSourceLabel(fileNameWithoutExtension(wavFile), sourceLabel)) {
+                    return wavFile;
                 }
             }
-        }
-        if (result == null) {
             throw new IllegalArgumentException("Missing detailed decoded local audio fixture: " + sourceLabel);
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalStateException("Failed to locate local TestAudio WAV fixture: " + sourceLabel, exception);
         }
-        return result;
+    }
+
+    private static String fileNameWithoutExtension(Path wavFile) {
+        String fileName = wavFile.getFileName().toString();
+        return fileName.toLowerCase(Locale.US).endsWith(".wav")
+                ? fileName.substring(0, fileName.length() - 4)
+                : fileName;
+    }
+
+    private static boolean matchesSourceLabel(String candidateLabel, String sourceLabel) {
+        if (candidateLabel == null || sourceLabel == null) {
+            return false;
+        }
+        return candidateLabel.equalsIgnoreCase(sourceLabel)
+                || candidateLabel.endsWith(sourceLabel)
+                || sourceLabel.endsWith(candidateLabel)
+                || shareTrailingRecordingSuffix(candidateLabel, sourceLabel);
     }
 
     private static boolean shareTrailingRecordingSuffix(String left, String right) {

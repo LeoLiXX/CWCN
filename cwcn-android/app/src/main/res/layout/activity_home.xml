@@ -24,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Start from rig setup, then focus on RX validation and the core operating path."
+            android:text="Start from rig setup, then move into the formal operating path."
             android:textColor="@color/cwcn_subtitle"
             android:textSize="15sp" />
 
@@ -38,43 +38,9 @@
             android:textStyle="bold" />
 
         <LinearLayout
-            android:id="@+id/developerModePanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="App Mode"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/developerModeStatusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
-
-            <Button
-                android:id="@+id/toggleDeveloperModeButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Enable Developer Mode" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
             android:padding="20dp">
@@ -135,41 +101,13 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:text="Connect Radio" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/developerToolsPanel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Developer Tools"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/developerToolsNoteText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:text="Bench TX, raw pipeline inspection, and low-level diagnostics live here."
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
 
             <Button
-                android:id="@+id/openDeveloperToolsButton"
+                android:id="@+id/openSettingsButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Open Developer Tools" />
+                android:text="Open Settings" />
 
             <TextView
                 android:id="@+id/navigationNoteText"
@@ -177,7 +115,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:lineSpacingExtra="3dp"
-                android:text="Rig Setup is the formal rig entry, Operate is the main user path, and Debug stays available only for RX and protocol inspection."
+                android:text="Rig Setup is the formal rig entry, Operate is the main user path, and advanced tools live under Settings."
                 android:textColor="@color/cwcn_body"
                 android:textSize="14sp" />
         </LinearLayout>

@@ -276,11 +276,11 @@ public final class CwUserCaptureCoverageTest {
                 bundle.signalSnapshot.effectiveTrackedToneFrequencyHz(),
                 35
         );
-        assertTrue(summary, result.textTokenRecall() >= 0.75d);
-        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 18);
-        assertDecodedFragmentCount(summary, decodedText, "CQ", 2);
+        assertTrue(summary, result.textTokenRecall() >= 0.90d);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 24);
+        assertDecodedFragmentCount(summary, decodedText, "CQ", 3);
         assertDecodedFragmentPresent(summary, decodedText, "DE");
-        assertDecodedFragmentCount(summary, decodedText, "BI9CLT", 2);
+        assertDecodedFragmentCount(summary, decodedText, "BI9CLT", 3);
         assertDecodedFragmentPresent(summary, decodedText, "PSE");
         assertDecodedFragmentPresent(summary, decodedText, "K");
     }
@@ -396,11 +396,12 @@ public final class CwUserCaptureCoverageTest {
         assertTrue(summary, bundle.signalSnapshot.totalToneOnEvents() >= 20);
         assertTrue(summary, bundle.signalSnapshot.totalToneOffEvents() >= 20);
         assertTrue(summary, bundle.signalSnapshot.maxConsecutiveLockedFrames() >= 12);
-        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 24);
-        assertTrue(summary, result.textTokenRecall() >= 0.45d);
-        assertTrue(summary, countSubstring(decodedText, "JV3VV") >= 2);
+        assertTrue(summary, bundle.decoderSnapshot.totalCharacters() >= 40);
+        assertTrue(summary, result.textTokenRecall() >= 0.75d);
+        assertTrue(summary, countSubstring(decodedText, "JV3VV") >= 3);
         assertTrue(summary, countSubstring(decodedText, "PAGE") >= 1);
         assertTrue(summary, countSubstring(decodedText, "DX") >= 2);
+        assertTrue(summary, countSubstring(decodedText, "CQ") >= 3);
     }
 
     @Test
@@ -803,6 +804,14 @@ public final class CwUserCaptureCoverageTest {
         QsoStateMachine qsoStateMachine = new QsoStateMachine();
 
         List<AudioFrame> frames = source.renderFramesForTesting(scenario);
+        LocalAudioDecodeTestSupport.OfflineDetailedProbeResult detailedProbeResult =
+                LocalAudioDecodeTestSupport.decodeFramesDetailed(scenario.id(), frames, false);
+        LocalAudioDecodeTestSupport.FrontEndDisagreementProfile frontEndDisagreementProfile =
+                LocalAudioDecodeTestSupport.evaluateFrontEndDisagreementProfile(detailedProbeResult, 30);
+        LocalAudioDecodeTestSupport.OfflineDetailedProbeResult experimentalDetailedProbeResult =
+                LocalAudioDecodeTestSupport.decodeFramesDetailed(scenario.id() + "#exp", frames, true);
+        LocalAudioDecodeTestSupport.FrontEndDisagreementProfile experimentalFrontEndDisagreementProfile =
+                LocalAudioDecodeTestSupport.evaluateFrontEndDisagreementProfile(experimentalDetailedProbeResult, 30);
         AudioFrame lastFrame = null;
         for (AudioFrame frame : frames) {
             lastFrame = frame;
@@ -854,7 +863,10 @@ public final class CwUserCaptureCoverageTest {
                 signalProcessor.snapshot(),
                 timingModel.snapshot(),
                 decoder.snapshot(),
-                computeClippedSampleRatio(frames)
+                computeClippedSampleRatio(frames),
+                frontEndDisagreementProfile,
+                experimentalDetailedProbeResult.probeResult().signalSnapshot(),
+                experimentalFrontEndDisagreementProfile
         );
     }
 
@@ -905,6 +917,41 @@ public final class CwUserCaptureCoverageTest {
                 + ", bestLockRun=" + bundle.signalSnapshot.maxConsecutiveLockedFrames()
                 + ", toneOn=" + bundle.signalSnapshot.totalToneOnEvents()
                 + ", toneOff=" + bundle.signalSnapshot.totalToneOffEvents()
+                + "\nTRK/HYP: eff=" + bundle.signalSnapshot.effectiveTrackedToneFrequencyHz()
+                + "Hz, hyp=" + bundle.signalSnapshot.toneHypothesisFrequencyHz()
+                + "Hz@" + Math.round(bundle.signalSnapshot.toneHypothesisConfidence() * 100.0d) + "%"
+                + "/" + bundle.signalSnapshot.toneHypothesisSupportFrames()
+                + "f/" + bundle.signalSnapshot.toneHypothesisSource()
+                + ", rep=" + bundle.signalSnapshot.representativeLockedToneFrequencyHz()
+                + "Hz@" + bundle.signalSnapshot.representativeLockedToneFrameCount()
+                + ", act=" + bundle.signalSnapshot.activeAcquisitionCenterFrequencyHz()
+                + "Hz@" + bundle.signalSnapshot.activeWindowObservationCount()
+                + ", hypAct=" + bundle.signalSnapshot.activeHypothesisCenterFrequencyHz()
+                + "Hz@" + bundle.signalSnapshot.activeHypothesisObservationCount()
+                + ", guard=" + bundle.signalSnapshot.hypothesisGuardDecision()
+                + ", eligible=" + bundle.signalSnapshot.hypothesisGuardEligible()
+                + ", applied=" + bundle.signalSnapshot.hypothesisGuardApplied()
+                + ", guardCount=" + bundle.signalSnapshot.hypothesisGuardApplyCount()
+                + ", histSpan=" + bundle.signalSnapshot.hypothesisGuardHistorySpanHz()
+                + "\nTRK/HYP profile: " + bundle.frontEndDisagreementProfile.renderSummary()
+                + "\nTRK/HYP exp: eff=" + bundle.experimentalSignalSnapshot.effectiveTrackedToneFrequencyHz()
+                + "Hz, hyp=" + bundle.experimentalSignalSnapshot.toneHypothesisFrequencyHz()
+                + "Hz@" + Math.round(bundle.experimentalSignalSnapshot.toneHypothesisConfidence() * 100.0d) + "%"
+                + "/" + bundle.experimentalSignalSnapshot.toneHypothesisSupportFrames()
+                + "f/" + bundle.experimentalSignalSnapshot.toneHypothesisSource()
+                + ", rep=" + bundle.experimentalSignalSnapshot.representativeLockedToneFrequencyHz()
+                + "Hz@" + bundle.experimentalSignalSnapshot.representativeLockedToneFrameCount()
+                + ", act=" + bundle.experimentalSignalSnapshot.activeAcquisitionCenterFrequencyHz()
+                + "Hz@" + bundle.experimentalSignalSnapshot.activeWindowObservationCount()
+                + ", hypAct=" + bundle.experimentalSignalSnapshot.activeHypothesisCenterFrequencyHz()
+                + "Hz@" + bundle.experimentalSignalSnapshot.activeHypothesisObservationCount()
+                + ", guard=" + bundle.experimentalSignalSnapshot.hypothesisGuardDecision()
+                + ", eligible=" + bundle.experimentalSignalSnapshot.hypothesisGuardEligible()
+                + ", applied=" + bundle.experimentalSignalSnapshot.hypothesisGuardApplied()
+                + ", appliedHz=" + bundle.experimentalSignalSnapshot.hypothesisGuardAppliedFrequencyHz()
+                + ", guardCount=" + bundle.experimentalSignalSnapshot.hypothesisGuardApplyCount()
+                + ", histSpan=" + bundle.experimentalSignalSnapshot.hypothesisGuardHistorySpanHz()
+                + "\nTRK/HYP exp profile: " + bundle.experimentalFrontEndDisagreementProfile.renderSummary()
                 + "\nTiming: dot=" + bundle.timingSnapshot.dotEstimateMs()
                 + ", dash=" + bundle.timingSnapshot.dashEstimateMs()
                 + ", intra=" + bundle.timingSnapshot.intraGapEstimateMs()
@@ -1051,6 +1098,9 @@ public final class CwUserCaptureCoverageTest {
         private final CwTimingSnapshot timingSnapshot;
         private final CwDecoderSnapshot decoderSnapshot;
         private final double clippedSampleRatio;
+        private final LocalAudioDecodeTestSupport.FrontEndDisagreementProfile frontEndDisagreementProfile;
+        private final CwSignalSnapshot experimentalSignalSnapshot;
+        private final LocalAudioDecodeTestSupport.FrontEndDisagreementProfile experimentalFrontEndDisagreementProfile;
 
         private OfflineEvalBundle(
                 CwFixtureScenario scenario,
@@ -1058,7 +1108,10 @@ public final class CwUserCaptureCoverageTest {
                 CwSignalSnapshot signalSnapshot,
                 CwTimingSnapshot timingSnapshot,
                 CwDecoderSnapshot decoderSnapshot,
-                double clippedSampleRatio
+                double clippedSampleRatio,
+                LocalAudioDecodeTestSupport.FrontEndDisagreementProfile frontEndDisagreementProfile,
+                CwSignalSnapshot experimentalSignalSnapshot,
+                LocalAudioDecodeTestSupport.FrontEndDisagreementProfile experimentalFrontEndDisagreementProfile
         ) {
             this.scenario = scenario;
             this.result = result;
@@ -1066,6 +1119,9 @@ public final class CwUserCaptureCoverageTest {
             this.timingSnapshot = timingSnapshot;
             this.decoderSnapshot = decoderSnapshot;
             this.clippedSampleRatio = clippedSampleRatio;
+            this.frontEndDisagreementProfile = frontEndDisagreementProfile;
+            this.experimentalSignalSnapshot = experimentalSignalSnapshot;
+            this.experimentalFrontEndDisagreementProfile = experimentalFrontEndDisagreementProfile;
         }
     }
 }

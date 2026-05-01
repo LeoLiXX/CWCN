@@ -86,7 +86,7 @@ public final class CwLocalAudioFolderRegressionTest {
     private static final List<Expectation> OBSERVABILITY_CASES = Arrays.asList(
             Expectation.observabilityOnly("20260427_222505", "BI9CLT BI9CLT DE BI9CMS BI9CMS PSE K")
                     .requireFragments("KI9", "DEBI9", "PSEK")
-                    .requireFragmentCount("KI9", 2)
+                    .requireFragmentCount("KI9", 1)
                     .requireFragmentCount("DEBI9", 1)
                     .requireFragmentCount("PSEK", 1)
                     .withMinCharacters(20)

@@ -21,17 +21,20 @@ public final class CwInterpreterCallsignRecoveryTest {
     }
 
     @Test
-    public void rawTextStabilizationMergesSplitShortControlAndReportTokens() {
+    public void rawTextPreservesSplitShortControlAndReportTokensWhileNormalizedTextRecoversStructure() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR 5 NN B K");
 
-        assertEquals("BI9CLT DE BG7YOZ UR 5NN BK", snapshot.rawText());
+        assertEquals("BI9CLT DE BG7YOZ UR 5 NN B K", snapshot.rawText());
+        assertTrue(snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 5NN BK"));
     }
 
     @Test
-    public void rawTextStabilizationSplitsCompactAckCallsignChainsIntoStructuralTokens() {
+    public void rawTextPreservesCompactAckCallsignChainsWhileNormalizedTextSplitsStructuralTokens() {
         CwInterpreterSnapshot snapshot = runSequence("BKBI9CLTDEBG7YOZR5NNTU73BK");
 
-        assertEquals("BK BI9CLT DE BG7YOZ R 5NN TU 73 BK", snapshot.rawText());
+        assertEquals("BKBI9CLTDEBG7YOZR5NNTU73BK", snapshot.rawText());
+        assertTrue(snapshot.normalizedText().contains("BK BI9CLT DE BG7YOZ R 5NN"));
+        assertTrue(snapshot.normalizedText().contains("73 BK"));
     }
 
     @Test
@@ -309,6 +312,7 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void closingResidueTokenContributes73HintWithoutPollutingCallsigns() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ TU 73B");
 
+        assertTrue(snapshot.normalizedText().contains("TU 73B"));
         assertTrue(snapshot.phraseHints().contains("73 closing"));
         assertFalse(snapshot.callsignCandidates().contains("73B"));
     }
@@ -317,17 +321,26 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void damagedDirectedReportResidueStillNormalizesIntoReportAndHandoffHints() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR?NN B");
 
-        assertTrue(snapshot.normalizedText().contains("UR 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("UR ?NN B"));
         assertTrue(snapshot.phraseHints().contains("Report exchange"));
         assertTrue(snapshot.phraseHints().contains("Directed report to called station"));
         assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
     }
 
     @Test
+    public void split73FragmentsMergeBackIntoClosingTokenInOperationalContext() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ TU 7 3 SK");
+
+        assertTrue(snapshot.normalizedText().contains("TU 73 SK"));
+        assertTrue(snapshot.phraseHints().contains("73 closing"));
+        assertTrue(snapshot.phraseHints().contains("Closing / acknowledgement"));
+    }
+
+    @Test
     public void damagedCompactReportTailStillNormalizesIntoReportAndHandoffHints() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR 5NNEB");
 
-        assertTrue(snapshot.normalizedText().contains("UR 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("UR 5NN EB"));
         assertTrue(snapshot.phraseHints().contains("Report exchange"));
         assertTrue(snapshot.phraseHints().contains("Directed report to called station"));
         assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
@@ -337,7 +350,7 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void damagedSeparatedReportAndControlResidueStillNormalizeInContext() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR ?NN EB");
 
-        assertTrue(snapshot.normalizedText().contains("UR 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("UR ?NN EB"));
         assertTrue(snapshot.phraseHints().contains("Report exchange"));
         assertTrue(snapshot.phraseHints().contains("Directed report to called station"));
         assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
@@ -347,29 +360,61 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void splitReportAndControlWordsMergeBackIntoCompactTokens() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ UR 5 NN B K");
 
-        assertTrue(snapshot.normalizedText().contains("UR 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("UR 5NN BK"));
         assertTrue(snapshot.phraseHints().contains("Report exchange"));
         assertTrue(snapshot.phraseHints().contains("Directed report to called station"));
         assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
     }
 
     @Test
+    public void bareSplitControlFragmentsDoNotMergeWithoutOperationalContext() {
+        CwInterpreterSnapshot snapshot = runSequence("B K");
+
+        assertEquals("B K", snapshot.normalizedText());
+        assertFalse(snapshot.phraseHints().contains("Turn handoff / over"));
+    }
+
+    @Test
+    public void bareSplitDeFragmentsDoNotMergeWithoutCallsignContext() {
+        CwInterpreterSnapshot snapshot = runSequence("D E");
+
+        assertEquals("D E", snapshot.normalizedText());
+        assertFalse(snapshot.phraseHints().contains("Station identification / callsign exchange"));
+    }
+
+    @Test
     public void splitClarificationKeywordMergesBackIntoAgain() {
         CwInterpreterSnapshot snapshot = runSequence("BI9??Z AG N PSE K");
 
-        assertTrue(snapshot.normalizedText().contains("AGAIN PLEASE K"));
+        assertTrue(snapshot.normalizedText().contains("AGN PSE K"));
         assertTrue(snapshot.callsignCandidates().contains("BI9??Z"));
         assertTrue(snapshot.phraseHints().contains("Repeat / clarification request"));
+        assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
     }
 
     @Test
     public void splitClarificationKeywordsDoNotPolluteFullCallsignCandidate() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT AG N PS E K");
 
-        assertTrue(snapshot.normalizedText().contains("BI9CLT AGAIN PLEASE K"));
+        assertTrue(snapshot.normalizedText().contains("BI9CLT AGN PSE K"));
         assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
         assertFalse(snapshot.callsignCandidates().contains("BI9CLTAG"));
         assertTrue(snapshot.phraseHints().contains("Repeat / clarification request"));
+    }
+
+    @Test
+    public void cleanCallNounUsageDoesNotTriggerClarificationHintByItself() {
+        CwInterpreterSnapshot snapshot = runSequence("TNX FER CALL UR 5NN BK");
+
+        assertTrue(snapshot.normalizedText().contains("TNX FER CALL UR 5NN BK"));
+        assertFalse(snapshot.phraseHints().contains("Repeat / clarification request"));
+    }
+
+    @Test
+    public void normalizeDoesNotSplitCleanCallsignLikeTokenOnClarificationPrefix() {
+        CwInterpreterSnapshot snapshot = runSequence("BI9CLTAG");
+
+        assertEquals("BI9CLTAG", snapshot.normalizedText());
     }
 
     @Test
@@ -380,7 +425,7 @@ public final class CwInterpreterCallsignRecoveryTest {
         interpreter.process(decode("BI9CLT AG N PS E K", 2000L));
 
         CwInterpreterSnapshot snapshot = interpreter.snapshot();
-        assertTrue(snapshot.normalizedText().contains("BI9CLT AGAIN PLEASE K"));
+        assertTrue(snapshot.normalizedText().contains("BI9CLT AGN PSE K"));
         assertEquals("BI9CLT", snapshot.primaryCallsignCandidate());
         assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
         assertFalse(snapshot.callsignCandidates().contains("BI9CLTAG"));
@@ -390,7 +435,7 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void splitDeAndCallsignFragmentsRecoverStationIdentificationFlow() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT D E BG 7YOZ UR 5NN BK");
 
-        assertTrue(snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 5NN BK"));
         assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
         assertTrue(snapshot.callsignCandidates().contains("BG7YOZ"));
         assertTrue(snapshot.phraseHints().contains("Station identification / callsign exchange"));
@@ -401,7 +446,7 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void singleLetterSpeakerPrefixFragmentMergesBackIntoCallsignInContext() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE B G7YOZ UR 5NN BK");
 
-        assertTrue(snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 5NN BK"));
         assertTrue(snapshot.callsignCandidates().contains("BG7YOZ"));
         assertFalse(snapshot.callsignCandidates().contains("G7YOZ"));
         assertTrue(snapshot.phraseHints().contains("Station identification / callsign exchange"));
@@ -411,7 +456,7 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void singleLetterSpeakerSuffixFragmentMergesBackIntoCallsignInContext() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YO Z UR 5NN BK");
 
-        assertTrue(snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 5NN BK"));
         assertTrue(snapshot.callsignCandidates().contains("BG7YOZ"));
         assertFalse(snapshot.callsignCandidates().contains("BG7YO"));
         assertTrue(snapshot.phraseHints().contains("Station identification / callsign exchange"));
@@ -421,7 +466,7 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void uncertainSpeakerPrefixFragmentMergesBackIntoPartialCallsignInContext() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE ? G7YOZ UR 5NN BK");
 
-        assertTrue(snapshot.normalizedText().contains("BI9CLT DE ?G7YOZ UR 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("BI9CLT DE ?G7YOZ UR 5NN BK"));
         assertTrue(snapshot.callsignCandidates().contains("?G7YOZ"));
         assertFalse(snapshot.callsignCandidates().contains("G7YOZ"));
         assertTrue(snapshot.phraseHints().contains("Partial callsign / uncertain copy"));
@@ -431,7 +476,7 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void uncertainSpeakerSuffixFragmentMergesBackIntoPartialCallsignInContext() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YO ? UR 5NN BK");
 
-        assertTrue(snapshot.normalizedText().contains("BI9CLT DE BG7YO? UR 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("BI9CLT DE BG7YO? UR 5NN BK"));
         assertTrue(snapshot.callsignCandidates().contains("BG7YO?"));
         assertFalse(snapshot.callsignCandidates().contains("BG7YO"));
         assertTrue(snapshot.phraseHints().contains("Partial callsign / uncertain copy"));
@@ -442,7 +487,7 @@ public final class CwInterpreterCallsignRecoveryTest {
         CwInterpreterSnapshot snapshot = runIncrementalSequence("BI9CLT DE BG7YOZ UR 5 NN B K");
         String summary = snapshot.normalizedText() + " | " + snapshot.callsignCandidates() + " | " + snapshot.primaryCallsignCandidate();
 
-        assertTrue(summary, snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 599 BK"));
+        assertTrue(summary, snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 5NN BK"));
         assertTrue(summary, snapshot.callsignCandidates().contains("BI9CLT"));
         assertTrue(summary, snapshot.callsignCandidates().contains("BG7YOZ"));
         assertFalse(summary, snapshot.callsignCandidates().contains("BI9CL"));
@@ -453,7 +498,7 @@ public final class CwInterpreterCallsignRecoveryTest {
         CwInterpreterSnapshot snapshot = runIncrementalSequence("BI9CLT D E BG 7YOZ UR 5NN BK");
         String summary = snapshot.normalizedText() + " | " + snapshot.callsignCandidates() + " | " + snapshot.primaryCallsignCandidate();
 
-        assertTrue(summary, snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 599 BK"));
+        assertTrue(summary, snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 5NN BK"));
         assertTrue(summary, snapshot.callsignCandidates().contains("BI9CLT"));
         assertTrue(summary, snapshot.callsignCandidates().contains("BG7YOZ"));
         assertFalse(summary, snapshot.callsignCandidates().contains("BI9CL"));
@@ -464,7 +509,7 @@ public final class CwInterpreterCallsignRecoveryTest {
         CwInterpreterSnapshot snapshot = runIncrementalSequence("BI9CLT DE B G7YOZ UR 5NN BK");
         String summary = snapshot.normalizedText() + " | " + snapshot.callsignCandidates() + " | " + snapshot.primaryCallsignCandidate();
 
-        assertTrue(summary, snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 599 BK"));
+        assertTrue(summary, snapshot.normalizedText().contains("BI9CLT DE BG7YOZ UR 5NN BK"));
         assertTrue(summary, snapshot.callsignCandidates().contains("BI9CLT"));
         assertTrue(summary, snapshot.callsignCandidates().contains("BG7YOZ"));
         assertFalse(summary, snapshot.callsignCandidates().contains("G7YOZ"));
@@ -475,7 +520,7 @@ public final class CwInterpreterCallsignRecoveryTest {
         CwInterpreterSnapshot snapshot = runIncrementalSequence("BI9CLT DE ? G7YOZ UR 5NN BK");
         String summary = snapshot.normalizedText() + " | " + snapshot.callsignCandidates() + " | " + snapshot.primaryCallsignCandidate();
 
-        assertTrue(summary, snapshot.normalizedText().contains("BI9CLT DE ?G7YOZ UR 599 BK"));
+        assertTrue(summary, snapshot.normalizedText().contains("BI9CLT DE ?G7YOZ UR 5NN BK"));
         assertTrue(summary, snapshot.callsignCandidates().contains("BI9CLT"));
         assertTrue(summary, snapshot.callsignCandidates().contains("?G7YOZ"));
         assertFalse(summary, snapshot.callsignCandidates().contains("G7YOZ"));
@@ -496,7 +541,7 @@ public final class CwInterpreterCallsignRecoveryTest {
         CwInterpreterSnapshot snapshot = interpreter.snapshot();
         String summary = snapshot.normalizedText() + " | " + snapshot.callsignCandidates() + " | " + snapshot.primaryCallsignCandidate();
 
-        assertTrue(summary, snapshot.normalizedText().contains("BI?CLT DE BG7YOZ UR 599 BK"));
+        assertTrue(summary, snapshot.normalizedText().contains("BI?CLT DE BG7YOZ UR 5NN BK"));
         assertTrue(summary, snapshot.callsignCandidates().contains("BI9CLT"));
         assertTrue(summary, snapshot.callsignCandidates().contains("BG7YOZ"));
         assertFalse(summary, snapshot.callsignCandidates().contains("BI?CLT"));
@@ -506,7 +551,7 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void damagedAckReportTailStillNormalizesIntoSentReportAndHandoffHints() {
         CwInterpreterSnapshot snapshot = runSequence("BI9CLT DE BG7YOZ R?NNB");
 
-        assertTrue(snapshot.normalizedText().contains("R 599 BK"));
+        assertTrue(snapshot.normalizedText().contains("R ?NN B"));
         assertTrue(snapshot.phraseHints().contains("Report acknowledgement / return report"));
         assertTrue(snapshot.phraseHints().contains("Turn handoff / over"));
     }
@@ -553,17 +598,36 @@ public final class CwInterpreterCallsignRecoveryTest {
             }
         }
 
-        assertTrue(sawRecoveredReport);
-        assertTrue(sawRecoveredControl);
+        assertFalse(sawRecoveredReport);
+        assertFalse(sawRecoveredControl);
     }
 
     @Test
     public void unknownLeadingEdgeBeforeDeStillRestoresStationIdentificationContext() {
         CwInterpreterSnapshot snapshot = runSequence(CwDecoder.UNKNOWN_CHARACTER + "DE BG7YOZ R5NNTU73B");
 
-        assertTrue(snapshot.normalizedText().contains("DE BG7YOZ"));
+        assertTrue(snapshot.normalizedText().contains("? DE BG7YOZ"));
         assertTrue(snapshot.phraseHints().contains("Station identification / callsign exchange"));
         assertTrue(snapshot.callsignCandidates().contains("BG7YOZ"));
+    }
+
+    @Test
+    public void callsignEndingWithTuDoesNotSplitIntoThanksResidue() {
+        CwInterpreterSnapshot snapshot = runSequence("QRZ DE BI3TUK KN");
+
+        assertEquals("QRZ DE BI3TUK KN", snapshot.normalizedText());
+        assertEquals("BI3TUK", snapshot.primaryCallsignCandidate());
+        assertTrue(snapshot.callsignCandidates().contains("BI3TUK"));
+        assertFalse(snapshot.normalizedText().contains("THANKS"));
+    }
+
+    @Test
+    public void incrementalShortTailQrzKeepsFullSpeakerCallsignAsPrimary() {
+        CwInterpreterSnapshot snapshot = runIncrementalSequence("QRZ DE BI3TUK KN");
+        String summary = snapshot.normalizedText() + " | " + snapshot.callsignCandidates() + " | " + snapshot.primaryCallsignCandidate();
+
+        assertTrue(summary, snapshot.callsignCandidates().contains("BI3TUK"));
+        assertEquals(summary, "BI3TUK", snapshot.primaryCallsignCandidate());
     }
 
     @Test
@@ -613,7 +677,7 @@ public final class CwInterpreterCallsignRecoveryTest {
     public void missingWordGapBetweenRepeatedCallsignsIsRecoveredInNormalizedText() {
         CwInterpreterSnapshot snapshot = runSequence("CQ CQ CQ DE BI9CLTBI9CLT PSE K");
 
-        assertTrue(snapshot.normalizedText().contains("CQ CQ CQ DE BI9CLT BI9CLT PLEASE K"));
+        assertTrue(snapshot.normalizedText().contains("CQ CQ CQ DE BI9CLT BI9CLT PSE K"));
         assertEquals("BI9CLT", snapshot.primaryCallsignCandidate());
         assertTrue(snapshot.callsignCandidates().contains("BI9CLT"));
         assertFalse(snapshot.callsignCandidates().contains("BI9CLTBI9CLT"));

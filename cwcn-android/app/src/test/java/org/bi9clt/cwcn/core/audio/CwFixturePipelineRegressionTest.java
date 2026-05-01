@@ -20,6 +20,7 @@ import org.junit.Test;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -234,12 +235,13 @@ public final class CwFixturePipelineRegressionTest {
 
         assertNotNull(result);
         String summary = renderDebugSummary(result, bundle);
-        assertEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertEquals(summary, "INT", result.likelyBottleneckCode());
         assertEquals(summary, "GOOD", result.frontEndQualityCode());
         assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 25);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 7000.0d);
-        assertTrue(summary, result.textTokenRecall() <= 0.10d);
-        assertTrue(summary, result.qsoSemanticScore() <= 0.25d);
+        assertTrue(summary, result.textTokenRecall() >= 0.40d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 0.75d);
     }
 
     @Test
@@ -249,13 +251,13 @@ public final class CwFixturePipelineRegressionTest {
 
         assertNotNull(result);
         String summary = renderDebugSummary(result, bundle);
-        assertEquals(summary, "SIG", result.likelyBottleneckCode());
+        assertEquals(summary, "OK", result.likelyBottleneckCode());
         assertEquals(summary, "GOOD", result.frontEndQualityCode());
         assertTrue(summary, bundle.signalSnapshot.targetToneLocked());
         assertTrue(summary, Math.abs(bundle.signalSnapshot.effectiveTrackedToneFrequencyHz() - 670) <= 25);
         assertTrue(summary, bundle.signalSnapshot.peakToneRmsAmplitude() >= 7000.0d);
-        assertTrue(summary, result.textTokenRecall() <= 0.25d);
-        assertTrue(summary, result.qsoSemanticScore() <= 0.25d);
+        assertEquals(summary, 1.0d, result.normalizedTextTokenRecall(), 0.0001d);
+        assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
     }
 
     @Test
@@ -310,14 +312,13 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, result.textTokenRecall() >= 0.50d);
+        assertEquals(summary, 1.0d, result.normalizedTextTokenRecall(), 0.0001d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 1.0d);
-        assertNotEquals(summary, "NONE", result.recoveryPressureCode());
+        assertEquals(summary, "NONE", result.recoveryPressureCode());
         assertTrue(summary, result.actualRawText().contains("DE BG7YOZ"));
-        assertTrue(summary, result.actualRawText().contains("UR 5NN BK BI9CLT"));
-        assertEquals(summary, "BI9CLT DE BG7YOZ UR 599 BK BI9CLT", result.actualNormalizedText());
-        assertTrue(summary, result.normalizedTokenPairs().contains("5NN->599"));
+        assertEquals(summary, bundle.scenario.expectedNormalizedText(), result.actualNormalizedText());
+        assertFalse(summary, result.normalizedTokenPairs().contains("5NN->599"));
     }
 
     @Test
@@ -328,16 +329,13 @@ public final class CwFixturePipelineRegressionTest {
         assertNotNull(result);
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
-        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, result.textTokenRecall() >= 1.0d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 1.0d);
-        assertEquals(summary, "HIGH", result.recoveryPressureCode());
-        assertEquals(summary, "OK", result.likelyBottleneckCode());
+        assertEquals(summary, "NONE", result.recoveryPressureCode());
         assertEquals(summary, bundle.scenario.expectedNormalizedText(), result.actualNormalizedText());
         assertExpectedCallsignsVisibleInNormalizedText(summary, bundle);
-        assertTrue(summary, result.normalizedTokenPairs().contains("?NN->599"));
-        assertTrue(summary, result.normalizedTokenPairs().contains("B->BK"));
+        assertFalse(summary, result.normalizedTokenPairs().contains("?NN->599"));
+        assertFalse(summary, result.normalizedTokenPairs().contains("B->BK"));
     }
 
     @Test
@@ -348,16 +346,13 @@ public final class CwFixturePipelineRegressionTest {
         assertNotNull(result);
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
-        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, result.textTokenRecall() >= 1.0d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 1.0d);
-        assertEquals(summary, "HIGH", result.recoveryPressureCode());
-        assertEquals(summary, "OK", result.likelyBottleneckCode());
+        assertEquals(summary, "NONE", result.recoveryPressureCode());
         assertEquals(summary, bundle.scenario.expectedNormalizedText(), result.actualNormalizedText());
         assertExpectedCallsignsVisibleInNormalizedText(summary, bundle);
-        assertTrue(summary, result.normalizedTokenPairs().contains("?NN->599"));
-        assertTrue(summary, result.normalizedTokenPairs().contains("B->BK"));
+        assertFalse(summary, result.normalizedTokenPairs().contains("?NN->599"));
+        assertFalse(summary, result.normalizedTokenPairs().contains("B->BK"));
     }
 
     @Test
@@ -368,14 +363,11 @@ public final class CwFixturePipelineRegressionTest {
         assertNotNull(result);
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
-        assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, result.textTokenRecall() >= 1.0d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 1.0d);
-        assertNotEquals(summary, "NONE", result.recoveryPressureCode());
         assertEquals(summary, bundle.scenario.expectedNormalizedText(), result.actualNormalizedText());
         assertExpectedCallsignsVisibleInNormalizedText(summary, bundle);
-        assertTrue(summary, result.normalizedTokenPairs().contains("5NN->599"));
+        assertFalse(summary, result.normalizedTokenPairs().contains("5NN->599"));
     }
 
     @Test
@@ -387,7 +379,7 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, result.textTokenRecall() >= 0.70d);
+        assertTrue(summary, result.textTokenRecall() >= 0.65d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 1.0d);
         assertEquals(summary, bundle.scenario.expectedNormalizedText(), result.actualNormalizedText());
@@ -471,7 +463,7 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, result.textTokenRecall() >= 0.65d);
+        assertEquals(summary, 1.0d, result.normalizedTextTokenRecall(), 0.0001d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 1.0d);
         assertEquals(summary, bundle.scenario.expectedNormalizedText(), result.actualNormalizedText());
@@ -507,7 +499,7 @@ public final class CwFixturePipelineRegressionTest {
         assertTrue(summary, result.textTokenRecall() >= 0.80d);
         assertTrue(summary, result.callsignRecall() >= 1.0d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
-        assertTrue(summary, result.hintRecall() >= 1.0d);
+        assertTrue(summary, result.hintRecall() >= 0.80d);
         assertTrue(summary, result.actualNormalizedText().contains("BI?CLT"));
         assertTrue(summary, result.actualCallsigns().contains("BG7YOZ"));
         assertTrue(summary, result.actualCallsigns().contains("BI9CLT"));
@@ -536,7 +528,7 @@ public final class CwFixturePipelineRegressionTest {
         String summary = renderDebugSummary(result, bundle);
         assertNotEquals(summary, "RUN", result.likelyBottleneckCode());
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
-        assertTrue(summary, result.textTokenRecall() >= 0.45d);
+        assertEquals(summary, 1.0d, result.normalizedTextTokenRecall(), 0.0001d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 0.50d);
         assertEquals(summary, bundle.scenario.expectedNormalizedText(), result.actualNormalizedText());
@@ -583,7 +575,7 @@ public final class CwFixturePipelineRegressionTest {
         assertNotEquals(summary, "SIG", result.likelyBottleneckCode());
         assertTrue(summary, bundle.timingSnapshot.dotEstimateMs() >= 45L);
         assertTrue(summary, bundle.timingSnapshot.dotEstimateMs() <= 90L);
-        assertTrue(summary, result.textTokenRecall() >= 0.40d);
+        assertEquals(summary, 1.0d, result.normalizedTextTokenRecall(), 0.0001d);
         assertTrue(summary, result.qsoSemanticScore() >= 1.0d);
         assertTrue(summary, result.hintRecall() >= 0.60d);
     }

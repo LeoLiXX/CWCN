@@ -19,20 +19,20 @@ public final class CwInterpreter {
 
     private static final List<String> REPORT_TOKEN_VARIANTS = Arrays.asList("5NN", "599", "ENN");
     private static final List<String> CONTROL_TOKEN_VARIANTS = Arrays.asList("BK", "KN", "K");
-    private static final List<String> COMPOUND_KEYWORDS = Arrays.asList(
-            "CALLSIGN", "CALL", "QRZ", "CQ", "DE", "5NN", "ENN", "599", "AGN", "PSE", "PLS", "TNX", "TU", "UR", "BK", "KN", "73"
+    private static final List<String> PREFIX_SPLIT_KEYWORDS = Arrays.asList(
+            "QRZ", "CQ", "DE", "5NN", "ENN", "599", "UR", "BK", "KN", "TNX", "TU", "73"
     );
-    private static final List<String> COMPOUND_BRIDGE_KEYWORDS = Arrays.asList(
-            "DE", "QRZ", "UR", "TNX", "TU", "BK", "KN", "73", "5NN", "ENN", "599", "AGN", "PSE", "PLS", "CALLSIGN", "CALL", "CQ"
+    private static final List<String> BRIDGE_SPLIT_KEYWORDS = Arrays.asList(
+            "DE", "QRZ", "UR", "TNX", "TU", "BK", "KN", "73", "5NN", "ENN", "599", "CQ"
     );
     private static final Pattern CALLSIGN_PATTERN =
             Pattern.compile("^(?=.{3,})(?=.*[A-Z])(?=.*\\d)[A-Z0-9?/]{3,}$");
     private static final Set<String> NON_CALLSIGN_TOKENS = new LinkedHashSet<>(Arrays.asList(
             "CQ", "DE", "QRZ", "K", "KN", "BK", "PSE", "PLS", "AGN", "R", "UR", "TU", "TNX", "599", "5NN", "ENN",
-            "PLEASE", "CALL", "CALLSIGN", "AGAIN", "73"
+            "PLEASE", "CALL", "CALLSIGN", "AGAIN", "73", "FB", "SK"
     ));
     private static final Set<String> MERGEABLE_SPLIT_TOKENS = new LinkedHashSet<>(Arrays.asList(
-            "DE", "BK", "KN", "TU", "TNX", "AGN", "PSE", "PLS", "5NN", "ENN", "599"
+            "DE", "BK", "KN", "TU", "TNX", "AGN", "PSE", "PLS", "5NN", "ENN", "599", "73"
     ));
 
     private final RecoveryMode recoveryMode;
@@ -64,10 +64,10 @@ public final class CwInterpreter {
             return;
         }
 
-        rawText = stabilizeRawText(
-                decodeEvent.outputText(),
-                recoveryMode != RecoveryMode.RAW_COPY_FOCUS
-        );
+        // RAW must stay as a faithful view of the observed decode stream.
+        // Human-oriented cleanup and structural recovery belong to Normalize,
+        // not to the RAW channel itself.
+        rawText = stabilizeVisibleRawText(decodeEvent.outputText());
         parseCurrentText(decodeEvent.timestampMs());
     }
 
@@ -108,8 +108,7 @@ public final class CwInterpreter {
         ArrayList<String> normalizedParts = new ArrayList<>();
 
         if (!rawText.isEmpty()) {
-            String semanticRawText = rawText.toUpperCase(Locale.US).replace(CwDecoder.UNKNOWN_CHARACTER, "?");
-            List<String> rawParts = normalizeRawParts(expandCompoundText(semanticRawText).split("\\s+"));
+            List<String> rawParts = normalizeRawParts(expandCompoundText(rawText).split("\\s+"));
             for (int index = 0; index < rawParts.size(); index++) {
                 String rawPart = rawParts.get(index);
                 if (rawPart.isEmpty()) {
@@ -148,20 +147,16 @@ public final class CwInterpreter {
         if (containsNormalizedToken(parsedTokens, "DE") && !callsignCandidates.isEmpty()) {
             hintSet.add("Station identification / callsign exchange");
         }
-        if (containsNormalizedToken(parsedTokens, "599")) {
+        if (containsReportValueToken(parsedTokens)) {
             hintSet.add("Report exchange");
         }
-        if (containsTokenSequence(parsedTokens, "UR", "599")) {
+        if (containsReportLeadSequence(parsedTokens, "UR")) {
             hintSet.add("Directed report to called station");
         }
-        if (containsTokenSequence(parsedTokens, "R", "599")) {
+        if (containsReportLeadSequence(parsedTokens, "R")) {
             hintSet.add("Report acknowledgement / return report");
         }
-        if (containsNormalizedToken(parsedTokens, "AGAIN")
-                || containsNormalizedToken(parsedTokens, "PLEASE")
-                || containsNormalizedToken(parsedTokens, "CALL")
-                || containsNormalizedToken(parsedTokens, "CALLSIGN")
-                || normalizedText.contains("?")) {
+        if (hasRepeatClarificationHint(parsedTokens)) {
             hintSet.add("Repeat / clarification request");
         }
         if (hasUncertainCallsign(rawCallsignCandidates)) {
@@ -171,20 +166,21 @@ public final class CwInterpreter {
             hintSet.add("Partial callsign resolved");
         }
         if (primaryCallsignCandidate != null
-                && (containsNormalizedToken(parsedTokens, "CALL")
-                || containsNormalizedToken(parsedTokens, "CALLSIGN")
-                || containsNormalizedToken(parsedTokens, "AGAIN"))) {
+                && (containsSemanticToken(parsedTokens, "CALL")
+                || containsSemanticToken(parsedTokens, "CALLSIGN")
+                || containsSemanticToken(parsedTokens, "AGAIN"))) {
             hintSet.add("Callsign confirmation cycle");
         }
-        if (containsNormalizedToken(parsedTokens, "BK")
-                || containsNormalizedToken(parsedTokens, "KN")
-                || containsNormalizedToken(parsedTokens, "K")) {
+        if (hasTurnHandoffHint(parsedTokens)) {
             hintSet.add("Turn handoff / over");
         }
-        if (containsNormalizedToken(parsedTokens, "THANKS")) {
+        if (hasShortTailEndingHint(parsedTokens, callsignCandidates)) {
+            hintSet.add("Short-tail ending");
+        }
+        if (containsSemanticToken(parsedTokens, "THANKS")) {
             hintSet.add("Closing / acknowledgement");
         }
-        if (containsNormalizedToken(parsedTokens, "73")) {
+        if (containsSemanticToken(parsedTokens, "73")) {
             hintSet.add("73 closing");
         }
 
@@ -201,23 +197,15 @@ public final class CwInterpreter {
         );
     }
 
-    private String stabilizeRawText(String candidateText, boolean allowCompoundExpansion) {
+    private String stabilizeVisibleRawText(String candidateText) {
         if (candidateText == null) {
             return "";
         }
-        String semanticRawText = candidateText.trim()
-                .toUpperCase(Locale.US)
-                .replace(CwDecoder.UNKNOWN_CHARACTER, "?");
-        if (semanticRawText.isEmpty()) {
+        String visibleRawText = candidateText.replace(CwDecoder.UNKNOWN_CHARACTER, "?");
+        if (visibleRawText.trim().isEmpty()) {
             return "";
         }
-        String structuralRawText = allowCompoundExpansion
-                ? expandCompoundText(semanticRawText)
-                : semanticRawText;
-        List<String> rawParts = allowCompoundExpansion
-                ? normalizeRawParts(structuralRawText.split("\\s+"))
-                : normalizeRawCopyParts(structuralRawText.split("\\s+"));
-        return String.join(" ", rawParts).trim();
+        return visibleRawText.stripTrailing();
     }
 
     private List<String> normalizeRawCopyParts(String[] rawParts) {
@@ -235,7 +223,23 @@ public final class CwInterpreter {
             }
             normalizedParts.add(token);
         }
-        return normalizedParts;
+        return expandRawCopyReadableParts(normalizedParts);
+    }
+
+    private List<String> expandRawCopyReadableParts(List<String> rawParts) {
+        ArrayList<String> readableParts = new ArrayList<>();
+        for (String token : rawParts) {
+            if (token == null || token.isEmpty()) {
+                continue;
+            }
+            List<String> repeatedCallsignSplit = splitRepeatedCallsignRun(token);
+            if (!repeatedCallsignSplit.isEmpty()) {
+                readableParts.addAll(repeatedCallsignSplit);
+                continue;
+            }
+            readableParts.add(token);
+        }
+        return readableParts;
     }
 
     private void parseRawCopyFocusText(long timestampMs) {
@@ -245,18 +249,19 @@ public final class CwInterpreter {
 
         if (!rawText.isEmpty()) {
             String semanticRawText = rawText.toUpperCase(Locale.US).replace(CwDecoder.UNKNOWN_CHARACTER, "?");
-            List<String> rawParts = normalizeRawParts(semanticRawText.split("\\s+"));
+            List<String> rawParts = normalizeRawCopyParts(semanticRawText.split("\\s+"));
             for (int index = 0; index < rawParts.size(); index++) {
                 String rawPart = rawParts.get(index);
                 if (rawPart.isEmpty()) {
                     continue;
                 }
-                String normalized = normalizeToken(rawPart);
-                CwInterpretedToken.Type type = classifyRawCopyFocusToken(rawPart, normalized);
-                parsedTokens.add(new CwInterpretedToken(rawPart, normalized, type));
-                normalizedParts.add(normalized);
+                String visibleToken = normalizeRawCopyFocusToken(rawPart);
+                String classificationToken = rawCopyFocusClassificationToken(rawPart);
+                CwInterpretedToken.Type type = classifyRawCopyFocusToken(rawPart, classificationToken);
+                parsedTokens.add(new CwInterpretedToken(rawPart, visibleToken, type));
+                normalizedParts.add(visibleToken);
                 if (type == CwInterpretedToken.Type.CALLSIGN_CANDIDATE) {
-                    callsignSet.add(normalized);
+                    callsignSet.add(visibleToken);
                 }
             }
         }
@@ -278,47 +283,73 @@ public final class CwInterpreter {
         );
     }
 
-    private CwInterpretedToken.Type classifyRawCopyFocusToken(String rawToken, String normalizedToken) {
-        if ("CQ".equals(normalizedToken)) {
+    private CwInterpretedToken.Type classifyRawCopyFocusToken(String rawToken, String classificationToken) {
+        String semanticToken = semanticToken(classificationToken);
+        if ("CQ".equals(semanticToken)) {
             return CwInterpretedToken.Type.CQ;
         }
-        if ("DE".equals(normalizedToken)) {
+        if ("DE".equals(semanticToken)) {
             return CwInterpretedToken.Type.DE;
         }
-        if ("QRZ".equals(normalizedToken)) {
+        if ("QRZ".equals(semanticToken)) {
             return CwInterpretedToken.Type.QRZ;
         }
-        if ("THANKS".equals(normalizedToken)) {
+        if ("THANKS".equals(semanticToken)) {
             return CwInterpretedToken.Type.THANKS;
         }
-        if ("AGAIN".equals(normalizedToken)) {
+        if ("AGAIN".equals(semanticToken)) {
             return CwInterpretedToken.Type.AGAIN;
         }
-        if ("R".equals(normalizedToken)) {
+        if ("R".equals(semanticToken)) {
             return CwInterpretedToken.Type.ACK;
         }
-        if (isRequestToken(normalizedToken)) {
+        if (isRequestToken(semanticToken)) {
             return CwInterpretedToken.Type.REQUEST;
         }
-        if (isReportToken(rawToken, normalizedToken)) {
+        if (isReportToken(rawToken, classificationToken)) {
             return CwInterpretedToken.Type.REPORT;
         }
-        if (isControlToken(normalizedToken)) {
+        if (isControlToken(classificationToken)) {
             return CwInterpretedToken.Type.CONTROL;
         }
-        if (isCallsignCandidate(normalizedToken)) {
+        if (isRawCopyFocusCallsignCandidate(classificationToken)) {
             return CwInterpretedToken.Type.CALLSIGN_CANDIDATE;
         }
         return CwInterpretedToken.Type.FREE_TEXT;
     }
 
+    private boolean isRawCopyFocusCallsignCandidate(String token) {
+        if (!isCallsignCandidate(token)) {
+            return false;
+        }
+        if (token.length() < 4 || token.length() > 10) {
+            return false;
+        }
+        if (!containsLetter(token) || !containsDigit(token)) {
+            return false;
+        }
+        return countLetters(token) >= 2;
+    }
+
+    private String normalizeRawCopyFocusToken(String rawToken) {
+        return trimKnownTrailingPunctuation(rawToken);
+    }
+
+    private String rawCopyFocusClassificationToken(String rawToken) {
+        return trimKnownTrailingPunctuation(rawToken);
+    }
+
     private String normalizeToken(String rawToken) {
         String cleanedToken = trimKnownTrailingPunctuation(rawToken);
-        String normalizedClosingResidue = normalizeClosingResidueToken(cleanedToken);
-        if (normalizedClosingResidue != null) {
-            return normalizedClosingResidue;
-        }
+        return cleanedToken;
+    }
+
+    private String semanticToken(String token) {
+        String cleanedToken = trimKnownTrailingPunctuation(token);
         switch (cleanedToken) {
+            case "5NN":
+            case "ENN":
+                return "599";
             case "TU":
             case "TNX":
                 return "THANKS";
@@ -331,10 +362,10 @@ public final class CwInterpreter {
                 return "CALL";
             case "CALL-SIGN":
                 return "CALLSIGN";
-            case "5NN":
-            case "ENN":
-                return "599";
             default:
+                if (cleanedToken.matches("[7?]3[BK?]") || cleanedToken.matches("[7?]3")) {
+                    return "73";
+                }
                 return cleanedToken;
         }
     }
@@ -343,13 +374,6 @@ public final class CwInterpreter {
         String normalizedToken = normalizeToken(rawToken);
         if (!normalizedToken.equals(rawToken)) {
             return normalizedToken;
-        }
-        if (isLikelyDamagedReportToken(rawToken) && isReportResidueContext(rawParts, index)) {
-            return "599";
-        }
-        String damagedControlNormalization = normalizeDamagedControlToken(rawToken, rawParts, index);
-        if (damagedControlNormalization != null) {
-            return damagedControlNormalization;
         }
         return normalizedToken;
     }
@@ -360,28 +384,32 @@ public final class CwInterpreter {
             List<String> normalizedParts,
             int index
     ) {
-        if ("CQ".equals(normalizedToken)) {
+        String semanticToken = semanticToken(normalizedToken);
+        if ("CQ".equals(semanticToken)) {
             return CwInterpretedToken.Type.CQ;
         }
-        if ("DE".equals(normalizedToken)) {
+        if ("DE".equals(semanticToken)) {
             return CwInterpretedToken.Type.DE;
         }
-        if ("QRZ".equals(normalizedToken)) {
+        if ("QRZ".equals(semanticToken)) {
             return CwInterpretedToken.Type.QRZ;
         }
-        if ("THANKS".equals(normalizedToken)) {
+        if ("THANKS".equals(semanticToken)) {
             return CwInterpretedToken.Type.THANKS;
         }
-        if ("AGAIN".equals(normalizedToken)) {
+        if ("AGAIN".equals(semanticToken)) {
             return CwInterpretedToken.Type.AGAIN;
         }
-        if ("R".equals(normalizedToken)) {
+        if ("R".equals(semanticToken)) {
             return CwInterpretedToken.Type.ACK;
         }
-        if (isRequestToken(normalizedToken)) {
+        if (isRequestToken(semanticToken)) {
             return CwInterpretedToken.Type.REQUEST;
         }
         if (isReportToken(rawToken, normalizedToken)) {
+            return CwInterpretedToken.Type.REPORT;
+        }
+        if (isLikelyDamagedReportToken(rawToken) && isReportResidueContext(normalizedParts, index)) {
             return CwInterpretedToken.Type.REPORT;
         }
         if (isLikelyReportResidueToken(normalizedToken, normalizedParts, index)) {
@@ -390,7 +418,8 @@ public final class CwInterpreter {
         if (isControlToken(normalizedToken)) {
             return CwInterpretedToken.Type.CONTROL;
         }
-        if (isLikelyControlResidueToken(normalizedToken)) {
+        if (isDamagedControlResidueToken(rawToken, normalizedParts, index)
+                || isLikelyControlResidueToken(normalizedToken)) {
             return CwInterpretedToken.Type.CONTROL;
         }
         if (isCallsignCandidate(normalizedToken)
@@ -436,8 +465,8 @@ public final class CwInterpreter {
     }
 
     private boolean isReportResidueContext(List<String> normalizedParts, int index) {
-        String previous = index > 0 ? normalizeToken(normalizedParts.get(index - 1)) : "";
-        String next = index + 1 < normalizedParts.size() ? normalizeToken(normalizedParts.get(index + 1)) : "";
+        String previous = index > 0 ? semanticToken(normalizeToken(normalizedParts.get(index - 1))) : "";
+        String next = index + 1 < normalizedParts.size() ? semanticToken(normalizeToken(normalizedParts.get(index + 1))) : "";
         return "UR".equals(previous)
                 || "R".equals(previous)
                 || "RST".equals(previous)
@@ -453,8 +482,8 @@ public final class CwInterpreter {
     private boolean isControlResidueContext(List<String> normalizedParts, int index) {
         String previousRaw = index > 0 ? normalizedParts.get(index - 1) : "";
         String nextRaw = index + 1 < normalizedParts.size() ? normalizedParts.get(index + 1) : "";
-        String previous = normalizeToken(previousRaw);
-        String next = normalizeToken(nextRaw);
+        String previous = semanticToken(normalizeToken(previousRaw));
+        String next = semanticToken(normalizeToken(nextRaw));
         return "599".equals(previous)
                 || "UR".equals(previous)
                 || "R".equals(previous)
@@ -462,11 +491,7 @@ public final class CwInterpreter {
                 || "THANKS".equals(previous)
                 || "73".equals(previous)
                 || "THANKS".equals(next)
-                || "73".equals(next)
-                || "BK".equals(next)
-                || "KN".equals(next)
-                || "K".equals(next)
-                || bestEffortControlNormalization(nextRaw) != null;
+                || "73".equals(next);
     }
 
     private boolean matchesFuzzyToken(String rawToken, String canonicalToken, int maxMismatches) {
@@ -494,11 +519,10 @@ public final class CwInterpreter {
                 || matchesControlResidue(normalizedToken, "K");
     }
 
-    private String normalizeDamagedControlToken(String rawToken, List<String> rawParts, int index) {
-        if (rawToken == null || rawToken.isEmpty() || !isControlResidueContext(rawParts, index)) {
-            return null;
-        }
-        return bestEffortControlNormalization(rawToken);
+    private boolean isDamagedControlResidueToken(String rawToken, List<String> normalizedParts, int index) {
+        return rawToken != null
+                && bestEffortControlNormalization(rawToken) != null
+                && isControlResidueContext(normalizedParts, index);
     }
 
     private boolean isLikelyDamagedReportToken(String token) {
@@ -620,7 +644,8 @@ public final class CwInterpreter {
     }
 
     private boolean isCallsignCandidate(String token) {
-        if (NON_CALLSIGN_TOKENS.contains(token)) {
+        if (NON_CALLSIGN_TOKENS.contains(token)
+                || NON_CALLSIGN_TOKENS.contains(semanticToken(token))) {
             return false;
         }
         return CALLSIGN_PATTERN.matcher(token).matches();
@@ -655,8 +680,8 @@ public final class CwInterpreter {
     }
 
     private boolean isContextualCallsignSlot(List<String> normalizedParts, int index) {
-        String previous = index > 0 ? normalizeToken(normalizedParts.get(index - 1)) : "";
-        String next = index + 1 < normalizedParts.size() ? normalizeToken(normalizedParts.get(index + 1)) : "";
+        String previous = index > 0 ? semanticToken(normalizeToken(normalizedParts.get(index - 1))) : "";
+        String next = index + 1 < normalizedParts.size() ? semanticToken(normalizeToken(normalizedParts.get(index + 1))) : "";
         return "DE".equals(previous)
                 || "DE".equals(next)
                 || "BK".equals(previous)
@@ -703,9 +728,28 @@ public final class CwInterpreter {
         return false;
     }
 
+    private int countLetters(String token) {
+        int letters = 0;
+        for (int index = 0; index < token.length(); index++) {
+            if (Character.isLetter(token.charAt(index))) {
+                letters += 1;
+            }
+        }
+        return letters;
+    }
+
     private boolean containsNormalizedToken(List<CwInterpretedToken> parsedTokens, String normalizedToken) {
         for (CwInterpretedToken token : parsedTokens) {
             if (normalizedToken.equals(token.normalizedText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsSemanticToken(List<CwInterpretedToken> parsedTokens, String semanticToken) {
+        for (CwInterpretedToken token : parsedTokens) {
+            if (semanticToken.equals(semanticToken(token.normalizedText()))) {
                 return true;
             }
         }
@@ -726,6 +770,184 @@ public final class CwInterpreter {
             }
         }
         return false;
+    }
+
+    private boolean containsSemanticTokenSequence(
+            List<CwInterpretedToken> parsedTokens,
+            String firstSemanticToken,
+            String secondSemanticToken
+    ) {
+        for (int index = 0; index < parsedTokens.size() - 1; index++) {
+            CwInterpretedToken first = parsedTokens.get(index);
+            CwInterpretedToken second = parsedTokens.get(index + 1);
+            if (firstSemanticToken.equals(semanticToken(first.normalizedText()))
+                    && secondSemanticToken.equals(semanticToken(second.normalizedText()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsReportValueToken(List<CwInterpretedToken> parsedTokens) {
+        for (CwInterpretedToken token : parsedTokens) {
+            if (isReportValueToken(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsReportLeadSequence(List<CwInterpretedToken> parsedTokens, String reportLeadToken) {
+        for (int index = 0; index < parsedTokens.size() - 1; index++) {
+            CwInterpretedToken first = parsedTokens.get(index);
+            CwInterpretedToken second = parsedTokens.get(index + 1);
+            if (reportLeadToken.equals(semanticToken(first.normalizedText()))
+                    && isReportValueToken(second)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isReportValueToken(CwInterpretedToken token) {
+        if (token == null || token.type() != CwInterpretedToken.Type.REPORT) {
+            return false;
+        }
+        String normalized = token.normalizedText();
+        if (normalized == null || normalized.isEmpty()) {
+            return false;
+        }
+        String semantic = semanticToken(normalized);
+        if ("599".equals(semantic)) {
+            return true;
+        }
+        return isLikelyDamagedReportToken(trimKnownTrailingPunctuation(normalized));
+    }
+
+    private boolean hasTurnHandoffHint(List<CwInterpretedToken> parsedTokens) {
+        for (int index = 0; index < parsedTokens.size(); index++) {
+            String canonicalControl = canonicalControlToken(parsedTokens.get(index));
+            if ("BK".equals(canonicalControl) || "KN".equals(canonicalControl)) {
+                return true;
+            }
+            if ("K".equals(canonicalControl) && hasContextualPlainKUsage(parsedTokens, index)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String canonicalControlToken(CwInterpretedToken token) {
+        if (token == null || token.type() != CwInterpretedToken.Type.CONTROL) {
+            return null;
+        }
+        String normalized = trimKnownTrailingPunctuation(token.normalizedText());
+        if (isControlToken(normalized)) {
+            return normalized;
+        }
+        return bestEffortControlNormalization(normalized);
+    }
+
+    private boolean hasRepeatClarificationHint(List<CwInterpretedToken> parsedTokens) {
+        int requestSignalCount = 0;
+        boolean hasUncertainty = false;
+        for (CwInterpretedToken token : parsedTokens) {
+            if (isRepeatRequestSignal(token.normalizedText())) {
+                requestSignalCount += 1;
+            }
+            if (token.normalizedText() != null && token.normalizedText().contains("?")) {
+                hasUncertainty = true;
+            }
+        }
+        return requestSignalCount >= 2 || (hasUncertainty && requestSignalCount >= 1);
+    }
+
+    private boolean hasShortTailEndingHint(
+            List<CwInterpretedToken> parsedTokens,
+            List<String> recoveredCallsignCandidates
+    ) {
+        if (parsedTokens == null || parsedTokens.isEmpty()) {
+            return false;
+        }
+        boolean hasQrz = false;
+        boolean hasCq = false;
+        boolean hasDe = false;
+        boolean hasCallsign = recoveredCallsignCandidates != null && !recoveredCallsignCandidates.isEmpty();
+        boolean hasReport = false;
+        boolean hasClosing = false;
+        boolean hasUncertainty = false;
+        String lastNormalized = null;
+        for (CwInterpretedToken token : parsedTokens) {
+            if (token == null || token.normalizedText() == null) {
+                continue;
+            }
+            String normalized = token.normalizedText();
+            String semantic = semanticToken(normalized);
+            lastNormalized = normalized;
+            if (normalized.contains("?")
+                    || (token.rawText() != null && token.rawText().contains("?"))) {
+                hasUncertainty = true;
+            }
+            if ("QRZ".equals(semantic)) {
+                hasQrz = true;
+            } else if ("CQ".equals(semantic)) {
+                hasCq = true;
+            } else if ("DE".equals(semantic)) {
+                hasDe = true;
+            } else if ("THANKS".equals(semantic) || "73".equals(semantic)) {
+                hasClosing = true;
+            }
+            if (token.type() == CwInterpretedToken.Type.REPORT || "RST".equals(normalized)) {
+                hasReport = true;
+            }
+        }
+        return hasQrz
+                && !hasCq
+                && hasDe
+                && hasCallsign
+                && !hasReport
+                && !hasClosing
+                && !hasUncertainty
+                && "KN".equals(lastNormalized);
+    }
+
+    private boolean isRepeatRequestSignal(String normalizedToken) {
+        String semantic = semanticToken(normalizedToken);
+        return "AGAIN".equals(semantic)
+                || "PLEASE".equals(semantic)
+                || "CALL".equals(semantic)
+                || "CALLSIGN".equals(semantic);
+    }
+
+    private boolean hasContextualPlainKUsage(List<CwInterpretedToken> parsedTokens, int index) {
+        if (index < 0 || index >= parsedTokens.size()) {
+            return false;
+        }
+        CwInterpretedToken previous = index > 0 ? parsedTokens.get(index - 1) : null;
+        CwInterpretedToken next = index + 1 < parsedTokens.size() ? parsedTokens.get(index + 1) : null;
+        return isPlainKSupportToken(previous) || isPlainKSupportToken(next);
+    }
+
+    private boolean isPlainKSupportToken(CwInterpretedToken token) {
+        if (token == null) {
+            return false;
+        }
+        switch (token.type()) {
+            case CALLSIGN_CANDIDATE:
+            case CQ:
+            case DE:
+            case QRZ:
+            case REPORT:
+            case ACK:
+            case REQUEST:
+            case THANKS:
+            case AGAIN:
+                return true;
+            case CONTROL:
+            case FREE_TEXT:
+            default:
+                return false;
+        }
     }
 
     private boolean hasUncertainCallsign(List<String> callsigns) {
@@ -792,6 +1014,7 @@ public final class CwInterpreter {
         );
         ArrayList<String> rankedCandidates = new ArrayList<>(mergeAndRankCallsignCandidates(recoveredCandidates));
         restoreConflictingObservedCandidates(rankedCandidates, rawCandidates);
+        restoreObservedContextualCandidates(rankedCandidates, rawCandidates, contextualCallsigns);
         return rankedCandidates;
     }
 
@@ -825,6 +1048,153 @@ public final class CwInterpreter {
         }
     }
 
+    private void restoreObservedContextualCandidates(
+            List<String> rankedCandidates,
+            List<String> rawCandidates,
+            ContextualCallsigns contextualCallsigns
+    ) {
+        if (rankedCandidates == null || rawCandidates == null || contextualCallsigns == null) {
+            return;
+        }
+        restoreObservedContextualCandidate(
+                rankedCandidates,
+                rawCandidates,
+                contextualCallsigns.addressedCallsign,
+                true
+        );
+        restoreObservedContextualCandidate(
+                rankedCandidates,
+                rawCandidates,
+                contextualCallsigns.speakerCallsign,
+                false
+        );
+    }
+
+    private void restoreObservedContextualCandidate(
+            List<String> rankedCandidates,
+            List<String> rawCandidates,
+            String observedCandidate,
+            boolean addressedContext
+    ) {
+        if (!isTrustedCleanCallsign(observedCandidate)
+                || rankedCandidates.contains(observedCandidate)
+                || !rawCandidates.contains(observedCandidate)
+                || hasCompatibleRememberedTrustedCleanCandidate(observedCandidate)) {
+            return;
+        }
+        ArrayList<String> derivedTrimmedCandidates = new ArrayList<>();
+        for (String rankedCandidate : rankedCandidates) {
+            if (!isDerivedShorterTrimmedCandidateOfObservedCallsign(
+                    rankedCandidate,
+                    observedCandidate,
+                    rawCandidates
+            )) {
+                continue;
+            }
+            derivedTrimmedCandidates.add(rankedCandidate);
+        }
+        if (derivedTrimmedCandidates.isEmpty()
+                || isLikelyDeBoundaryContaminatedContextualCandidate(
+                observedCandidate,
+                derivedTrimmedCandidates,
+                addressedContext
+        )) {
+            return;
+        }
+        rankedCandidates.removeAll(derivedTrimmedCandidates);
+        rankedCandidates.add(0, observedCandidate);
+    }
+
+    private boolean hasCompatibleRememberedTrustedCleanCandidate(String observedCandidate) {
+        return isBlockingRememberedTrustedCleanCandidate(observedCandidate, rememberedAddressedCallsign)
+                || isBlockingRememberedTrustedCleanCandidate(observedCandidate, rememberedSpeakerCallsign)
+                || isBlockingRememberedTrustedCleanCandidate(observedCandidate, rememberedPrimaryCallsign);
+    }
+
+    private boolean isBlockingRememberedTrustedCleanCandidate(
+            String observedCandidate,
+            String rememberedCandidate
+    ) {
+        return isCompatibleTrustedCleanUpgrade(observedCandidate, rememberedCandidate)
+                && !isProtectedShortTrimOfObservedCallsign(rememberedCandidate, observedCandidate);
+    }
+
+    private boolean isDerivedShorterTrimmedCandidateOfObservedCallsign(
+            String rankedCandidate,
+            String observedCandidate,
+            List<String> rawCandidates
+    ) {
+        if (!isTrustedCleanCallsign(rankedCandidate)
+                || rankedCandidate.length() >= observedCandidate.length()
+                || rawCandidates.contains(rankedCandidate)) {
+            return false;
+        }
+        return isProtectedShortTrimOfObservedCallsign(rankedCandidate, observedCandidate);
+    }
+
+    private boolean isProtectedShortTrimOfObservedCallsign(
+            String shorterCandidate,
+            String observedCandidate
+    ) {
+        if (!isTrustedCleanCallsign(shorterCandidate)
+                || shorterCandidate.length() >= observedCandidate.length()) {
+            return false;
+        }
+        if (anchoredCallsignMatch(observedCandidate, shorterCandidate, true)) {
+            String contamination = observedCandidate.substring(shorterCandidate.length());
+            if (!isProtectedOperatorEdgeResidue(contamination)) {
+                return false;
+            }
+            return shorterCandidate.equals(
+                    chooseAnchoredMergeWinner(observedCandidate, shorterCandidate, true)
+            );
+        }
+        if (anchoredCallsignMatch(observedCandidate, shorterCandidate, false)) {
+            String contamination = observedCandidate.substring(0, observedCandidate.length() - shorterCandidate.length());
+            if (!isProtectedOperatorEdgeResidue(contamination)) {
+                return false;
+            }
+            return shorterCandidate.equals(
+                    chooseAnchoredMergeWinner(observedCandidate, shorterCandidate, false)
+            );
+        }
+        return false;
+    }
+
+    private boolean isProtectedOperatorEdgeResidue(String contamination) {
+        return "K".equals(contamination)
+                || "KN".equals(contamination)
+                || "BK".equals(contamination)
+                || "TU".equals(contamination)
+                || "TNX".equals(contamination)
+                || "73".equals(contamination)
+                || "AGN".equals(contamination)
+                || "PSE".equals(contamination)
+                || "PLS".equals(contamination);
+    }
+
+    private boolean isLikelyDeBoundaryContaminatedContextualCandidate(
+            String observedCandidate,
+            List<String> derivedTrimmedCandidates,
+            boolean addressedContext
+    ) {
+        if (observedCandidate == null || derivedTrimmedCandidates == null || derivedTrimmedCandidates.isEmpty()) {
+            return false;
+        }
+        for (String candidate : derivedTrimmedCandidates) {
+            if (candidate == null || candidate.length() >= observedCandidate.length()) {
+                continue;
+            }
+            String contamination = addressedContext
+                    ? observedCandidate.substring(candidate.length())
+                    : observedCandidate.substring(0, observedCandidate.length() - candidate.length());
+            if ("D".equals(contamination) || "DE".equals(contamination)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private List<String> deriveCallsignRepairVariants(String rawCandidate) {
         ArrayList<String> variants = new ArrayList<>();
         if (rawCandidate == null || rawCandidate.isEmpty()) {
@@ -833,7 +1203,7 @@ public final class CwInterpreter {
         variants.add(rawCandidate);
         addTrimmedRepairVariants(variants, rawCandidate);
         addRepeatedPartialCallsignRepairVariants(variants, rawCandidate);
-        for (String keyword : COMPOUND_BRIDGE_KEYWORDS) {
+        for (String keyword : BRIDGE_SPLIT_KEYWORDS) {
             int searchFrom = 1;
             while (searchFrom < rawCandidate.length()) {
                 int splitIndex = rawCandidate.indexOf(keyword, searchFrom);
@@ -1019,6 +1389,10 @@ public final class CwInterpreter {
         }
         if (isShortAnchoredRememberedFragment(rememberedCandidate, rawCandidate)) {
             return rememberedCandidate;
+        }
+        if (isTrustedCleanCallsign(rawCandidate)
+                && isProtectedShortTrimOfObservedCallsign(rememberedCandidate, rawCandidate)) {
+            return rawCandidate;
         }
         if (isTrustedCleanCallsign(rawCandidate)
                 && isKeywordResidueWrap(rawCandidate, rememberedCandidate)) {
@@ -1576,6 +1950,9 @@ public final class CwInterpreter {
         if (!isTrustedCleanCallsign(shorter)) {
             return false;
         }
+        if (isLikelyLegitimateRepeatedCallsignEdge(longer, shorter, prefixAligned, contaminationSegment)) {
+            return false;
+        }
         if (isLikelyContaminationSegment(contaminationSegment)) {
             return true;
         }
@@ -1613,19 +1990,6 @@ public final class CwInterpreter {
         return token.matches("[59EN]{1,3}");
     }
 
-    private String normalizeClosingResidueToken(String token) {
-        if (token == null || token.isEmpty()) {
-            return null;
-        }
-        if (token.matches("[7?]3[BK?]")) {
-            return "73";
-        }
-        if (token.matches("[7?]3")) {
-            return "73";
-        }
-        return null;
-    }
-
     private boolean isLikelyRepeatedAnchorEdge(
             String contaminationSegment,
             String shorter,
@@ -1645,6 +2009,34 @@ public final class CwInterpreter {
         return prefixAligned
                 ? shorter.endsWith(cleanSegment)
                 : shorter.startsWith(cleanSegment);
+    }
+
+    private boolean isLikelyLegitimateRepeatedCallsignEdge(
+            String longer,
+            String shorter,
+            boolean prefixAligned,
+            String contaminationSegment
+    ) {
+        if (!isTrustedCleanCallsign(longer)
+                || contaminationSegment == null
+                || contaminationSegment.length() != 1) {
+            return false;
+        }
+        char repeated = contaminationSegment.charAt(0);
+        if (!Character.isLetter(repeated)) {
+            return false;
+        }
+        int repeatedRunLength = 0;
+        if (prefixAligned) {
+            for (int index = longer.length() - 1; index >= 0 && longer.charAt(index) == repeated; index--) {
+                repeatedRunLength += 1;
+            }
+            return repeatedRunLength >= 3 && shorter.endsWith(String.valueOf(repeated));
+        }
+        for (int index = 0; index < longer.length() && longer.charAt(index) == repeated; index++) {
+            repeatedRunLength += 1;
+        }
+        return repeatedRunLength >= 3 && shorter.startsWith(String.valueOf(repeated));
     }
 
     private int certaintyScore(String candidate) {
@@ -1756,11 +2148,205 @@ public final class CwInterpreter {
         int maxParts = Math.min(3, rawParts.length - startIndex);
         for (int partCount = 2; partCount <= maxParts; partCount++) {
             String merged = joinRawParts(rawParts, startIndex, startIndex + partCount);
-            if (MERGEABLE_SPLIT_TOKENS.contains(merged)) {
+            if (MERGEABLE_SPLIT_TOKENS.contains(merged)
+                    && shouldMergeSplitFixedToken(rawParts, startIndex, partCount, merged)) {
                 bestCandidate = merged;
             }
         }
         return bestCandidate;
+    }
+
+    private boolean shouldMergeSplitFixedToken(
+            String[] rawParts,
+            int startIndex,
+            int partCount,
+            String mergedToken
+    ) {
+        String previousRaw = previousNonEmptyRawPart(rawParts, startIndex - 1);
+        String nextRaw = nextNonEmptyRawPart(rawParts, startIndex + partCount);
+        String previous = semanticToken(normalizeToken(previousRaw == null ? "" : previousRaw));
+        String next = semanticToken(normalizeToken(nextRaw == null ? "" : nextRaw));
+
+        switch (mergedToken) {
+            case "DE":
+                return hasPotentialCallsignContextBefore(rawParts, startIndex)
+                        || hasPotentialCallsignContextAfter(rawParts, startIndex + partCount)
+                        || "CQ".equals(previous)
+                        || "QRZ".equals(previous);
+            case "BK":
+            case "KN":
+                return hasPotentialReportContextBefore(rawParts, startIndex)
+                        || hasPotentialClosingContextBefore(rawParts, startIndex)
+                        || hasPotentialCallsignContextBefore(rawParts, startIndex)
+                        || hasPotentialCallsignContextAfter(rawParts, startIndex + partCount)
+                        || "CQ".equals(next)
+                        || "QRZ".equals(next);
+            case "TU":
+            case "TNX":
+                return hasPotentialReportContextBefore(rawParts, startIndex)
+                        || hasPotentialCallsignContextBefore(rawParts, startIndex)
+                        || isPotentialControlFollowToken(next)
+                        || "73".equals(next);
+            case "AGN":
+            case "PSE":
+            case "PLS":
+                return hasPotentialCallsignContextBefore(rawParts, startIndex)
+                        || hasPotentialCallsignContextAfter(rawParts, startIndex + partCount)
+                        || isPotentialControlFollowToken(next)
+                        || isPotentialRequestFollowToken(next);
+            case "73":
+                return hasPotentialClosingContextBefore(rawParts, startIndex)
+                        || hasPotentialCallsignContextBefore(rawParts, startIndex)
+                        || isPotentialControlFollowToken(next)
+                        || "SK".equals(next);
+            case "5NN":
+            case "599":
+            case "ENN":
+                return hasPotentialReportLeadBefore(rawParts, startIndex)
+                        || isPotentialControlFollowToken(next)
+                        || "THANKS".equals(next)
+                        || "73".equals(next);
+            default:
+                return false;
+        }
+    }
+
+    private boolean hasPotentialCallsignContextBefore(String[] rawParts, int exclusiveEndIndex) {
+        return hasPotentialJoinedContext(rawParts, Math.max(0, exclusiveEndIndex - 3), exclusiveEndIndex, true);
+    }
+
+    private boolean hasPotentialCallsignContextAfter(String[] rawParts, int startIndex) {
+        return hasPotentialJoinedContext(rawParts, startIndex, Math.min(rawParts.length, startIndex + 3), false);
+    }
+
+    private boolean hasPotentialJoinedContext(
+            String[] rawParts,
+            int startInclusive,
+            int endExclusive,
+            boolean suffixAligned
+    ) {
+        if (rawParts == null || startInclusive < 0 || endExclusive > rawParts.length || startInclusive >= endExclusive) {
+            return false;
+        }
+        if (suffixAligned) {
+            for (int index = endExclusive - 1; index >= startInclusive; index--) {
+                if (isPotentialCallsignContextToken(joinRawParts(rawParts, index, endExclusive))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        for (int index = startInclusive + 1; index <= endExclusive; index++) {
+            if (isPotentialCallsignContextToken(joinRawParts(rawParts, startInclusive, index))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasPotentialReportLeadBefore(String[] rawParts, int exclusiveEndIndex) {
+        if (rawParts == null) {
+            return false;
+        }
+        int startInclusive = Math.max(0, exclusiveEndIndex - 3);
+        for (int index = exclusiveEndIndex - 1; index >= startInclusive; index--) {
+            if (isPotentialReportLeadToken(normalizeToken(joinRawParts(rawParts, index, exclusiveEndIndex)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasPotentialReportContextBefore(String[] rawParts, int exclusiveEndIndex) {
+        if (hasPotentialReportLeadBefore(rawParts, exclusiveEndIndex)) {
+            return true;
+        }
+        if (rawParts == null) {
+            return false;
+        }
+        int startInclusive = Math.max(0, exclusiveEndIndex - 3);
+        for (int index = exclusiveEndIndex - 1; index >= startInclusive; index--) {
+            String candidate = joinRawParts(rawParts, index, exclusiveEndIndex);
+            String normalizedCandidate = normalizeToken(candidate);
+            if ("599".equals(semanticToken(normalizedCandidate)) || isLikelyDamagedReportToken(candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasPotentialClosingContextBefore(String[] rawParts, int exclusiveEndIndex) {
+        if (rawParts == null) {
+            return false;
+        }
+        int startInclusive = Math.max(0, exclusiveEndIndex - 3);
+        for (int index = exclusiveEndIndex - 1; index >= startInclusive; index--) {
+            if (isPotentialClosingLeadToken(normalizeToken(joinRawParts(rawParts, index, exclusiveEndIndex)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String previousNonEmptyRawPart(String[] rawParts, int startIndex) {
+        for (int index = startIndex; index >= 0; index--) {
+            String token = rawParts[index];
+            if (token != null && !token.isEmpty()) {
+                return token;
+            }
+        }
+        return null;
+    }
+
+    private String nextNonEmptyRawPart(String[] rawParts, int startIndex) {
+        for (int index = startIndex; index < rawParts.length; index++) {
+            String token = rawParts[index];
+            if (token != null && !token.isEmpty()) {
+                return token;
+            }
+        }
+        return null;
+    }
+
+    private boolean isPotentialCallsignContextToken(String token) {
+        if (token == null || token.isEmpty()) {
+            return false;
+        }
+        String normalizedToken = normalizeToken(token);
+        if (isCallsignCandidate(normalizedToken) || isPotentialRepairedCallsignFragment(normalizedToken)) {
+            return true;
+        }
+        return normalizedToken.matches("[A-Z0-9?]{3,}")
+                && containsLetter(normalizedToken)
+                && (containsDigit(normalizedToken) || normalizedToken.contains("?"));
+    }
+
+    private boolean isPotentialReportLeadToken(String normalizedToken) {
+        String semantic = semanticToken(normalizedToken);
+        return "UR".equals(semantic)
+                || "R".equals(semantic)
+                || "RST".equals(semantic)
+                || "599".equals(semantic);
+    }
+
+    private boolean isPotentialClosingLeadToken(String normalizedToken) {
+        String semantic = semanticToken(normalizedToken);
+        return "THANKS".equals(semantic)
+                || "73".equals(semantic);
+    }
+
+    private boolean isPotentialControlFollowToken(String normalizedToken) {
+        return "BK".equals(normalizedToken)
+                || "KN".equals(normalizedToken)
+                || "K".equals(normalizedToken);
+    }
+
+    private boolean isPotentialRequestFollowToken(String normalizedToken) {
+        String semantic = semanticToken(normalizedToken);
+        return "PLEASE".equals(semantic)
+                || "CALL".equals(semantic)
+                || "CALLSIGN".equals(semantic)
+                || "AGAIN".equals(semantic);
     }
 
     private int countMergedSplitTokens(String[] rawParts, int startIndex, int mergedLength) {
@@ -1833,7 +2419,7 @@ public final class CwInterpreter {
             return result;
         }
         if (isLikelyLeadingEdgeNoise(prefix)) {
-            return Arrays.asList("DE");
+            return Arrays.asList(prefix, "DE");
         }
         return null;
     }
@@ -2276,7 +2862,7 @@ public final class CwInterpreter {
     }
 
     private List<String> splitKeywordPrefixedToken(String token) {
-        for (String keyword : COMPOUND_KEYWORDS) {
+        for (String keyword : PREFIX_SPLIT_KEYWORDS) {
             if (!token.startsWith(keyword) || token.length() <= keyword.length()) {
                 continue;
             }
@@ -2296,7 +2882,7 @@ public final class CwInterpreter {
     }
 
     private List<String> splitKeywordBridgedToken(String token) {
-        for (String keyword : COMPOUND_BRIDGE_KEYWORDS) {
+        for (String keyword : BRIDGE_SPLIT_KEYWORDS) {
             int searchFrom = 1;
             while (searchFrom < token.length()) {
                 int splitIndex = token.indexOf(keyword, searchFrom);
@@ -2305,6 +2891,10 @@ public final class CwInterpreter {
                 }
                 String left = token.substring(0, splitIndex);
                 String right = token.substring(splitIndex + keyword.length());
+                if (shouldPreserveWholeTokenAgainstBridgeSplit(token, keyword, left, right)) {
+                    searchFrom = splitIndex + 1;
+                    continue;
+                }
                 List<String> leftParts = splitTrailingAckResidueFromCallsign(left, keyword);
                 if (leftParts == null) {
                     leftParts = expandCompoundSide(left);
@@ -2323,6 +2913,28 @@ public final class CwInterpreter {
             }
         }
         return null;
+    }
+
+    private boolean shouldPreserveWholeTokenAgainstBridgeSplit(
+            String token,
+            String keyword,
+            String left,
+            String right
+    ) {
+        if (!isCallsignCandidate(token)) {
+            return false;
+        }
+        if (!"TU".equals(keyword)
+                && !"TNX".equals(keyword)
+                && !"BK".equals(keyword)
+                && !"KN".equals(keyword)
+                && !"73".equals(keyword)
+                && !"AGN".equals(keyword)
+                && !"PSE".equals(keyword)
+                && !"PLS".equals(keyword)) {
+            return false;
+        }
+        return left.length() < 4 || right.length() < 2;
     }
 
     private List<String> splitTrailingAckResidueFromCallsign(String leftToken, String bridgeKeyword) {
@@ -2380,6 +2992,7 @@ public final class CwInterpreter {
 
     private boolean isCompoundTokenTerminal(String token) {
         return isKnownKeywordLikeToken(token)
+                || isKnownKeywordLikeToken(semanticToken(token))
                 || isCallsignCandidate(token)
                 || isLikelyContextualPartialCallsign(token, Arrays.asList(token), 0);
     }

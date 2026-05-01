@@ -41,6 +41,7 @@ public final class CwConversationSemanticsTest {
         assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
         assertTrue(snapshot.hints().contains("QRZ / next caller flow"));
         assertTrue(snapshot.hints().contains("Turn handoff / over"));
+        assertTrue(!snapshot.hints().contains("Repeat / clarification request"));
     }
 
     @Test
@@ -170,6 +171,7 @@ public final class CwConversationSemanticsTest {
         QsoDraftSnapshot snapshot = runConversation("BI9CLT DE BG7YOZ UR?NN B");
 
         assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI9CLT DE BG7YOZ UR ?NN B", snapshot.normalizedText());
         assertEquals("BI9CLT", snapshot.stationCallsignUsed());
         assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
         assertEquals("599", snapshot.rstRcvdCandidate());
@@ -182,6 +184,7 @@ public final class CwConversationSemanticsTest {
         QsoDraftSnapshot snapshot = runConversation("BI9CLT DE BG7YOZ UR 5NNEB");
 
         assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI9CLT DE BG7YOZ UR 5NN EB", snapshot.normalizedText());
         assertEquals("BI9CLT", snapshot.stationCallsignUsed());
         assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
         assertEquals("599", snapshot.rstRcvdCandidate());
@@ -194,6 +197,7 @@ public final class CwConversationSemanticsTest {
         QsoDraftSnapshot snapshot = runConversation("BI9CLT DE BG7YOZ UR ?NN EB");
 
         assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI9CLT DE BG7YOZ UR ?NN EB", snapshot.normalizedText());
         assertEquals("BI9CLT", snapshot.stationCallsignUsed());
         assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
         assertEquals("599", snapshot.rstRcvdCandidate());
@@ -206,6 +210,7 @@ public final class CwConversationSemanticsTest {
         QsoDraftSnapshot snapshot = runConversation("BI9CLT DE BG7YOZ R?NNB");
 
         assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI9CLT DE BG7YOZ R ?NN B", snapshot.normalizedText());
         assertEquals("BI9CLT", snapshot.stationCallsignUsed());
         assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
         assertEquals("599", snapshot.rstSentCandidate());
@@ -222,6 +227,18 @@ public final class CwConversationSemanticsTest {
         assertEquals("BG7YOZ", snapshot.remoteCallsignCandidate());
         assertTrue(snapshot.hints().contains("QRZ / next caller flow"));
         assertTrue(snapshot.hints().contains("Station identification / callsign exchange"));
+    }
+
+    @Test
+    public void shortTailQrzDeCallsignKnCountsAsReportExchange() {
+        QsoDraftSnapshot snapshot = runConversation("QRZ DE BI3TUK KN");
+
+        assertEquals(QsoPhase.REPORT_EXCHANGE, snapshot.phase());
+        assertEquals("BI3TUK", snapshot.remoteCallsignCandidate());
+        assertTrue(snapshot.hints().contains("QRZ / next caller flow"));
+        assertTrue(snapshot.hints().contains("Station identification / callsign exchange"));
+        assertTrue(snapshot.hints().contains("Short-tail ending"));
+        assertTrue(snapshot.hints().contains("Turn handoff / over"));
     }
 
     @Test

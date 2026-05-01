@@ -9,6 +9,77 @@ import static org.junit.Assert.assertTrue;
 
 public final class CwFixtureEvaluationResultTest {
     @Test
+    public void splitAwareConstructorKeepsRawAndNormalizedChannelsSeparate() {
+        CwFixtureEvaluationResult result = new CwFixtureEvaluationResult(
+                "fixture",
+                "Fixture",
+                1L,
+                true,
+                false,
+                false,
+                false,
+                1.0d,
+                0.50d,
+                0.75d,
+                1.0d,
+                1.0d,
+                1.0d,
+                "JV3VV JV3VV PSE K",
+                "JV3VV JV3VVPAGE K",
+                "JV3VV JV3VV PSE K",
+                "JV3VV JV3VV PAGE K",
+                "CALLING_CQ",
+                "CALLING_CQ",
+                "",
+                "",
+                "",
+                "",
+                Collections.singletonList("JV3VV"),
+                Collections.singletonList("CQ / calling flow"),
+                Collections.singletonList("PSE"),
+                Collections.singletonList("PSE"),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.singletonList("Text drift / partial copy"),
+                1,
+                4,
+                Collections.emptyList(),
+                false,
+                false,
+                0.0d,
+                0.0d,
+                0.0d,
+                0,
+                0.0d,
+                0,
+                0,
+                0,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0d,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0L
+        );
+
+        assertEquals("JV3VV JV3VVPAGE K", result.actualRawText());
+        assertEquals("JV3VV JV3VV PAGE K", result.actualNormalizedText());
+        assertEquals(0.50d, result.rawTextTokenRecall(), 0.0001d);
+        assertEquals(0.75d, result.normalizedTextTokenRecall(), 0.0001d);
+        assertTrue(!result.exactRawTextMatch());
+        assertTrue(!result.exactNormalizedTextMatch());
+        assertEquals(Collections.singletonList("PSE"), result.missingRawTextTokens());
+        assertEquals(Collections.singletonList("PSE"), result.missingNormalizedTextTokens());
+    }
+
+    @Test
     public void compactSummaryMarksFrontEndLossAsSig() {
         CwFixtureEvaluationResult result = new CwFixtureEvaluationResult(
                 "fixture",

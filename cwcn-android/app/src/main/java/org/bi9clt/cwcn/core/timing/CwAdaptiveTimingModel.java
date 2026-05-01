@@ -47,7 +47,8 @@ public final class CwAdaptiveTimingModel {
                         gapClassification,
                         toneEvent.timestampMs(),
                         gapDurationMs,
-                        dotEstimateRounded()
+                        dotEstimateRounded(),
+                        intraGapEstimateRounded()
                 );
                 totalGapEvents += 1;
                 lastTimingEvent = gapEvent;
@@ -63,7 +64,8 @@ public final class CwAdaptiveTimingModel {
                 classifyTone(toneDurationMs),
                 toneEvent.timestampMs(),
                 toneDurationMs,
-                dotEstimateRounded()
+                dotEstimateRounded(),
+                intraGapEstimateRounded()
         );
         totalToneEvents += 1;
         lastToneOffTimestampMs = toneEvent.timestampMs();
@@ -90,7 +92,8 @@ public final class CwAdaptiveTimingModel {
                 gapClassification,
                 timestampMs,
                 gapDurationMs,
-                dotEstimateRounded()
+                dotEstimateRounded(),
+                intraGapEstimateRounded()
         );
         totalGapEvents += 1;
         lastTimingEvent = gapEvent;
@@ -156,6 +159,9 @@ public final class CwAdaptiveTimingModel {
         if (classification == CwTimingEvent.Classification.INTRA_SYMBOL_GAP) {
             dotCandidateMs = gapDurationMs;
         } else if (classification == CwTimingEvent.Classification.LETTER_GAP) {
+            if (isAmbiguousLongLetterGap(gapDurationMs)) {
+                return;
+            }
             dotCandidateMs = Math.max(1L, Math.round(gapDurationMs / 3.0d));
         } else if (classification == CwTimingEvent.Classification.WORD_GAP) {
             dotCandidateMs = Math.max(1L, Math.round(gapDurationMs / 7.0d));
@@ -247,6 +253,20 @@ public final class CwAdaptiveTimingModel {
         return CwTimingEvent.Classification.UNKNOWN;
     }
 
+    private boolean isAmbiguousLongLetterGap(long gapDurationMs) {
+        if (gapDurationMs <= 0L || !isFastTimingContext()) {
+            return false;
+        }
+        double ratio = gapDurationMs / Math.max(1.0d, dotEstimateMs);
+        double intraRatio = gapDurationMs / Math.max(1.0d, intraGapEstimateMs);
+        return ratio >= WORD_GAP_DOT_RATIO_FALLBACK_MIN
+                && intraRatio < WORD_GAP_INTRA_RATIO_FALLBACK;
+    }
+
+    private boolean isFastTimingContext() {
+        return dotEstimateMs <= FAST_BOOTSTRAP_THRESHOLD_MS || intraGapEstimateMs <= FAST_BOOTSTRAP_THRESHOLD_MS;
+    }
+
     private void appendCandidate(long[] buffer, int absoluteCount, long candidateMs) {
         if (candidateMs <= 0L) {
             return;
@@ -274,5 +294,9 @@ public final class CwAdaptiveTimingModel {
 
     private long dotEstimateRounded() {
         return Math.max(1L, Math.round(dotEstimateMs));
+    }
+
+    private long intraGapEstimateRounded() {
+        return Math.max(1L, Math.round(intraGapEstimateMs));
     }
 }

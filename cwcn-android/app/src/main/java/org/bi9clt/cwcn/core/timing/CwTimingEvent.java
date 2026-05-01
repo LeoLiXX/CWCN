@@ -20,6 +20,7 @@ public final class CwTimingEvent {
     private final long timestampMs;
     private final long durationMs;
     private final long dotEstimateMs;
+    private final long intraGapEstimateMs;
 
     public CwTimingEvent(
             Kind kind,
@@ -28,11 +29,23 @@ public final class CwTimingEvent {
             long durationMs,
             long dotEstimateMs
     ) {
+        this(kind, classification, timestampMs, durationMs, dotEstimateMs, 0L);
+    }
+
+    public CwTimingEvent(
+            Kind kind,
+            Classification classification,
+            long timestampMs,
+            long durationMs,
+            long dotEstimateMs,
+            long intraGapEstimateMs
+    ) {
         this.kind = kind;
         this.classification = classification;
         this.timestampMs = timestampMs;
         this.durationMs = durationMs;
         this.dotEstimateMs = dotEstimateMs;
+        this.intraGapEstimateMs = intraGapEstimateMs;
     }
 
     public Kind kind() {
@@ -53,5 +66,17 @@ public final class CwTimingEvent {
 
     public long dotEstimateMs() {
         return dotEstimateMs;
+    }
+
+    public long intraGapEstimateMs() {
+        return intraGapEstimateMs;
+    }
+
+    public double ratioToDotEstimate() {
+        return durationMs / (double) Math.max(1L, dotEstimateMs);
+    }
+
+    public double ratioToIntraGapEstimate() {
+        return durationMs / (double) Math.max(1L, intraGapEstimateMs);
     }
 }

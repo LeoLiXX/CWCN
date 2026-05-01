@@ -66,6 +66,8 @@ import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoStateEvent;
 import org.bi9clt.cwcn.core.qso.QsoStateMachine;
+import org.bi9clt.cwcn.core.rx.RxSessionSnapshot;
+import org.bi9clt.cwcn.core.rx.RxSessionStore;
 import org.bi9clt.cwcn.core.rig.RigControlAdapter;
 import org.bi9clt.cwcn.core.rig.RigRegistry;
 import org.bi9clt.cwcn.core.rig.RigTransport;
@@ -116,6 +118,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private CwInterpreter qsoInterpreter;
     private QsoStateMachine qsoStateMachine;
     private LocalLogRepository localLogRepository;
+    private RxSessionStore rxSessionStore;
 
     private long receivedFrameCount;
     private long receivedSampleCount;
@@ -185,6 +188,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         qsoInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.SEMANTIC_RECOVERY);
         qsoStateMachine = new QsoStateMachine();
         localLogRepository = new LocalLogRepository(this);
+        rxSessionStore = new RxSessionStore(this);
         restorePreferredToneFrequency();
         restoreSelectedLocalFile();
         restoreSelectedLocalFolder();
@@ -444,6 +448,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.saveDraftButton.setEnabled(hasDraftContent(qsoSnapshot) || draftEditorDirty);
         binding.confirmLogButton.setEnabled(hasConfirmableDraft(qsoSnapshot) || hasRemoteCallsignInEditor());
         binding.exportAdifButton.setEnabled(confirmedLogCount > 0);
+        publishRxSessionSnapshot(interpreterSnapshot, qsoSnapshot);
     }
 
     private void toggleDebugDetails() {
@@ -1866,13 +1871,67 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         if (lastTimingEvent == null) {
             return getString(R.string.timing_last_event_empty);
         }
-        return getString(
-                R.string.timing_last_event_value,
-                timingKindLabel(lastTimingEvent.kind()),
-                timingClassificationLabel(lastTimingEvent.classification()),
-                lastTimingEvent.durationMs(),
-                lastTimingEvent.dotEstimateMs()
-        );
+        StringBuilder builder = new StringBuilder();
+        builder.append("最近 timing 事件：")
+                .append(timingKindLabel(lastTimingEvent.kind()))
+                .append(" / ")
+                .append(timingClassificationLabel(lastTimingEvent.classification()))
+                .append("\nDuration：")
+                .append(lastTimingEvent.durationMs())
+                .append(" ms")
+                .append("\nDot Estimate：")
+                .append(lastTimingEvent.dotEstimateMs())
+                .append(" ms")
+                .append(" / ratio ")
+                .append(formatTimingRatio(lastTimingEvent.ratioToDotEstimate()))
+                .append("x");
+        if (lastTimingEvent.kind() == CwTimingEvent.Kind.GAP) {
+            builder.append("\nIntra Gap Estimate：")
+                    .append(lastTimingEvent.intraGapEstimateMs())
+                    .append(" ms")
+                    .append(" / ratio ")
+                    .append(formatTimingRatio(lastTimingEvent.ratioToIntraGapEstimate()))
+                    .append("x");
+            String note = renderGapTimingNote(lastTimingEvent);
+            if (!note.isEmpty()) {
+                builder.append("\nNote：").append(note);
+            }
+        }
+        return builder.toString();
+    }
+
+    private String formatTimingRatio(double ratio) {
+        return String.format(Locale.US, "%.2f", ratio);
+    }
+
+    private String renderGapTimingNote(CwTimingEvent timingEvent) {
+        if (timingEvent == null || timingEvent.kind() != CwTimingEvent.Kind.GAP) {
+            return "";
+        }
+        double dotRatio = timingEvent.ratioToDotEstimate();
+        double intraRatio = timingEvent.ratioToIntraGapEstimate();
+        if (timingEvent.classification() == CwTimingEvent.Classification.LETTER_GAP) {
+            if (dotRatio >= 3.60d) {
+                return "Letter-gap classification, but decoder soft word-break promotion is likely.";
+            }
+            if (dotRatio >= 3.15d && intraRatio < 5.0d) {
+                return "Borderline word-like gap blocked by weak intra-gap evidence.";
+            }
+            return "Stable letter-gap region under current timing estimates.";
+        }
+        if (timingEvent.classification() == CwTimingEvent.Classification.WORD_GAP) {
+            if (dotRatio < 4.35d) {
+                return "Word-gap classification relies on strong intra-gap evidence, not just raw dot ratio.";
+            }
+            return "Clear word-gap region under current timing estimates.";
+        }
+        if (timingEvent.classification() == CwTimingEvent.Classification.INTRA_SYMBOL_GAP) {
+            return "Short gap kept inside one Morse character.";
+        }
+        if (timingEvent.classification() == CwTimingEvent.Classification.UNKNOWN) {
+            return "Gap fell outside the expected timing buckets.";
+        }
+        return "";
     }
 
     private String renderDecoderState() {
@@ -2615,6 +2674,36 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.resetDraftEditsButton.setEnabled(hasManualCorrections(qsoSnapshot));
         binding.rxFocusStopCaptureButton.setEnabled(anySourceActive());
         binding.runBatchAnalysisButton.setEnabled(!anySourceActive() && !batchRunInProgress);
+        publishRxSessionSnapshot(interpreterSnapshot, qsoSnapshot);
+    }
+
+    private void publishRxSessionSnapshot(
+            CwInterpreterSnapshot interpreterSnapshot,
+            QsoDraftSnapshot qsoSnapshot
+    ) {
+        if (rxSessionStore == null) {
+            return;
+        }
+        InputSourceOption selectedOption = selectedInputSource();
+        RxAudioSource selectedSource = sourceForOption(selectedOption);
+        CwSignalSnapshot signalSnapshot = cwSignalProcessor.snapshot();
+        CwTimingSnapshot timingSnapshot = cwTimingModel.snapshot();
+        rxSessionStore.save(new RxSessionSnapshot(
+                System.currentTimeMillis(),
+                selectedOption == null ? "" : selectedOption.toString(),
+                selectedSource == null ? RxAudioSource.State.IDLE.displayName() : selectedSource.state().displayName(),
+                anySourceActive(),
+                signalSnapshot.preferredToneFrequencyHz(),
+                signalSnapshot.targetToneFrequencyHz(),
+                signalSnapshot.effectiveTrackedToneFrequencyHz(),
+                timingSnapshot.estimatedWpm(),
+                interpreterSnapshot == null ? "" : interpreterSnapshot.rawText(),
+                qsoSnapshot == null ? "" : qsoSnapshot.normalizedText(),
+                qsoSnapshot == null || qsoSnapshot.phase() == null ? "" : qsoSnapshot.phase().displayName(),
+                qsoSnapshot == null ? "" : qsoSnapshot.remoteCallsignCandidate(),
+                qsoSnapshot != null && qsoSnapshot.readyForDraftConfirmation(),
+                qsoSnapshot != null && qsoSnapshot.needManualReview()
+        ));
     }
 
     @Override

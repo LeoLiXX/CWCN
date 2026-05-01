@@ -218,16 +218,20 @@ public final class QsoStateMachine {
         boolean hasRepeatRequest = containsHint(snapshot.phraseHints(), "Repeat / clarification request")
                 || containsHint(snapshot.phraseHints(), "Callsign confirmation cycle");
         boolean hasAck = containsToken(normalized, " R ");
-        boolean hasTurnHandoff = containsToken(normalized, " BK ")
+        boolean hasTurnHandoff = containsHint(snapshot.phraseHints(), "Turn handoff / over")
+                || containsToken(normalized, " BK ")
                 || containsToken(normalized, " KN ")
                 || normalized.endsWith(" KN")
                 || normalized.endsWith(" BK")
                 || containsToken(normalized, " K ")
                 || normalized.endsWith(" K");
+        boolean hasShortTailEnding = containsHint(snapshot.phraseHints(), "Short-tail ending");
         boolean hasClosing = containsToken(normalized, "THANKS")
                 || containsToken(normalized, "73")
                 || containsToken(normalized, "EE")
-                || containsToken(normalized, "GL");
+                || containsToken(normalized, "GL")
+                || containsHint(snapshot.phraseHints(), "Closing / acknowledgement")
+                || containsHint(snapshot.phraseHints(), "73 closing");
         boolean hasDe = containsToken(normalized, "DE");
 
         if (!hasText) {
@@ -239,6 +243,9 @@ public final class QsoStateMachine {
         }
         if (hasClosing || (hasTurnHandoff && hasAck && (effectiveRstSent() != null || effectiveRstRcvd() != null))) {
             return QsoPhase.CLOSING;
+        }
+        if (hasShortTailEnding && hasTurnHandoff && hasCallsign && hasDe) {
+            return QsoPhase.REPORT_EXCHANGE;
         }
         if (hasReport) {
             return QsoPhase.REPORT_EXCHANGE;
@@ -450,8 +457,8 @@ public final class QsoStateMachine {
     private String nearestReportAfter(List<CwInterpretedToken> tokens, int startIndex) {
         for (int index = startIndex + 1; index < tokens.size() && index <= startIndex + 2; index++) {
             CwInterpretedToken token = tokens.get(index);
-            if (token.type() == CwInterpretedToken.Type.REPORT && "599".equals(token.normalizedText())) {
-                return token.normalizedText();
+            if (isReportValueToken(token)) {
+                return "599";
             }
         }
         return null;
@@ -460,8 +467,8 @@ public final class QsoStateMachine {
     private String trailingReport(List<CwInterpretedToken> tokens) {
         for (int index = tokens.size() - 1; index >= 0 && index >= tokens.size() - 3; index--) {
             CwInterpretedToken token = tokens.get(index);
-            if (token.type() == CwInterpretedToken.Type.REPORT && "599".equals(token.normalizedText())) {
-                return token.normalizedText();
+            if (isReportValueToken(token)) {
+                return "599";
             }
         }
         return null;
@@ -475,12 +482,25 @@ public final class QsoStateMachine {
             CwInterpretedToken first = tokens.get(index);
             CwInterpretedToken second = tokens.get(index + 1);
             if (reportLabel.equals(first.normalizedText())
-                    && second.type() == CwInterpretedToken.Type.REPORT
-                    && "599".equals(second.normalizedText())) {
+                    && isReportValueToken(second)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private boolean isReportValueToken(CwInterpretedToken token) {
+        if (token == null || token.type() != CwInterpretedToken.Type.REPORT) {
+            return false;
+        }
+        String normalized = token.normalizedText();
+        if (normalized == null || normalized.isEmpty()) {
+            return false;
+        }
+        if ("599".equals(normalized) || "5NN".equals(normalized) || "ENN".equals(normalized)) {
+            return true;
+        }
+        return normalized.length() == 3 && normalized.matches("[59EN?]{3}");
     }
 
     private String buildSummary(QsoPhase previousPhase, QsoPhase currentPhase) {

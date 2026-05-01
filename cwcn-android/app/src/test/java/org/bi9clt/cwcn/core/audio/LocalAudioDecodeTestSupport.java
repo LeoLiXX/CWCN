@@ -72,6 +72,29 @@ final class LocalAudioDecodeTestSupport {
             boolean experimentalHypothesisGuardEnabled
     ) throws IOException {
         WaveDataProbe waveData = readWaveFileForProbe(wavFile);
+        short[] samples = waveData.samples();
+        int sampleRateHz = waveData.sampleRateHz();
+        ArrayList<AudioFrame> capturedFrames = new ArrayList<>();
+        long sampleOffset = 0L;
+        for (int offset = 0; offset < samples.length; offset += FRAME_SIZE_SAMPLES) {
+            int frameLength = Math.min(FRAME_SIZE_SAMPLES, samples.length - offset);
+            short[] frameSamples = new short[frameLength];
+            System.arraycopy(samples, offset, frameSamples, 0, frameLength);
+            capturedFrames.add(buildFrameForProbe(frameSamples, sampleRateHz, sampleOffset));
+            sampleOffset += frameLength;
+        }
+        String fileName = wavFile.getFileName().toString();
+        String sourceLabel = fileName.toLowerCase(Locale.US).endsWith(".wav")
+                ? fileName.substring(0, fileName.length() - 4)
+                : fileName;
+        return decodeFramesDetailed(sourceLabel, capturedFrames, experimentalHypothesisGuardEnabled);
+    }
+
+    static OfflineDetailedProbeResult decodeFramesDetailed(
+            String sourceLabel,
+            List<AudioFrame> frames,
+            boolean experimentalHypothesisGuardEnabled
+    ) {
         CwSignalProcessor signalProcessor = new CwSignalProcessor();
         signalProcessor.setExperimentalHypothesisGuardEnabled(experimentalHypothesisGuardEnabled);
         CwHybridTimingModel timingModel = new CwHybridTimingModel();
@@ -84,14 +107,9 @@ final class LocalAudioDecodeTestSupport {
         ArrayList<CwDecodeEvent> capturedDecodeEvents = new ArrayList<>();
         ArrayList<FrameSignalTrace> frameSignalTraces = new ArrayList<>();
 
-        short[] samples = waveData.samples();
-        int sampleRateHz = waveData.sampleRateHz();
-        long sampleOffset = 0L;
-        for (int offset = 0; offset < samples.length; offset += FRAME_SIZE_SAMPLES) {
-            int frameLength = Math.min(FRAME_SIZE_SAMPLES, samples.length - offset);
-            short[] frameSamples = new short[frameLength];
-            System.arraycopy(samples, offset, frameSamples, 0, frameLength);
-            AudioFrame frame = buildFrameForProbe(frameSamples, sampleRateHz, sampleOffset);
+        AudioFrame lastFrame = null;
+        for (AudioFrame frame : frames) {
+            lastFrame = frame;
             capturedFrames.add(frame);
             List<CwToneEvent> toneEvents = signalProcessor.process(frame);
             capturedToneEvents.addAll(toneEvents);
@@ -105,23 +123,22 @@ final class LocalAudioDecodeTestSupport {
                     capturedTimingEvents,
                     capturedDecodeEvents
             );
-            sampleOffset += frameLength;
         }
 
-        long flushTimestampMs = Math.max(
-                1L,
-                Math.round(samples.length * 1000.0d / sampleRateHz)
-        );
-        List<CwTimingEvent> timingEvents = timingModel.flushPendingGap(flushTimestampMs);
-        capturedTimingEvents.addAll(timingEvents);
-        drainTimingEvents(timingEvents, decoder, interpreter, qsoStateMachine, capturedDecodeEvents);
-        List<CwDecodeEvent> trailingDecodeEvents = decoder.flushPendingCharacter(flushTimestampMs);
-        drainDecodeEvents(trailingDecodeEvents, interpreter, qsoStateMachine, capturedDecodeEvents);
+        long flushTimestampMs = 0L;
+        if (lastFrame != null) {
+            long frameDurationMs = Math.max(
+                    1L,
+                    Math.round(lastFrame.sampleCount() * 1000.0d / lastFrame.sampleRateHz())
+            );
+            flushTimestampMs = lastFrame.capturedAtMs() + frameDurationMs;
+            List<CwTimingEvent> timingEvents = timingModel.flushPendingGap(flushTimestampMs);
+            capturedTimingEvents.addAll(timingEvents);
+            drainTimingEvents(timingEvents, decoder, interpreter, qsoStateMachine, capturedDecodeEvents);
+            List<CwDecodeEvent> trailingDecodeEvents = decoder.flushPendingCharacter(flushTimestampMs);
+            drainDecodeEvents(trailingDecodeEvents, interpreter, qsoStateMachine, capturedDecodeEvents);
+        }
 
-        String fileName = wavFile.getFileName().toString();
-        String sourceLabel = fileName.toLowerCase(Locale.US).endsWith(".wav")
-                ? fileName.substring(0, fileName.length() - 4)
-                : fileName;
         OfflineProbeResult probeResult = new OfflineProbeResult(
                 sourceLabel,
                 sanitize(decoder.snapshot().decodedText()),

@@ -1605,7 +1605,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     400,
-                    "BI9CLT DE BG7YOZ UR 599 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList("Station identification / callsign exchange", "Report exchange"),
                     QsoPhase.REPORT_EXCHANGE,
@@ -1636,7 +1636,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR ?NN B",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1673,7 +1673,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1709,7 +1709,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1739,7 +1739,7 @@ public final class CwFixtureLibrary {
                     0.22d,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1775,7 +1775,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9??Z AGAIN PLEASE K BI9CLZ DE BG7YOZ UR 599 BK",
+                    "BI9??Z AGN PSE K BI9CLZ DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLZ", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1815,7 +1815,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9??Z AGAIN PLEASE K BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9??Z AGN PSE K BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1852,7 +1852,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1884,7 +1884,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1917,7 +1917,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1950,7 +1950,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -1985,7 +1985,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2020,7 +2020,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2054,7 +2054,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2089,7 +2089,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2125,7 +2125,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2161,7 +2161,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2200,7 +2200,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2237,7 +2237,7 @@ public final class CwFixtureLibrary {
                     Collections.singletonList(PartTimingProfile.defaultProfile()),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2263,7 +2263,7 @@ public final class CwFixtureLibrary {
                     1800,
                     300,
                     500,
-                    "BI9??Z UR CALL AGAIN PLEASE K",
+                    "BI9??Z UR CALL AGAIN PSE K",
                     Collections.singletonList("BI9??Z"),
                     Arrays.asList(
                             "Repeat / clarification request",
@@ -2336,7 +2336,7 @@ public final class CwFixtureLibrary {
                     2600,
                     250,
                     450,
-                    "BI9??Z AGAIN CALLSIGN PLEASE KN",
+                    "BI9??Z AGN CALLSIGN PSE KN",
                     Collections.singletonList("BI9??Z"),
                     Arrays.asList(
                             "Repeat / clarification request",
@@ -2456,7 +2456,7 @@ public final class CwFixtureLibrary {
                     2300,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2481,7 +2481,7 @@ public final class CwFixtureLibrary {
                     2300,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2506,7 +2506,7 @@ public final class CwFixtureLibrary {
                     2300,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2531,7 +2531,7 @@ public final class CwFixtureLibrary {
                     2300,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK BI9CLT",
+                    "BI9CLT DE BG7YOZ UR 5NN BK BI9CLT",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2556,7 +2556,7 @@ public final class CwFixtureLibrary {
                     2200,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ THANKS 73 BK",
+                    "BI9CLT DE BG7YOZ TU 73 BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2581,7 +2581,7 @@ public final class CwFixtureLibrary {
                     2200,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ THANKS 73 BK BI9CLT",
+                    "BI9CLT DE BG7YOZ TU 73 BK BI9CLT",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2613,7 +2613,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK BI9CLT",
+                    "BI9CLT DE BG7YOZ UR 5NN BK BI9CLT",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2646,7 +2646,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     850,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR ?NN B",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2658,7 +2658,7 @@ public final class CwFixtureLibrary {
                     null,
                     "599",
                     "GOOD",
-                    "Exercises a hand-key/QSB style directed report where the copied report/control tail is damaged as UR?NN B and must be recovered downstream."
+                    "Exercises a hand-key/QSB style directed report where the copied report/control tail is damaged as UR?NN B; visible residue should stay explicit while semantics still recover downstream."
             ).withExpectedRawText("BI9CLT DE BG7YOZ UR ?NN B"),
             new CwFixtureScenario(
                     "human_damaged_ack_report_exchange",
@@ -2679,7 +2679,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     850,
-                    "BI9CLT DE BG7YOZ R 599 BK",
+                    "BI9CLT DE BG7YOZ R ?NN B",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2691,7 +2691,7 @@ public final class CwFixtureLibrary {
                     "599",
                     null,
                     "GOOD",
-                    "Exercises a hand-key/QSB style acknowledgement-return-report token where R?NNB should still normalize into R 599 BK."
+                    "Exercises a hand-key/QSB style acknowledgement-return-report token where R?NNB should still stay visibly damaged while report/handoff semantics recover downstream."
             ).withExpectedRawText("BI9CLT DE BG7YOZ R ?NN B"),
             new CwFixtureScenario(
                     "human_split_short_tokens_report_exchange",
@@ -2712,7 +2712,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     800,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2757,7 +2757,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     800,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2802,7 +2802,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     800,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2847,7 +2847,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     800,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2892,7 +2892,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     800,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2937,7 +2937,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     800,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -2982,7 +2982,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     700,
-                    "BI9CLT AGAIN PLEASE K",
+                    "BI9CLT AGN PSE K",
                     Collections.singletonList("BI9CLT"),
                     Arrays.asList(
                             "Repeat / clarification request",
@@ -3017,7 +3017,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     700,
-                    "BI9CLT DE BG7YOZ UR 599 BK BI9CLT DE ?G7YOZ THANKS 73 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK BI9CLT DE ?G7YOZ TU 73 BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3058,7 +3058,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     700,
-                    "BI9CLT DE BG7YOZ UR 599 BKBI?CLT DE BG7YOZ THANKS 73 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK BI?CLT DE BG7YOZ TU 73 BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3098,7 +3098,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK BI9CL DE ?YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK BI9CL DE ?YOZ UR 5NN BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3133,7 +3133,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ THANKS 73 BK",
+                    "BI9CLT DE BG7YOZ TU 73 BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3166,7 +3166,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ R 599 THANKS 73 BK",
+                    "BI9CLT DE BG7YOZ R 5NN TU 73 BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3218,7 +3218,7 @@ public final class CwFixtureLibrary {
                     2200,
                     250,
                     450,
-                    "BI9??Z DE BI9CLZ AGAIN BI9CLZ K",
+                    "BI9??Z DE BI9CLZ AGN BI9CLZ K",
                     Collections.singletonList("BI9CLZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3248,7 +3248,7 @@ public final class CwFixtureLibrary {
                     2400,
                     250,
                     450,
-                    "BI9??Z UR CALL AGAIN PLEASE K BI9CLZ DE BG7YOZ UR 599 BK",
+                    "BI9??Z UR CALL AGAIN PSE K BI9CLZ DE BG7YOZ UR 5NN BK",
                     Arrays.asList("BI9CLZ", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3283,7 +3283,7 @@ public final class CwFixtureLibrary {
                     2400,
                     250,
                     450,
-                    "BI9??Z UR CALL AGAIN PLEASE K BI9CLZ DE BG7YOZ UR 599 BK BI9CLZ DE BG7YOZ THANKS 73 BK",
+                    "BI9??Z UR CALL AGAIN PSE K BI9CLZ DE BG7YOZ UR 5NN BK BI9CLZ DE BG7YOZ TU 73 BK",
                     Arrays.asList("BI9CLZ", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3327,7 +3327,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9??Z UR CALL AGAIN PLEASE K BI9CLZ DE BG7YOZ UR 599 BK BI9CLZ DE BG7YOZ THANKS 73 BK",
+                    "BI9??Z UR CALL AGAIN PSE K BI9CLZ DE BG7YOZ UR 5NN BK BI9CLZ DE BG7YOZ TU 73 BK",
                     Arrays.asList("BI9CLZ", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3359,7 +3359,7 @@ public final class CwFixtureLibrary {
                     2400,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ UR 599 BK",
+                    "BI9CLT DE BG7YOZ UR 5NN BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3382,7 +3382,7 @@ public final class CwFixtureLibrary {
                     2200,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ R 599 THANKS 73 BK",
+                    "BI9CLT DE BG7YOZ R 5NN TU 73 BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3409,7 +3409,7 @@ public final class CwFixtureLibrary {
                     2200,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ R 599 THANKS 73 BK",
+                    "BI9CLT DE BG7YOZ R 5NN TU 73 BK",
                     Collections.singletonList("BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3445,7 +3445,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ R 599 THANKS 73 BK",
+                    "BI9CLT DE BG7YOZ R 5NN TU 73 BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3483,7 +3483,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ R 599 THANKS 73 BK",
+                    "BI9CLT DE BG7YOZ R 5NN TU 73 BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3511,7 +3511,7 @@ public final class CwFixtureLibrary {
                     2200,
                     250,
                     450,
-                    "BK BI9CLT DE BG7YOZ R 599 THANKS 73 BK",
+                    "BK BI9CLT DE BG7YOZ R 5NN TU 73 BK",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
@@ -3539,7 +3539,7 @@ public final class CwFixtureLibrary {
                     2200,
                     250,
                     450,
-                    "BI9CLT DE BG7YOZ R 599 BK BI9CLT",
+                    "BI9CLT DE BG7YOZ R 5NN BK BI9CLT",
                     Arrays.asList("BI9CLT", "BG7YOZ"),
                     Arrays.asList(
                             "Station identification / callsign exchange",
