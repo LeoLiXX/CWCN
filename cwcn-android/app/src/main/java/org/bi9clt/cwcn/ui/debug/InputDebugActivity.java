@@ -74,6 +74,8 @@ import org.bi9clt.cwcn.core.rig.RigTransport;
 import org.bi9clt.cwcn.core.signal.CwSignalProcessor;
 import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 import org.bi9clt.cwcn.core.signal.CwToneEvent;
+import org.bi9clt.cwcn.core.spectrum.SpectrumHistoryStore;
+import org.bi9clt.cwcn.core.spectrum.SpectrumSnapshotData;
 import org.bi9clt.cwcn.core.timing.CwTimingEvent;
 import org.bi9clt.cwcn.core.timing.CwHybridTimingModel;
 import org.bi9clt.cwcn.core.timing.CwTimingSnapshot;
@@ -119,6 +121,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private QsoStateMachine qsoStateMachine;
     private LocalLogRepository localLogRepository;
     private RxSessionStore rxSessionStore;
+    private SpectrumHistoryStore spectrumHistoryStore;
 
     private long receivedFrameCount;
     private long receivedSampleCount;
@@ -189,6 +192,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         qsoStateMachine = new QsoStateMachine();
         localLogRepository = new LocalLogRepository(this);
         rxSessionStore = new RxSessionStore(this);
+        spectrumHistoryStore = new SpectrumHistoryStore(this);
         restorePreferredToneFrequency();
         restoreSelectedLocalFile();
         restoreSelectedLocalFolder();
@@ -1588,6 +1592,20 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         setStableText(binding.rxFocusSpectrumSummaryText, renderAudioSpectrumSummary());
         binding.audioSpectrumView.setSpectrumSnapshot(lastSpectrumSnapshot);
         setStableText(binding.audioSpectrumSummaryText, renderAudioSpectrumSummary());
+        publishSpectrumSnapshot();
+    }
+
+    private void publishSpectrumSnapshot() {
+        if (spectrumHistoryStore == null) {
+            return;
+        }
+        SpectrumSnapshotData snapshotData = SpectrumSnapshotData.fromAudioSnapshot(
+                lastSpectrumSnapshot,
+                System.currentTimeMillis()
+        );
+        if (snapshotData != null) {
+            spectrumHistoryStore.append(snapshotData);
+        }
     }
 
     private CharSequence renderAudioSpectrumSummary() {

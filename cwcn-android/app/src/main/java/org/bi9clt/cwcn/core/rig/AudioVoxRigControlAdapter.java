@@ -105,4 +105,9 @@ public final class AudioVoxRigControlAdapter implements RigControlAdapter {
     CwTxPlaybackSnapshot lastSnapshot() {
         return lastSnapshot;
     }
+
+    @Override
+    public CwTxPlaybackSnapshot currentTxPlaybackSnapshot() {
+        return lastSnapshot;
+    }
 }

@@ -183,6 +183,11 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
         return lastSnapshot;
     }
 
+    @Override
+    public CwTxPlaybackSnapshot currentTxPlaybackSnapshot() {
+        return lastSnapshot;
+    }
+
     public SerialKeyerTxOutput.KeyLine keyLine() {
         return keyLine;
     }

@@ -152,6 +152,7 @@ public final class CwTxRunner {
                 elapsedMs,
                 plan.totalDurationMs(),
                 currentElement == null ? "" : currentElement.sourceSymbol(),
+                currentElement == null ? -1 : currentElement.sourceTextIndex(),
                 currentElement != null && currentElement.kind() == CwTxElement.Kind.KEY_DOWN,
                 statusMessage
         );

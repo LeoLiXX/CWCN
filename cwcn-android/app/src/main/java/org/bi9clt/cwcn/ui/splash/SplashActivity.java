@@ -9,7 +9,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import org.bi9clt.cwcn.BuildConfig;
 import org.bi9clt.cwcn.databinding.ActivitySplashBinding;
-import org.bi9clt.cwcn.ui.home.HomeActivity;
+import org.bi9clt.cwcn.ui.operate.OperateActivity;
 
 public final class SplashActivity extends AppCompatActivity {
     private static final long SPLASH_DELAY_MS = 1200L;
@@ -19,7 +19,7 @@ public final class SplashActivity extends AppCompatActivity {
 
     private ActivitySplashBinding binding;
     private boolean navigating;
-    private final Runnable delayedOpenRunnable = this::openHome;
+    private final Runnable delayedOpenRunnable = this::openOperate;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -31,8 +31,8 @@ public final class SplashActivity extends AppCompatActivity {
         binding.versionText.setText("Version " + BuildConfig.VERSION_NAME);
         binding.buildTimeText.setText("Build " + BuildConfig.BUILD_TIME);
         applyLaunchIntent(getIntent());
-        binding.getRoot().setOnClickListener(view -> openHome());
-        binding.enterButton.setOnClickListener(view -> openHome());
+        binding.getRoot().setOnClickListener(view -> openOperate());
+        binding.enterButton.setOnClickListener(view -> openOperate());
         animateEntrance();
         scheduleAutoOpen();
     }
@@ -54,20 +54,20 @@ public final class SplashActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    private void openHome() {
+    private void openOperate() {
         if (navigating || isFinishing()) {
             return;
         }
         navigating = true;
         binding.getRoot().removeCallbacks(delayedOpenRunnable);
-        Intent intent = new Intent(this, HomeActivity.class);
+        Intent intent = new Intent(this, OperateActivity.class);
         startActivity(intent);
         finish();
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
     }
 
     private void applyLaunchIntent(@Nullable Intent intent) {
-        binding.splashHintText.setText("Tap to enter, or wait a moment for CWCN to open.");
+        binding.splashHintText.setText("Tap to enter Operate, or wait a moment for CWCN to open.");
     }
 
     private void scheduleAutoOpen() {

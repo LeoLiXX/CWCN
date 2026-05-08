@@ -86,11 +86,11 @@ public final class RigKeyingTxBackend implements CwTxBackend {
         }
         String status = snapshot.statusMessage();
         if (snapshot.state() == CwTxState.PLAYING) {
-            status = "Dedicated keying line is driving CW timing through the rig. Phone sidetone is not generated on this route; rely on the radio's monitor/sidetone.";
+            status = "正在通过独立键控线按节奏发射 CW";
         } else if (snapshot.state() == CwTxState.COMPLETED) {
-            status = "Dedicated keying playback completed. If no sidetone was heard, verify the radio's CW monitor/sidetone settings.";
+            status = "独立键控线发射完成";
         } else if (snapshot.state() == CwTxState.STOPPED) {
-            status = "Dedicated keying playback stopped. The rig keying line was released.";
+            status = "独立键控线发射已停止";
         }
         return new CwTxPlaybackSnapshot(
                 snapshot.state(),
@@ -101,6 +101,7 @@ public final class RigKeyingTxBackend implements CwTxBackend {
                 snapshot.elapsedMs(),
                 snapshot.totalDurationMs(),
                 snapshot.currentElementLabel(),
+                snapshot.currentTextIndex(),
                 snapshot.toneActive(),
                 status
         );

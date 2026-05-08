@@ -1,0 +1,63 @@
+package org.bi9clt.cwcn.core.app;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+
+public final class StationProfileStore {
+    private static final String PREFS_NAME = "cwcn_station_profile";
+    private static final String KEY_STATION_CALLSIGN = "station_callsign";
+    private static final String KEY_OPERATOR_NAME = "operator_name";
+    private static final String KEY_QTH = "station_qth";
+
+    private final SharedPreferences preferences;
+
+    public StationProfileStore(Context context) {
+        Context appContext = context.getApplicationContext();
+        preferences = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+    }
+
+    public String stationCallsign() {
+        return normalize(preferences.getString(KEY_STATION_CALLSIGN, null));
+    }
+
+    public String operatorName() {
+        return normalize(preferences.getString(KEY_OPERATOR_NAME, null));
+    }
+
+    public String qth() {
+        return normalize(preferences.getString(KEY_QTH, null));
+    }
+
+    public void save(String stationCallsign, String operatorName, String qth) {
+        SharedPreferences.Editor editor = preferences.edit();
+        putOptionalString(editor, KEY_STATION_CALLSIGN, stationCallsign);
+        putOptionalString(editor, KEY_OPERATOR_NAME, operatorName);
+        putOptionalString(editor, KEY_QTH, qth);
+        editor.apply();
+    }
+
+    public void clear() {
+        preferences.edit()
+                .remove(KEY_STATION_CALLSIGN)
+                .remove(KEY_OPERATOR_NAME)
+                .remove(KEY_QTH)
+                .apply();
+    }
+
+    private void putOptionalString(SharedPreferences.Editor editor, String key, String value) {
+        String normalized = normalize(value);
+        if (normalized == null) {
+            editor.remove(key);
+            return;
+        }
+        editor.putString(key, normalized);
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+}

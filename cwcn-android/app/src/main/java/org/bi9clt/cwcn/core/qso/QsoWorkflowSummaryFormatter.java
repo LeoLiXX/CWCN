@@ -11,7 +11,7 @@ public final class QsoWorkflowSummaryFormatter {
 
     public static String renderDraftReviewSummary(QsoDraftSnapshot snapshot) {
         if (snapshot == null) {
-            return "No active draft. Start from Debug or type fields here to build one.";
+            return "No active draft. Type fields here or wait for live RX to build one.";
         }
 
         ArrayList<String> lines = new ArrayList<>();
@@ -45,7 +45,7 @@ public final class QsoWorkflowSummaryFormatter {
             return "Save Draft first so the stored draft, review state, and editor all match.";
         }
         if (snapshot == null) {
-            return "Type at least a remote callsign or return to Debug to feed live decode.";
+            return "Type at least a remote callsign or wait for live RX to populate the draft.";
         }
         if (isBlank(snapshot.remoteCallsignCandidate())) {
             return "Fill in the remote callsign before confirmation.";

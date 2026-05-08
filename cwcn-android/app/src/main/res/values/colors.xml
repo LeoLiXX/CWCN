@@ -12,4 +12,15 @@
     <color name="cwcn_body">#D0DEE3</color>
     <color name="cwcn_subtitle">#8FA8B1</color>
     <color name="cwcn_accent">#74EBDD</color>
+    <color name="cwcn_rx_line">#8EE7FF</color>
+    <color name="cwcn_tx_line">#FFBF62</color>
+    <color name="cwcn_warning">#FF9C6A</color>
+    <color name="cwcn_overlay_scrim">#3305090C</color>
+    <color name="cwcn_overlay_panel">#B814242D</color>
+    <color name="cwcn_chip_active">#183E45</color>
+    <color name="cwcn_chip_active_stroke">#52D8CB</color>
+    <color name="cwcn_soft_button_fill">#0B171D</color>
+    <color name="cwcn_soft_button_stroke">#1E3843</color>
+    <color name="cwcn_soft_button_active_fill">#132730</color>
+    <color name="cwcn_soft_button_active_stroke">#3FAFA3</color>
 </resources>

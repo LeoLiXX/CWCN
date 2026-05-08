@@ -9,11 +9,13 @@ public final class CwTxElement {
     private final Kind kind;
     private final int durationMs;
     private final String sourceSymbol;
+    private final int sourceTextIndex;
 
-    public CwTxElement(Kind kind, int durationMs, String sourceSymbol) {
+    public CwTxElement(Kind kind, int durationMs, String sourceSymbol, int sourceTextIndex) {
         this.kind = kind;
         this.durationMs = Math.max(0, durationMs);
         this.sourceSymbol = sourceSymbol == null ? "" : sourceSymbol;
+        this.sourceTextIndex = Math.max(-1, sourceTextIndex);
     }
 
     public Kind kind() {
@@ -26,5 +28,9 @@ public final class CwTxElement {
 
     public String sourceSymbol() {
         return sourceSymbol;
+    }
+
+    public int sourceTextIndex() {
+        return sourceTextIndex;
     }
 }

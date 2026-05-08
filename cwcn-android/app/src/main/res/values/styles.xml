@@ -1,0 +1,11 @@
+<resources>
+    <style name="TextAppearance.CWCN.BottomNav.Active" parent="TextAppearance.AppCompat.Caption">
+        <item name="android:textSize">10sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="TextAppearance.CWCN.BottomNav.Inactive" parent="TextAppearance.AppCompat.Caption">
+        <item name="android:textSize">10sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+</resources>

@@ -1,5 +1,9 @@
 package org.bi9clt.cwcn.core.rig;
 
+import androidx.annotation.Nullable;
+
+import org.bi9clt.cwcn.core.tx.CwTxPlaybackSnapshot;
+
 public interface RigControlAdapter {
     String id();
 
@@ -21,6 +25,10 @@ public interface RigControlAdapter {
 
     boolean sendText(String text);
 
+    default boolean stopTextTransmission() {
+        return keyUp();
+    }
+
     default boolean supportsConfigurableTextToCwProfile() {
         return false;
     }
@@ -35,5 +43,10 @@ public interface RigControlAdapter {
 
     default boolean usesToneFrequencyForTextToCwProfile() {
         return supportsConfigurableTextToCwProfile();
+    }
+
+    @Nullable
+    default CwTxPlaybackSnapshot currentTxPlaybackSnapshot() {
+        return null;
     }
 }

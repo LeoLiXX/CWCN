@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/cwcn_screen_background"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="2dp"
+        android:paddingBottom="2dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/spectrumStatusMainText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/cwcn_title"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/spectrumStatusDetailText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="7sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/spectrumSqlLabelText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SQL"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="7sp"
+                    android:textStyle="bold" />
+
+                <SeekBar
+                    android:id="@+id/spectrumSqlSeekBar"
+                    android:layout_width="92dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:max="100"
+                    android:minHeight="20dp"
+                    android:progress="55" />
+
+                <TextView
+                    android:id="@+id/spectrumSqlValueText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="7sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/backToOperateButton"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Back to operate"
+            android:padding="5dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_back"
+            android:tint="@color/cwcn_accent" />
+    </LinearLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@android:color/black">
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/spectrumGuideline"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintGuide_percent="0.15321477" />
+
+        <org.bi9clt.cwcn.ui.spectrum.Ft8CnRulerFrequencyView
+            android:id="@+id/rulerFrequencyView"
+            android:layout_width="0dp"
+            android:layout_height="29dp"
+            android:background="@android:color/black"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <org.bi9clt.cwcn.ui.spectrum.Ft8CnColumnarView
+            android:id="@+id/columnarView"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toTopOf="@+id/spectrumGuideline"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/rulerFrequencyView" />
+
+        <org.bi9clt.cwcn.ui.spectrum.Ft8CnWaterfallView
+            android:id="@+id/waterfallView"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="@+id/spectrumGuideline" />
+
+        <TextView
+            android:id="@+id/emptySpectrumStateText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColor="@color/cwcn_subtitle"
+            android:textSize="11sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="@+id/waterfallView" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <TextView
+        android:id="@+id/spectrumSummaryText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:textColor="@color/cwcn_body"
+        android:textSize="9sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/spectrumDraftText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:textColor="@color/cwcn_subtitle"
+        android:textSize="8sp"
+        android:visibility="gone" />
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNavView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/formal_bottom_nav_background"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        app:itemBackground="@drawable/formal_bottom_nav_item_background"
+        app:itemIconSize="22dp"
+        app:itemIconTint="@color/formal_bottom_nav_item_colors"
+        app:itemRippleColor="@android:color/transparent"
+        app:itemTextAppearanceActive="@style/TextAppearance.CWCN.BottomNav.Active"
+        app:itemTextAppearanceInactive="@style/TextAppearance.CWCN.BottomNav.Inactive"
+        app:itemTextColor="@color/formal_bottom_nav_item_colors"
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/formal_bottom_nav_menu" />
+
+</LinearLayout>

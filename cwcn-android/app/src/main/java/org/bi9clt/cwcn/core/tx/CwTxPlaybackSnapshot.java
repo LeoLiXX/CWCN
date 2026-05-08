@@ -9,6 +9,7 @@ public final class CwTxPlaybackSnapshot {
     private final int elapsedMs;
     private final int totalDurationMs;
     private final String currentElementLabel;
+    private final int currentTextIndex;
     private final boolean toneActive;
     private final String statusMessage;
 
@@ -21,6 +22,7 @@ public final class CwTxPlaybackSnapshot {
             int elapsedMs,
             int totalDurationMs,
             String currentElementLabel,
+            int currentTextIndex,
             boolean toneActive,
             String statusMessage
     ) {
@@ -32,6 +34,7 @@ public final class CwTxPlaybackSnapshot {
         this.elapsedMs = Math.max(0, elapsedMs);
         this.totalDurationMs = Math.max(0, totalDurationMs);
         this.currentElementLabel = currentElementLabel == null ? "" : currentElementLabel;
+        this.currentTextIndex = Math.max(-1, currentTextIndex);
         this.toneActive = toneActive;
         this.statusMessage = statusMessage == null ? "" : statusMessage;
     }
@@ -66,6 +69,10 @@ public final class CwTxPlaybackSnapshot {
 
     public String currentElementLabel() {
         return currentElementLabel;
+    }
+
+    public int currentTextIndex() {
+        return currentTextIndex;
     }
 
     public boolean toneActive() {

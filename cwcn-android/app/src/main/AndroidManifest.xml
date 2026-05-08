@@ -42,9 +42,6 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".ui.home.HomeActivity"
-            android:exported="false" />
-        <activity
             android:name=".ui.settings.SettingsActivity"
             android:exported="false" />
         <activity
@@ -55,6 +52,9 @@
             android:exported="false" />
         <activity
             android:name=".ui.operate.OperateActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.spectrum.SpectrumActivity"
             android:exported="false" />
         <activity
             android:name=".ui.qso.QsoEditorActivity"

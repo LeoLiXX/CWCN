@@ -8,141 +8,712 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
-
-        <TextView
-            android:id="@+id/titleText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Settings"
-            android:textColor="@color/cwcn_title"
-            android:textSize="30sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Configuration and advanced controls live here so Home and Operate can stay focused on radio work."
-            android:textColor="@color/cwcn_subtitle"
-            android:textSize="15sp" />
-
-        <TextView
-            android:id="@+id/versionText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textColor="@color/cwcn_accent"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/backButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Back" />
+        android:padding="10dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
             <TextView
+                android:id="@+id/titleText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Settings"
+                android:textColor="@color/cwcn_title"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/versionText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/cwcn_accent"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/backButton"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/operate_chip_background"
+                android:contentDescription="Back"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_ui_back"
+                android:tint="@color/cwcn_body" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Station And Operating"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Station"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/stationInfoButton"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Station help"
+                    android:padding="2dp"
+                    android:src="@drawable/ic_ui_info"
+                    android:tint="@color/cwcn_subtitle" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/stationProfileText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
+                android:layout_marginTop="6dp"
+                android:maxLines="1"
                 android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/operatingDefaultsText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
+
+            <EditText
+                android:id="@+id/stationCallsignEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="Station callsign"
+                android:inputType="textCapCharacters"
+                android:padding="8dp"
+                android:singleLine="true"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <EditText
+                android:id="@+id/operatorNameEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="Operator name"
+                android:inputType="textPersonName"
+                android:padding="8dp"
+                android:singleLine="true"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <EditText
+                android:id="@+id/qthEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="QTH"
+                android:inputType="textCapWords"
+                android:padding="8dp"
+                android:singleLine="true"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <Button
+                android:id="@+id/saveStationProfileButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/operate_chip_background"
+                android:minHeight="0dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="7dp"
+                android:text="Save"
+                android:textAllCaps="false"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/stationProfileStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="10dp">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Radio And Audio"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Radio Route"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/radioRouteInfoButton"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Radio route help"
+                    android:padding="2dp"
+                    android:src="@drawable/ic_ui_info"
+                    android:tint="@color/cwcn_subtitle" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/rigSettingsText"
+                android:id="@+id/radioRouteText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
+                android:layout_marginTop="6dp"
                 android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
 
             <Button
                 android:id="@+id/openRigSetupButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Open Connect Radio" />
+                android:layout_marginTop="8dp"
+                android:background="@drawable/operate_chip_background"
+                android:minHeight="0dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="7dp"
+                android:text="Rig Setup"
+                android:textAllCaps="false"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="10dp">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Advanced / Developer"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="No-Radio Fallback"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/routeFallbackInfoButton"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Fallback help"
+                    android:padding="2dp"
+                    android:src="@drawable/ic_ui_info"
+                    android:tint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/routeFallbackText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="11sp" />
+
+            <Spinner
+                android:id="@+id/routeFallbackModeSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" />
+
+            <Button
+                android:id="@+id/saveRouteFallbackButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/operate_chip_background"
+                android:minHeight="0dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="7dp"
+                android:text="Save"
+                android:textAllCaps="false"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/routeFallbackStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="CAT &amp; Keying"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/catKeyingInfoButton"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="CAT and keying help"
+                    android:padding="2dp"
+                    android:src="@drawable/ic_ui_info"
+                    android:tint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/catKeyingText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/catKeyingHintText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="1sp" />
+
+            <TextView
+                android:id="@+id/routeSettingsScopeText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
+
+            <LinearLayout
+                android:id="@+id/serialRouteSettingsPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Serial CAT Defaults"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/serialCatPortHintEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="Serial port hint"
+                    android:inputType="text"
+                    android:padding="8dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/serialCatBaudRateEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:hint="Baud"
+                        android:inputType="number"
+                        android:padding="10dp"
+                        android:singleLine="true"
+                        android:textColor="@color/cwcn_body"
+                        android:textColorHint="@color/cwcn_subtitle" />
+
+                    <Spinner
+                        android:id="@+id/serialCatKeyLineSpinner"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/serialCatKeyingPortHintEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:hint="Keying port hint"
+                        android:inputType="text"
+                        android:padding="8dp"
+                        android:singleLine="true"
+                        android:textColor="@color/cwcn_body"
+                        android:textColorHint="@color/cwcn_subtitle" />
+
+                    <Spinner
+                        android:id="@+id/serialCatKeyingPolaritySpinner"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1" />
+                </LinearLayout>
+
+                <EditText
+                    android:id="@+id/serialCatCivAddressEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="CI-V address (hex)"
+                    android:inputType="textCapCharacters"
+                    android:padding="10dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/networkRouteSettingsPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Network CAT Defaults"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/networkHostEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="Host"
+                    android:inputType="textUri"
+                    android:padding="8dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <EditText
+                    android:id="@+id/networkPortEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="Port"
+                    android:inputType="number"
+                    android:padding="8dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/usbRouteSettingsPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="USB Keying Defaults"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <Spinner
+                        android:id="@+id/usbKeyLineSpinner"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+
+                    <EditText
+                        android:id="@+id/usbPreferredDeviceNameEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:hint="Preferred USB device"
+                        android:inputType="text"
+                        android:padding="8dp"
+                        android:singleLine="true"
+                        android:textColor="@color/cwcn_body"
+                        android:textColorHint="@color/cwcn_subtitle" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/saveRouteSettingsButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/operate_chip_background"
+                android:minHeight="0dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="7dp"
+                android:text="Save"
+                android:textAllCaps="false"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/routeSettingsStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="CW Defaults"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/cwDefaultsInfoButton"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="CW defaults help"
+                    android:padding="2dp"
+                    android:src="@drawable/ic_ui_info"
+                    android:tint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/cwDefaultsText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="11sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/defaultWpmEditText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="WPM"
+                    android:inputType="number"
+                    android:padding="8dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <EditText
+                    android:id="@+id/defaultToneEditText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="Tone Hz"
+                    android:inputType="number"
+                    android:padding="8dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/saveCwDefaultsButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/operate_chip_background"
+                android:minHeight="0dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="7dp"
+                android:text="Save"
+                android:textAllCaps="false"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/cwDefaultsStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Advanced / Developer"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/developerInfoButton"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Developer help"
+                    android:padding="2dp"
+                    android:src="@drawable/ic_ui_info"
+                    android:tint="@color/cwcn_subtitle" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/developerModeStatusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
 
             <Button
                 android:id="@+id/toggleDeveloperModeButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Enable Developer Mode" />
+                android:layout_marginTop="8dp"
+                android:background="@drawable/operate_chip_background"
+                android:minHeight="0dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="7dp"
+                android:text="Enable Developer Mode"
+                android:textAllCaps="false"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/developerToolsPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp"
+            android:padding="10dp"
             android:visibility="gone">
 
             <TextView
@@ -150,24 +721,30 @@
                 android:layout_height="wrap_content"
                 android:text="Developer Tools"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/developerToolsNoteText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
 
             <Button
                 android:id="@+id/openDeveloperToolsButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Open Developer Tools" />
+                android:layout_marginTop="8dp"
+                android:background="@drawable/operate_chip_background"
+                android:minHeight="0dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="7dp"
+                android:text="Open Tools"
+                android:textAllCaps="false"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
         </LinearLayout>
 
     </LinearLayout>

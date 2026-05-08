@@ -49,6 +49,7 @@ public final class CwSignalProcessor {
     private static final int MIN_TRACKED_TONE_RMS = 120;
     private static final int MIN_THRESHOLD = 220;
     private static final int BASE_MARGIN = 140;
+    private static final int DEFAULT_SQL_PERCENT = 55;
     private static final int EDGE_WINDOW_SAMPLES = 12;
     private static final int EDGE_CONFIRM_SAMPLES = 6;
     private static final double EDGE_THRESHOLD_RATIO = 0.30d;
@@ -128,6 +129,7 @@ public final class CwSignalProcessor {
     private boolean targetToneLocked;
     private double noiseFloorEstimate;
     private double signalFloorEstimate;
+    private int sqlPercent = DEFAULT_SQL_PERCENT;
     private double lastRmsAmplitude;
     private double lastToneRmsAmplitude;
     private double lastWidebandResidualRmsAmplitude;
@@ -636,6 +638,10 @@ public final class CwSignalProcessor {
         this.pendingRetuneCandidateStableScans = 0;
     }
 
+    public synchronized void setSqlPercent(int sqlPercent) {
+        this.sqlPercent = Math.max(0, Math.min(100, sqlPercent));
+    }
+
     public synchronized void setExperimentalHypothesisGuardEnabled(boolean enabled) {
         experimentalHypothesisGuardEnabled = enabled;
         if (!enabled) {
@@ -902,6 +908,7 @@ public final class CwSignalProcessor {
         double noise = Math.max(0.0d, noiseFloorEstimate);
         double signalDelta = Math.max(0.0d, signalFloorEstimate - noise);
         double margin = Math.max(BASE_MARGIN, Math.max(noise * 0.18d, signalDelta * 0.30d));
+        margin *= sqlMarginMultiplier();
         return Math.max(MIN_THRESHOLD, (int) Math.round(noise + margin));
     }
 
@@ -910,6 +917,11 @@ public final class CwSignalProcessor {
         double attackThreshold = currentThreshold();
         double pullback = Math.max(BASE_MARGIN * 0.45d, (attackThreshold - noise) * 0.52d);
         return Math.max(MIN_THRESHOLD, (int) Math.round(noise + pullback));
+    }
+
+    private double sqlMarginMultiplier() {
+        double normalized = (sqlPercent - DEFAULT_SQL_PERCENT) / 45.0d;
+        return Math.max(0.40d, Math.min(1.75d, 1.0d + (normalized * 0.75d)));
     }
 
     private double smoothNoiseFloor(double currentFloor, double frameRms) {

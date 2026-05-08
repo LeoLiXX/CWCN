@@ -34,8 +34,10 @@ import org.bi9clt.cwcn.core.rig.SerialCatProbe;
 import org.bi9clt.cwcn.core.rig.SerialCatRigControlAdapter;
 import org.bi9clt.cwcn.core.rig.RigSupportLevel;
 import org.bi9clt.cwcn.core.rig.RigTransport;
+import org.bi9clt.cwcn.core.rig.RigControlAdapter;
+import org.bi9clt.cwcn.core.rig.UsbSerialDeviceOption;
 import org.bi9clt.cwcn.databinding.ActivityRigSetupBinding;
-import org.bi9clt.cwcn.ui.developer.DeveloperToolsActivity;
+import org.bi9clt.cwcn.core.rig.UsbSerialKeyerRigControlAdapter;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -49,6 +51,7 @@ public final class RigSetupActivity extends AppCompatActivity {
     public static final String EXTRA_OPEN_DEVELOPER_LABS = "org.bi9clt.cwcn.extra.OPEN_DEVELOPER_LABS";
     public static final String OPEN_REASON_USB_ATTACH = "usb-attached";
     private static final String ACTION_SERIAL_CAT_USB_PERMISSION = "org.bi9clt.cwcn.action.SERIAL_CAT_USB_PERMISSION";
+    private static final String ACTION_USB_KEYER_PERMISSION = "org.bi9clt.cwcn.action.USB_KEYER_PERMISSION";
     private static final String TAG = "RigSetupActivity";
 
     private ActivityRigSetupBinding binding;
@@ -60,6 +63,11 @@ public final class RigSetupActivity extends AppCompatActivity {
     private String serialProbeMessage = "";
     private String serialProbeProfileId;
     private boolean serialProbeInFlight;
+    private String usbKeyerStatusMessage = "";
+    private String usbKeyerStatusProfileId;
+    private boolean usbKeyerPermissionInFlight;
+    private boolean usbKeyerActionInFlight;
+    private boolean usbKeyerTransmissionInFlight;
     private String networkProbeMessage = "";
     private String networkProbeProfileId;
     private boolean networkProbeInFlight;
@@ -67,10 +75,12 @@ public final class RigSetupActivity extends AppCompatActivity {
     private BroadcastReceiver usbPermissionReceiver;
     private ArrayAdapter<String> serialCatPortAdapter;
     private ArrayAdapter<String> serialCatKeyingPortAdapter;
+    private ArrayAdapter<UsbSerialDeviceOption> usbDeviceAdapter;
     private final List<String> serialCatPortOptions = new ArrayList<>();
     private final List<String> serialCatPortHints = new ArrayList<>();
     private final List<String> serialCatKeyingPortOptions = new ArrayList<>();
     private final List<String> serialCatKeyingPortHints = new ArrayList<>();
+    private boolean syncingUsbDeviceSelection;
     private boolean syncingSerialCatPortSelection;
     private boolean syncingSerialCatKeyingPortSelection;
     private boolean syncingSettingsEditor;
@@ -121,15 +131,13 @@ public final class RigSetupActivity extends AppCompatActivity {
 
     private void setupActions() {
         binding.backButton.setOnClickListener(view -> finish());
-        binding.openDeveloperToolsButton.setOnClickListener(view ->
-                startActivity(new Intent(this, DeveloperToolsActivity.class)));
-        binding.toggleDeveloperModeButton.setOnClickListener(view -> {
-            developerModeStore.toggle();
-            refreshUi();
-        });
         binding.saveSelectedProfileButton.setOnClickListener(view -> saveSelectedProfile());
         binding.saveProfileConfigButton.setOnClickListener(view -> saveProfileConfig());
         binding.resetProfileConfigButton.setOnClickListener(view -> resetProfileConfig());
+        binding.requestUsbKeyerPermissionButton.setOnClickListener(view -> requestUsbKeyerPermission());
+        binding.testUsbKeyerPulseButton.setOnClickListener(view -> testUsbKeyerPulse());
+        binding.sendUsbKeyerTestTextButton.setOnClickListener(view -> sendUsbKeyerTestText());
+        binding.stopUsbKeyerTextButton.setOnClickListener(view -> stopUsbKeyerText());
         binding.requestSerialCatPermissionButton.setOnClickListener(view -> requestSerialCatPermission());
         binding.testSerialCatConnectionButton.setOnClickListener(view -> testSerialCatConnection());
         binding.testSerialCatPttButton.setOnClickListener(view -> testSerialCatPttPulse());
@@ -172,6 +180,35 @@ public final class RigSetupActivity extends AppCompatActivity {
         keyLineAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         binding.usbKeyLineSpinner.setAdapter(keyLineAdapter);
         binding.serialCatKeyLineSpinner.setAdapter(keyLineAdapter);
+
+        usbDeviceAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                new ArrayList<>()
+        );
+        usbDeviceAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.usbDeviceSpinner.setAdapter(usbDeviceAdapter);
+        binding.usbDeviceSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (syncingUsbDeviceSelection) {
+                    return;
+                }
+                Object item = parent.getItemAtPosition(position);
+                if (!(item instanceof UsbSerialDeviceOption)) {
+                    return;
+                }
+                UsbSerialDeviceOption option = (UsbSerialDeviceOption) item;
+                binding.usbPreferredDeviceNameEditText.setText(option.isAuto()
+                        ? ""
+                        : valueOrEmpty(option.deviceName()));
+                refreshSelectedProfileViews();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
 
         ArrayAdapter<CatProtocolFamily> catProtocolAdapter = new ArrayAdapter<>(
                 this,
@@ -838,10 +875,12 @@ public final class RigSetupActivity extends AppCompatActivity {
             currentEditorProfileId = profile == null ? null : profile.id();
         }
         RigProfileSettings settings = shouldReloadEditor ? storedSettings : readSettingsFromEditor();
+        syncUsbDeviceOptions(profile, settings);
         syncSerialCatPortOptions(profile, settings);
         updateConfigVisibility(profile, settings, developerModeEnabled);
         binding.resetProfileConfigButton.setEnabled(profile != null && hasSavedOverride);
         syncProfileActionButton(profile, pinnedProfile);
+        syncUsbKeyerState(profile, settings);
         syncSerialProbeState(profile, settings, developerModeEnabled);
         syncNetworkProbeState(profile, settings, developerModeEnabled);
         binding.connectionGuideText.setText(renderConnectionGuide(profile, settings, developerModeEnabled));
@@ -868,6 +907,45 @@ public final class RigSetupActivity extends AppCompatActivity {
         binding.networkPortEditText.setText(String.valueOf(settings.networkPort()));
         binding.bluetoothDeviceHintEditText.setText(valueOrEmpty(settings.bluetoothDeviceHint()));
         syncingSettingsEditor = false;
+    }
+
+    private void syncUsbDeviceOptions(@Nullable RigProfile profile, RigProfileSettings settings) {
+        syncingUsbDeviceSelection = true;
+        usbDeviceAdapter.clear();
+        if (profile == null || !profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
+            usbDeviceAdapter.add(UsbSerialDeviceOption.autoOption());
+            usbDeviceAdapter.notifyDataSetChanged();
+            binding.usbDeviceSpinner.setSelection(0, false);
+            syncingUsbDeviceSelection = false;
+            return;
+        }
+        UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(profile, settings);
+        List<UsbSerialDeviceOption> devices = new ArrayList<>();
+        devices.add(UsbSerialDeviceOption.autoOption());
+        if (adapter != null) {
+            devices.addAll(adapter.availableDevices());
+        }
+        usbDeviceAdapter.addAll(devices);
+        usbDeviceAdapter.notifyDataSetChanged();
+        int selectionIndex = resolveUsbDeviceSelectionIndex(devices, settings.usbPreferredDeviceName());
+        binding.usbDeviceSpinner.setSelection(selectionIndex, false);
+        syncingUsbDeviceSelection = false;
+    }
+
+    private int resolveUsbDeviceSelectionIndex(
+            List<UsbSerialDeviceOption> devices,
+            @Nullable String preferredDeviceName
+    ) {
+        if (preferredDeviceName == null || preferredDeviceName.trim().isEmpty()) {
+            return 0;
+        }
+        for (int index = 0; index < devices.size(); index++) {
+            UsbSerialDeviceOption option = devices.get(index);
+            if (!option.isAuto() && preferredDeviceName.equals(option.deviceName())) {
+                return index;
+            }
+        }
+        return 0;
     }
 
     private void initializeTimingLabDefaults() {
@@ -905,8 +983,14 @@ public final class RigSetupActivity extends AppCompatActivity {
         boolean civAddressVisible = serialCatVisible
                 && settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV;
         boolean developerLabsVisible = developerModeEnabled && openDeveloperLabs;
+        boolean usbBenchVisible = usbVisible && developerLabsVisible;
 
         binding.usbConfigGroup.setVisibility(usbVisible ? View.VISIBLE : View.GONE);
+        binding.requestUsbKeyerPermissionButton.setVisibility(usbVisible ? View.VISIBLE : View.GONE);
+        binding.testUsbKeyerPulseButton.setVisibility(usbBenchVisible ? View.VISIBLE : View.GONE);
+        binding.sendUsbKeyerTestTextButton.setVisibility(usbBenchVisible ? View.VISIBLE : View.GONE);
+        binding.stopUsbKeyerTextButton.setVisibility(usbBenchVisible ? View.VISIBLE : View.GONE);
+        binding.usbKeyerStatusText.setVisibility(usbVisible ? View.VISIBLE : View.GONE);
         binding.serialCatConfigGroup.setVisibility(serialCatVisible ? View.VISIBLE : View.GONE);
         binding.networkCatConfigGroup.setVisibility(networkCatVisible ? View.VISIBLE : View.GONE);
         binding.bluetoothConfigGroup.setVisibility(bluetoothVisible ? View.VISIBLE : View.GONE);
@@ -1149,7 +1233,7 @@ public final class RigSetupActivity extends AppCompatActivity {
                 : "Detected " + detectedPorts.size() + " serial CAT ports. Choose one from the port picker before testing.";
         if (!developerLabsVisible) {
             binding.serialCatProbeStatusText.setText(yaesuSelected || icomSelected || kenwoodSelected
-                    ? pickerHint + " Use Test Serial CAT Connection for the minimal handshake check. Open Developer Tools for PTT/keying bench controls."
+                    ? pickerHint + " Use Test Serial CAT Connection for the minimal handshake check. Extended line checks stay outside the normal setup flow."
                     : pickerHint + " Serial CAT connection testing is available for Yaesu-style CAT, Icom CI-V, and Kenwood-style CAT.");
             return;
         }
@@ -1165,20 +1249,12 @@ public final class RigSetupActivity extends AppCompatActivity {
     }
 
     private void syncDeveloperModeViews(boolean enabled) {
-        binding.titleText.setText(openDeveloperLabs ? "Rig Bench" : "Rig Setup");
-        binding.subtitleText.setText(openDeveloperLabs
-                ? "Bench mode keeps protocol probes and timing labs together so normal rig setup can stay clean."
-                : "Choose your radio path, save the connection defaults, and keep bench tools outside the main setup flow.");
-        binding.developerModeStatusText.setText(enabled
-                ? openDeveloperLabs
-                        ? "Developer mode is enabled.\nRig Setup is currently opened from Developer Tools, so protocol probes and bench controls are visible."
-                        : "Developer mode is enabled.\nRig Setup still stays focused on saved rig configuration. Open Developer Tools when you need protocol probes and bench controls."
-                : "Developer mode is disabled.\nRig Setup stays focused on profile selection and saved defaults, while protocol-level probes and engineering tools are folded away.");
-        binding.toggleDeveloperModeButton.setText(enabled
-                ? "Disable Developer Mode"
-                : "Enable Developer Mode");
-        binding.developerQuickActionsPanel.setVisibility(openDeveloperLabs ? View.GONE : View.VISIBLE);
-        int developerSummaryVisibility = enabled && openDeveloperLabs ? View.VISIBLE : View.GONE;
+        boolean developerLabsVisible = enabled && openDeveloperLabs;
+        binding.titleText.setText(developerLabsVisible ? "Rig Bench" : "Rig Setup");
+        binding.subtitleText.setText(developerLabsVisible
+                ? "Extended probes and timing labs are grouped here so the normal setup path can stay clean."
+                : "Choose your radio path, save the connection defaults, and keep extra diagnostics outside the main setup flow.");
+        int developerSummaryVisibility = developerLabsVisible ? View.VISIBLE : View.GONE;
         binding.readinessSummaryPanel.setVisibility(developerSummaryVisibility);
         binding.transportSummaryPanel.setVisibility(developerSummaryVisibility);
         binding.profileSummaryPanel.setVisibility(developerSummaryVisibility);
@@ -1210,19 +1286,19 @@ public final class RigSetupActivity extends AppCompatActivity {
             builder.append(", choose the CAT port");
             builder.append(", then choose the CW keying line and keying port if the radio exposes a separate keying endpoint, then save this rig path.");
             if (!developerModeEnabled) {
-                builder.append("\nBench probes stay hidden until developer mode is enabled.");
+                builder.append("\nExtra protocol checks stay hidden during normal operation.");
             } else if (!openDeveloperLabs) {
-                builder.append("\nBench probes are now collected under Developer Tools instead of this main setup flow.");
+                builder.append("\nExtra protocol checks are collected outside this setup page.");
             }
         } else if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
             builder.append("\nNext: fill the host and port for the radio bridge, then save this rig path.");
             if (!developerModeEnabled) {
-                builder.append("\nThe lightweight network probe stays behind developer mode.");
+                builder.append("\nConnection probing stays hidden during normal operation.");
             } else if (!openDeveloperLabs) {
-                builder.append("\nThe lightweight network probe is available from Developer Tools.");
+                builder.append("\nConnection probing is kept outside this setup page.");
             }
         } else if (profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
-            builder.append("\nNext: confirm the keying route you expect to use, then save the profile defaults.");
+            builder.append("\nNext: choose RTS or DTR, optionally lock the preferred USB device, request permission if Android asks for it, then save the profile defaults.");
         } else if (profile.hasCapability(RigCapability.AUDIO_VOX)) {
             builder.append("\nNext: save the audio defaults here, then tune VOX delay and gain on the radio.");
         } else {
@@ -1405,7 +1481,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         return "Ready transports: " + readyTransportCount + "/" + transports.size()
                 + "\nBench-ready profiles: " + benchReadyProfileCount + "/" + profiles.size()
                 + "\nCurrent strategy: support families first, then fill concrete vendor/model profiles."
-                + "\nDebug remains available as a diagnostic path while the formal rig UI grows.";
+                + "\nAdvanced tools remain available as a secondary diagnostic path while the formal rig UI grows.";
     }
 
     private String renderTransportSummary(List<RigTransport> transports) {
@@ -1508,7 +1584,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             builder.append("\n6. Keep the reusable CAT schema stable before attaching deeper native Yaesu/Icom/Kenwood model code.");
         }
         builder.append("\n7. Native serial CAT probe is now available for Yaesu-style, Icom CI-V, and Kenwood-style families in Rig Setup.");
-        builder.append("\n8. Keep Debug available, but treat it as a secondary engineering tool rather than the main user flow.");
+        builder.append("\n8. Keep advanced tools available, but treat them as a secondary engineering path rather than the main user flow.");
         builder.append("\n9. Next native step is no longer schema work; it is attaching controlled family-specific serial CAT behavior on top of the shared probe/session seam.");
         return builder.toString();
     }
@@ -1544,6 +1620,257 @@ public final class RigSetupActivity extends AppCompatActivity {
         return value == null ? "" : value;
     }
 
+    private void requestUsbKeyerPermission() {
+        RigProfile profile = selectedProfile();
+        RigProfileSettings settings = readSettingsFromEditor();
+        UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(profile, settings);
+        if (adapter == null) {
+            return;
+        }
+        usbKeyerPermissionInFlight = true;
+        usbKeyerActionInFlight = true;
+        usbKeyerStatusProfileId = profile == null ? null : profile.id();
+        usbKeyerStatusMessage = "Preparing USB keyer permission request...";
+        refreshSelectedProfileViews();
+        try {
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                    this,
+                    0,
+                    new Intent(ACTION_USB_KEYER_PERMISSION).setPackage(getPackageName()),
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                            ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+                            : PendingIntent.FLAG_UPDATE_CURRENT
+            );
+            boolean requested = adapter.requestUsbPermission(pendingIntent);
+            usbKeyerPermissionInFlight = false;
+            usbKeyerActionInFlight = false;
+            usbKeyerStatusMessage = requested
+                    ? "USB keyer permission request sent. If Android shows a system dialog, allow it and then return here."
+                    : "USB keyer permission could not be requested. Current status: " + adapter.describeAvailability();
+        } catch (RuntimeException exception) {
+            usbKeyerPermissionInFlight = false;
+            usbKeyerActionInFlight = false;
+            usbKeyerStatusMessage = "USB keyer permission path failed before Android could show a dialog: "
+                    + safeThrowableMessage(exception);
+        } catch (Throwable throwable) {
+            Log.e(TAG, "USB keyer permission request crashed", throwable);
+            usbKeyerPermissionInFlight = false;
+            usbKeyerActionInFlight = false;
+            usbKeyerStatusMessage = "USB keyer permission path crashed: " + safeThrowableMessage(throwable);
+        }
+        refreshSelectedProfileViews();
+    }
+
+    private void testUsbKeyerPulse() {
+        RigProfile profile = selectedProfile();
+        RigProfileSettings settings = readSettingsFromEditor();
+        UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(profile, settings);
+        if (adapter == null) {
+            return;
+        }
+        usbKeyerActionInFlight = true;
+        usbKeyerStatusProfileId = profile == null ? null : profile.id();
+        usbKeyerStatusMessage = "Running USB key line pulse test...";
+        refreshSelectedProfileViews();
+        new Thread(() -> {
+            final String resultMessage = runUsbKeyerPulse(adapter);
+            runOnUiThread(() -> {
+                usbKeyerActionInFlight = false;
+                usbKeyerStatusProfileId = profile == null ? null : profile.id();
+                usbKeyerStatusMessage = resultMessage;
+                refreshSelectedProfileViews();
+            });
+        }, "cwcn-usb-keyer-pulse").start();
+    }
+
+    private void sendUsbKeyerTestText() {
+        RigProfile profile = selectedProfile();
+        RigProfileSettings settings = readSettingsFromEditor();
+        UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(profile, settings);
+        if (adapter == null) {
+            return;
+        }
+        usbKeyerActionInFlight = true;
+        usbKeyerTransmissionInFlight = true;
+        usbKeyerStatusProfileId = profile == null ? null : profile.id();
+        usbKeyerStatusMessage = "Sending USB test text 'VVV'...";
+        refreshSelectedProfileViews();
+        new Thread(() -> {
+            final String resultMessage = runUsbKeyerTestText(adapter, "VVV");
+            runOnUiThread(() -> {
+                usbKeyerActionInFlight = false;
+                usbKeyerTransmissionInFlight = false;
+                usbKeyerStatusProfileId = profile == null ? null : profile.id();
+                usbKeyerStatusMessage = resultMessage;
+                refreshSelectedProfileViews();
+            });
+        }, "cwcn-usb-keyer-text").start();
+    }
+
+    private void stopUsbKeyerText() {
+        RigProfile profile = selectedProfile();
+        RigProfileSettings settings = readSettingsFromEditor();
+        UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(profile, settings);
+        if (adapter == null) {
+            return;
+        }
+        boolean stopped = adapter.stopTextTransmission();
+        usbKeyerStatusProfileId = profile == null ? null : profile.id();
+        usbKeyerStatusMessage = stopped
+                ? "Stop requested for the active USB keyer transmission..."
+                : "Stop request did not change the USB keyer state.";
+        refreshSelectedProfileViews();
+    }
+
+    private String runUsbKeyerPulse(UsbSerialKeyerRigControlAdapter adapter) {
+        try {
+            boolean keyDown = adapter.keyDown();
+            if (!keyDown) {
+                return "USB key line pulse could not start. Current status: "
+                        + adapter.describeAvailability();
+            }
+            try {
+                Thread.sleep(250L);
+            } catch (InterruptedException interruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            boolean keyUp = adapter.keyUp();
+            return keyUp
+                    ? "USB key line pulse completed. Watch whether the rig actually keyed for a short burst."
+                    : "USB key line asserted, but release failed. Review the USB route before transmitting.";
+        } catch (Throwable throwable) {
+            Log.e(TAG, "USB key line pulse crashed", throwable);
+            return "USB key line pulse crashed before completion: "
+                    + safeThrowableMessage(throwable);
+        }
+    }
+
+    private String runUsbKeyerTestText(UsbSerialKeyerRigControlAdapter adapter, String text) {
+        try {
+            if (!adapter.supportsTextToCw()) {
+                return "This USB keyer route does not support text-to-CW transmission.";
+            }
+            boolean sent = adapter.sendText(text);
+            org.bi9clt.cwcn.core.tx.CwTxPlaybackSnapshot snapshot = adapter.currentTxPlaybackSnapshot();
+            if (sent) {
+                return "USB test text '" + text + "' completed. Watch whether the rig sent the full pattern cleanly.";
+            }
+            if (snapshot != null && snapshot.state() == org.bi9clt.cwcn.core.tx.CwTxState.STOPPED) {
+                return "USB test text '" + text + "' was stopped before completion.";
+            }
+            if (snapshot != null && snapshot.state() == org.bi9clt.cwcn.core.tx.CwTxState.ERROR) {
+                return "USB test text '" + text + "' ended with an error: " + snapshot.statusMessage();
+            }
+            return "USB test text '" + text + "' could not complete. Current status: "
+                    + adapter.describeAvailability();
+        } catch (Throwable throwable) {
+            Log.e(TAG, "USB keyer text test crashed", throwable);
+            return "USB test text '" + text + "' crashed before completion: "
+                    + safeThrowableMessage(throwable);
+        }
+    }
+
+    private void syncUsbKeyerState(RigProfile profile, RigProfileSettings settings) {
+        boolean usbVisible = profile != null && profile.hasCapability(RigCapability.KEY_LINE_CONTROL);
+        if (!usbVisible) {
+            return;
+        }
+        UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(profile, settings);
+        if (adapter == null) {
+            binding.requestUsbKeyerPermissionButton.setEnabled(false);
+            binding.testUsbKeyerPulseButton.setEnabled(false);
+            binding.sendUsbKeyerTestTextButton.setEnabled(false);
+            binding.stopUsbKeyerTextButton.setEnabled(false);
+            binding.usbKeyerStatusText.setText("USB keyer adapter is not attached to this profile yet.");
+            return;
+        }
+        boolean hasTargetDevice = adapter.hasTargetDevice();
+        boolean ready = adapter.isReady();
+        boolean missingTarget = adapter.isPreferredDeviceMissing();
+        String buttonLabel = ready
+                ? "USB Keyer Ready"
+                : hasTargetDevice
+                ? "Request USB Keyer Permission"
+                : "Refresh After Plug-in";
+        binding.requestUsbKeyerPermissionButton.setText(buttonLabel);
+        binding.requestUsbKeyerPermissionButton.setEnabled(
+                hasTargetDevice && !ready && !usbKeyerActionInFlight
+        );
+        binding.testUsbKeyerPulseButton.setEnabled(ready && !usbKeyerActionInFlight);
+        binding.sendUsbKeyerTestTextButton.setEnabled(ready && !usbKeyerActionInFlight);
+        binding.stopUsbKeyerTextButton.setEnabled(usbKeyerTransmissionInFlight);
+        if (usbKeyerActionInFlight
+                && profile != null
+                && profile.id().equals(usbKeyerStatusProfileId)) {
+            binding.usbKeyerStatusText.setText(usbKeyerStatusMessage);
+            return;
+        }
+        if (usbKeyerStatusMessage != null
+                && !usbKeyerStatusMessage.isEmpty()
+                && profile != null
+                && profile.id().equals(usbKeyerStatusProfileId)) {
+            binding.usbKeyerStatusText.setText(usbKeyerStatusMessage);
+            return;
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append("USB keyer route: ")
+                .append(adapter.displayName())
+                .append("\n状态: ")
+                .append(adapter.describeAvailability())
+                .append("\n控制线: ")
+                .append(settings.usbKeyLine())
+                .append("\n设备选择: ")
+                .append(hasRealUsbDeviceOption(adapter.availableDevices())
+                        ? adapter.availableDevices().size() + " 个候选设备"
+                        : "未发现候选设备")
+                .append("\n设备锁定: ")
+                .append(valueOrEmpty(settings.usbPreferredDeviceName()).isEmpty()
+                        ? "自动选择"
+                        : settings.usbPreferredDeviceName());
+        if (missingTarget) {
+            builder.append("\n提示: 已保存的目标设备当前没有连接。");
+        } else if (!hasTargetDevice) {
+            builder.append("\n提示: 还没有检测到可用的 USB serial keyer 设备。");
+        } else if (!ready) {
+            builder.append("\n提示: 设备已检测到，下一步请求 Android USB 权限。");
+        } else {
+            builder.append("\n提示: 这条 USB keyer 路由已经可以用于发射。");
+        }
+        binding.usbKeyerStatusText.setText(builder.toString());
+    }
+
+    private boolean hasRealUsbDeviceOption(List<UsbSerialDeviceOption> devices) {
+        for (UsbSerialDeviceOption device : devices) {
+            if (!device.isAuto()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nullable
+    private UsbSerialKeyerRigControlAdapter resolveUsbKeyerAdapter(
+            @Nullable RigProfile profile,
+            RigProfileSettings settings
+    ) {
+        if (profile == null || !profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
+            return null;
+        }
+        for (RigControlAdapter candidate : RigRegistry.defaultAdapters(this)) {
+            if (!profile.adapterId().equals(candidate.id())) {
+                continue;
+            }
+            if (!(candidate instanceof UsbSerialKeyerRigControlAdapter)) {
+                continue;
+            }
+            UsbSerialKeyerRigControlAdapter adapter = (UsbSerialKeyerRigControlAdapter) candidate;
+            adapter.setKeyLine(settings.usbKeyLine());
+            adapter.selectDevice(settings.usbPreferredDeviceName());
+            return adapter;
+        }
+        return null;
+    }
+
     private String safeThrowableMessage(Throwable throwable) {
         if (throwable == null || throwable.getMessage() == null || throwable.getMessage().trim().isEmpty()) {
             return throwable == null ? "unknown failure" : throwable.getClass().getSimpleName();
@@ -1571,19 +1898,31 @@ public final class RigSetupActivity extends AppCompatActivity {
         usbPermissionReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(android.content.Context context, Intent intent) {
-                if (!ACTION_SERIAL_CAT_USB_PERMISSION.equals(intent.getAction())) {
+                String action = intent.getAction();
+                if (!ACTION_SERIAL_CAT_USB_PERMISSION.equals(action)
+                        && !ACTION_USB_KEYER_PERMISSION.equals(action)) {
                     return;
                 }
                 boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
                 RigProfile profile = selectedProfile();
-                serialProbeProfileId = profile == null ? null : profile.id();
-                serialProbeMessage = granted
-                        ? "USB serial CAT permission granted by the system dialog."
-                        : "USB serial CAT permission was denied by the system dialog.";
+                if (ACTION_USB_KEYER_PERMISSION.equals(action)) {
+                    usbKeyerPermissionInFlight = false;
+                    usbKeyerActionInFlight = false;
+                    usbKeyerStatusProfileId = profile == null ? null : profile.id();
+                    usbKeyerStatusMessage = granted
+                            ? "USB keyer permission granted by the system dialog."
+                            : "USB keyer permission was denied by the system dialog.";
+                } else {
+                    serialProbeProfileId = profile == null ? null : profile.id();
+                    serialProbeMessage = granted
+                            ? "USB serial CAT permission granted by the system dialog."
+                            : "USB serial CAT permission was denied by the system dialog.";
+                }
                 refreshSelectedProfileViews();
             }
         };
         IntentFilter filter = new IntentFilter(ACTION_SERIAL_CAT_USB_PERMISSION);
+        filter.addAction(ACTION_USB_KEYER_PERMISSION);
         ContextCompat.registerReceiver(
                 this,
                 usbPermissionReceiver,

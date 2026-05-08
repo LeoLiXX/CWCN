@@ -82,8 +82,9 @@ public final class RigTextTxBackend implements CwTxBackend {
                 0,
                 plan.totalDurationMs(),
                 "",
+                -1,
                 false,
-                "Sending text to rig adapter: " + adapter.displayName()
+                "正在通过电台适配器发送文本"
         ));
         Thread thread = new Thread(() -> runSendText(plan, listener), "cwcn-rig-text-backend");
         workerThread = thread;
@@ -117,8 +118,9 @@ public final class RigTextTxBackend implements CwTxBackend {
                     0,
                     plan.totalDurationMs(),
                     "",
+                    -1,
                     false,
-                    "Rig adapter error: " + exception.getMessage()
+                    "电台适配器异常: " + exception.getMessage()
             ));
             return;
         } finally {
@@ -135,10 +137,11 @@ public final class RigTextTxBackend implements CwTxBackend {
                 sent ? plan.totalDurationMs() : 0,
                 plan.totalDurationMs(),
                 "",
+                -1,
                 false,
                 sent
-                        ? "Rig adapter accepted text TX request."
-                        : "Rig adapter rejected the text TX request. "
+                        ? "电台已接受文本发射请求"
+                        : "电台拒绝文本发射请求: "
                                 + adapter.describeAvailability()
         ));
     }

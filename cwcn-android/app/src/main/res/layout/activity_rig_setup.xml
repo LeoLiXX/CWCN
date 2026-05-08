@@ -73,54 +73,6 @@
             android:text="Back" />
 
         <LinearLayout
-            android:id="@+id/developerModePanel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Developer Mode"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/developerModeStatusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
-
-            <Button
-                android:id="@+id/toggleDeveloperModeButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Enable Developer Mode" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/developerQuickActionsPanel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:orientation="vertical">
-
-            <Button
-                android:id="@+id/openDeveloperToolsButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Open Developer Tools" />
-        </LinearLayout>
-
-        <LinearLayout
             android:id="@+id/connectionGuidePanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -308,6 +260,59 @@
                     android:singleLine="true"
                     android:textColor="@color/cwcn_body"
                     android:textColorHint="@color/cwcn_subtitle" />
+
+                <Spinner
+                    android:id="@+id/usbDeviceSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:padding="12dp" />
+
+                <Button
+                    android:id="@+id/requestUsbKeyerPermissionButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="Request USB Keyer Permission" />
+
+                <Button
+                    android:id="@+id/testUsbKeyerPulseButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Pulse USB Key Line" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/sendUsbKeyerTestTextButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Send VVV" />
+
+                    <Button
+                        android:id="@+id/stopUsbKeyerTextButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:text="Stop" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/usbKeyerStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:lineSpacingExtra="3dp"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="14sp" />
             </LinearLayout>
 
             <LinearLayout

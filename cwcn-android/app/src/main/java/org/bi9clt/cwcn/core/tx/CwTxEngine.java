@@ -75,7 +75,7 @@ public final class CwTxEngine {
                 if (morsePreview.length() > 0 && morsePreview.charAt(morsePreview.length() - 1) != ' ') {
                     morsePreview.append(" / ");
                 }
-                appendElement(elements, CwTxElement.Kind.KEY_UP, dotDurationMs * 7, "word-gap");
+                appendElement(elements, CwTxElement.Kind.KEY_UP, dotDurationMs * 7, " ", index);
                 continue;
             }
 
@@ -91,15 +91,15 @@ public final class CwTxEngine {
             for (int symbolIndex = 0; symbolIndex < morse.length(); symbolIndex++) {
                 char symbol = morse.charAt(symbolIndex);
                 int keyDownDurationMs = symbol == '-' ? dotDurationMs * 3 : dotDurationMs;
-                appendElement(elements, CwTxElement.Kind.KEY_DOWN, keyDownDurationMs, String.valueOf(symbol));
+                appendElement(elements, CwTxElement.Kind.KEY_DOWN, keyDownDurationMs, String.valueOf(current), index);
                 if (symbolIndex < morse.length() - 1) {
-                    appendElement(elements, CwTxElement.Kind.KEY_UP, dotDurationMs, "intra-gap");
+                    appendElement(elements, CwTxElement.Kind.KEY_UP, dotDurationMs, String.valueOf(current), index);
                 }
             }
 
             char next = index + 1 < normalizedText.length() ? normalizedText.charAt(index + 1) : '\0';
             if (next != '\0' && next != ' ') {
-                appendElement(elements, CwTxElement.Kind.KEY_UP, dotDurationMs * 3, "letter-gap");
+                appendElement(elements, CwTxElement.Kind.KEY_UP, dotDurationMs * 3, String.valueOf(current), index);
             }
         }
 
@@ -110,7 +110,8 @@ public final class CwTxEngine {
             List<CwTxElement> elements,
             CwTxElement.Kind kind,
             int durationMs,
-            String sourceSymbol
+            String sourceSymbol,
+            int sourceTextIndex
     ) {
         if (durationMs <= 0) {
             return;
@@ -120,12 +121,17 @@ public final class CwTxEngine {
             if (previous.kind() == kind) {
                 elements.set(
                         elements.size() - 1,
-                        new CwTxElement(kind, previous.durationMs() + durationMs, previous.sourceSymbol())
+                        new CwTxElement(
+                                kind,
+                                previous.durationMs() + durationMs,
+                                previous.sourceSymbol(),
+                                previous.sourceTextIndex()
+                        )
                 );
                 return;
             }
         }
-        elements.add(new CwTxElement(kind, durationMs, sourceSymbol));
+        elements.add(new CwTxElement(kind, durationMs, sourceSymbol, sourceTextIndex));
     }
 
     private static Map<Character, String> createMorseMap() {

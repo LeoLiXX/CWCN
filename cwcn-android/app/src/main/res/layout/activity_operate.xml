@@ -1,76 +1,678 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/cwcn_screen_background">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="24dp">
-
-        <TextView
-            android:id="@+id/titleText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Operate"
-            android:textColor="@color/cwcn_title"
-            android:textSize="30sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/subtitleText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Formal user-facing operating screen focused on rig readiness and live RX visibility."
-            android:textColor="@color/cwcn_subtitle"
-            android:textSize="15sp" />
-
-        <TextView
-            android:id="@+id/versionText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textColor="@color/cwcn_accent"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/backHomeButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Back Home" />
+        android:paddingStart="6dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="6dp"
+        android:paddingBottom="6dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="2dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="2dp"
+            android:paddingBottom="4dp">
 
-            <TextView
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/statusMainText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/statusDetailText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="7sp" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/openRigSetupButton"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginStart="8dp"
+                android:alpha="0.82"
+                android:background="@android:color/transparent"
+                android:contentDescription="打开电台设置"
+                android:padding="3dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_ui_settings"
+                android:tint="@color/cwcn_subtitle" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="@drawable/bootstrap_panel_background"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/sourceChipText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/operate_chip_active_background"
+                        android:gravity="center"
+                        android:paddingStart="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingEnd="6dp"
+                        android:paddingBottom="2dp"
+                        android:textColor="@color/cwcn_accent"
+                        android:textSize="7sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginTop="6dp"
+                    android:layout_weight="1"
+                    android:background="@android:color/transparent"
+                    android:fillViewport="true"
+                    android:padding="0dp">
+
+                    <LinearLayout
+                        android:id="@+id/conversationList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="140dp"
+                        android:orientation="vertical" />
+                </ScrollView>
+
+                <TextView
+                    android:id="@+id/rxFootnoteText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="9sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Live RX Session"
+                android:layout_marginTop="6dp"
+                android:orientation="vertical"
+                android:paddingStart="2dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="2dp"
+                android:paddingBottom="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="草稿"
+                        android:textColor="@color/cwcn_title"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <ImageButton
+                        android:id="@+id/reviewDraftButton"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:alpha="0.82"
+                        android:background="@android:color/transparent"
+                        android:contentDescription="编辑草稿"
+                        android:padding="3dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_ui_edit"
+                        android:tint="@color/cwcn_subtitle" />
+
+                    <ImageButton
+                        android:id="@+id/expandDraftButton"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_marginStart="6dp"
+                        android:alpha="0.82"
+                        android:background="@android:color/transparent"
+                        android:contentDescription="展开草稿"
+                        android:padding="3dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_ui_expand"
+                        android:tint="@color/cwcn_subtitle" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/draftSummaryHeadlineText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:maxLines="1"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/draftSummaryMetaText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:maxLines="1"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="9sp" />
+
+                <TextView
+                    android:id="@+id/draftStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:maxLines="1"
+                    android:textColor="@color/cwcn_accent"
+                    android:textSize="8sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/draftPreviewText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:fontFamily="monospace"
+                    android:maxLines="2"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="10sp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:text="模板"
+                        android:textColor="@color/cwcn_subtitle"
+                        android:textSize="8sp"
+                        android:textStyle="bold" />
+
+                    <Spinner
+                        android:id="@+id/templateSelectorSpinner"
+                        android:layout_width="84dp"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:minHeight="26dp" />
+
+                    <TextView
+                        android:id="@+id/templatePreviewText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="@color/cwcn_subtitle"
+                        android:textSize="8sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/dockStateRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/selectedTemplateChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingEnd="4dp"
+                        android:textColor="@color/cwcn_accent"
+                        android:textSize="8sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/txRouteChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:maxLines="1"
+                        android:textColor="@color/cwcn_subtitle"
+                        android:textSize="8sp" />
+
+                    <TextView
+                        android:id="@+id/txStageChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:maxLines="1"
+                        android:textColor="@color/cwcn_subtitle"
+                        android:textSize="8sp" />
+
+                    <TextView
+                        android:id="@+id/sqlQuickChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/operate_chip_background"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:minHeight="20dp"
+                        android:paddingStart="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingEnd="6dp"
+                        android:paddingBottom="2dp"
+                        android:textColor="@color/cwcn_body"
+                        android:textSize="8sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="发送"
+                        android:textColor="@color/cwcn_subtitle"
+                        android:textSize="8sp"
+                        android:textStyle="bold" />
+
+                    <ImageButton
+                        android:id="@+id/clearComposeButton"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:background="@drawable/operate_chip_background"
+                        android:contentDescription="清空发送文本"
+                        android:padding="4dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_ui_clear"
+                        android:tint="@color/cwcn_body" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:baselineAligned="false"
+                    android:gravity="top"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/txComposeEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/bootstrap_field_background"
+                        android:fontFamily="monospace"
+                        android:gravity="top|start"
+                        android:hint="输入要发送的 CW 文本"
+                        android:inputType="textCapCharacters|textMultiLine"
+                        android:maxLines="2"
+                        android:minLines="2"
+                        android:padding="7dp"
+                        android:textColor="@color/cwcn_title"
+                        android:textColorHint="@color/cwcn_subtitle"
+                        android:textSize="12sp" />
+
+                    <ImageButton
+                        android:id="@+id/sendTxButton"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/operate_chip_active_background"
+                        android:contentDescription="发送 CW"
+                        android:padding="6dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_ui_send"
+                        android:tint="@color/cwcn_tx_line" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/txPlaybackControlsRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <ImageButton
+                        android:id="@+id/repeatTxButton"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:background="@drawable/operate_chip_background"
+                        android:contentDescription="重复发送"
+                        android:padding="4dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_ui_repeat"
+                        android:tint="@color/cwcn_body"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/pauseTxButton"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_marginStart="0dp"
+                        android:background="@drawable/operate_chip_background"
+                        android:contentDescription="停止发送"
+                        android:padding="4dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_ui_clear"
+                        android:tint="@color/cwcn_warning" />
+
+                    <ImageButton
+                        android:id="@+id/resumeTxButton"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/operate_chip_background"
+                        android:contentDescription="继续发送"
+                        android:padding="4dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_ui_play"
+                        android:tint="@color/cwcn_body"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/rewindTxButton"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/operate_chip_background"
+                        android:contentDescription="回退发送"
+                        android:padding="4dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_ui_rewind"
+                        android:tint="@color/cwcn_body"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/txStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:maxLines="1"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="9sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottomNavView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="@drawable/formal_bottom_nav_background"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            app:itemBackground="@drawable/formal_bottom_nav_item_background"
+            app:itemIconSize="22dp"
+            app:itemIconTint="@color/formal_bottom_nav_item_colors"
+            app:itemRippleColor="@android:color/transparent"
+            app:itemTextAppearanceActive="@style/TextAppearance.CWCN.BottomNav.Active"
+            app:itemTextAppearanceInactive="@style/TextAppearance.CWCN.BottomNav.Inactive"
+            app:itemTextColor="@color/formal_bottom_nav_item_colors"
+            app:labelVisibilityMode="labeled"
+            app:menu="@menu/formal_bottom_nav_menu" />
+    </LinearLayout>
+
+    <View
+        android:id="@+id/overlayScrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/cwcn_overlay_scrim"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/overlayPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginStart="22dp"
+        android:layout_marginTop="58dp"
+        android:layout_marginEnd="22dp"
+        android:background="@drawable/operate_overlay_panel_background"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/overlayTitleText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="16sp"
                 android:textStyle="bold" />
 
+            <ImageButton
+                android:id="@+id/closeOverlayButton"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="@drawable/operate_chip_background"
+                android:contentDescription="关闭浮层"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_ui_clear"
+                android:tint="@color/cwcn_accent" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/overlaySubtitleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:lineSpacingExtra="2dp"
+            android:textColor="@color/cwcn_subtitle"
+            android:textSize="11sp" />
+
+        <LinearLayout
+            android:id="@+id/chartOverlayContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
             <TextView
-                android:id="@+id/liveRxStatusText"
+                android:id="@+id/chartOverlayText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="4dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/sqlOverlayContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/sqlLabelText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="SQL 门限"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <SeekBar
+                android:id="@+id/sqlSeekBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:progress="55" />
+
+            <TextView
+                android:id="@+id/wpmLabelText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="发射速度"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <SeekBar
+                android:id="@+id/wpmSeekBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="75"
+                android:progress="15" />
+
+            <TextView
+                android:id="@+id/sqlOverlayText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
                 android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/templateOverlayContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/overlayTemplateCqButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/operate_chip_active_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:text="CQ"
+                    android:textColor="@color/cwcn_accent"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/overlayTemplateCqDxButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/operate_chip_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:text="CQ DX"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/overlayTemplateQrzButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/operate_chip_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:text="QRZ"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/overlayTemplateTu73Button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/operate_chip_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:text="TU73"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/liveRxTextText"
+                android:id="@+id/templateOverlayText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -81,114 +683,76 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/draftOverlayContent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
+            android:layout_marginTop="14dp"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:visibility="gone">
 
             <TextView
+                android:id="@+id/draftOverlayText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Operating Status"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/operatingStatusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="4dp"
                 android:textColor="@color/cwcn_body"
                 android:textSize="14sp" />
         </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Radio Path"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/rigStatusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Primary Actions"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <Button
-                android:id="@+id/openRigSetupButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:text="Connect Radio" />
-
-            <Button
-                android:id="@+id/openSettingsButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Open Settings" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Next Step"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/nextActionText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
-        </LinearLayout>
-
     </LinearLayout>
 
-</androidx.core.widget.NestedScrollView>
+    <LinearLayout
+        android:id="@+id/sideRail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/operate_side_rail_background"
+        android:orientation="vertical"
+        android:padding="4dp">
+
+        <LinearLayout
+            android:id="@+id/sideRailButtonsContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <ImageButton
+                android:id="@+id/sideChartButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/operate_side_button_background"
+                android:contentDescription="打开频谱浮层"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/icon_side_chart"
+                android:tint="@color/cwcn_title" />
+
+            <ImageButton
+                android:id="@+id/sideSqlButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/operate_side_button_background"
+                android:contentDescription="打开调谐浮层"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_ui_sliders"
+                android:tint="@color/cwcn_title" />
+
+            <ImageButton
+                android:id="@+id/sideTemplateButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/operate_side_button_background"
+                android:contentDescription="打开模板浮层"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/icon_side_template"
+                android:tint="@color/cwcn_title" />
+        </LinearLayout>
+    </LinearLayout>
+
+</FrameLayout>
