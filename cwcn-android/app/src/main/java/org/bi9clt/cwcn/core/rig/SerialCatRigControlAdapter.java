@@ -6,9 +6,13 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
+import org.bi9clt.cwcn.core.tx.CwTxAudioOutput;
 import org.bi9clt.cwcn.core.tx.CwTxElement;
 import org.bi9clt.cwcn.core.tx.CwTxEngine;
+import org.bi9clt.cwcn.core.tx.CwTxPlaybackSnapshot;
 import org.bi9clt.cwcn.core.tx.CwTxPlan;
+import org.bi9clt.cwcn.core.tx.CwTxRunner;
+import org.bi9clt.cwcn.core.tx.CwTxState;
 
 public final class SerialCatRigControlAdapter implements RigControlAdapter {
     private static final int DEFAULT_WPM = 18;
@@ -19,11 +23,14 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
     private final ConfigurationProvider configurationProvider;
     private final SerialCatSessionFactory sessionFactory;
     private final DedicatedKeyingPortFactory keyerPortFactory;
+    private final CwTxEngine txEngine;
 
     private volatile String lastAvailabilityNote;
     private volatile int wpm;
     private volatile int toneFrequencyHz;
     private volatile SerialKeyerPort openKeyingPort;
+    private volatile CwTxPlaybackSnapshot lastSnapshot;
+    private volatile CwTxRunner txRunner;
 
     public SerialCatRigControlAdapter(Context context) {
         this(
@@ -41,6 +48,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         this.configurationProvider = configurationProvider;
         this.sessionFactory = sessionFactory;
         this.keyerPortFactory = keyerPortFactory;
+        this.txEngine = new CwTxEngine();
         this.wpm = DEFAULT_WPM;
         this.toneFrequencyHz = DEFAULT_TONE_FREQUENCY_HZ;
     }
@@ -101,7 +109,9 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
 
     @Override
     public boolean supportsTextToCw() {
-        return false;
+        ActiveConfiguration configuration = configurationProvider.activeConfiguration();
+        return configuration != null
+                && configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE;
     }
 
     @Override
@@ -160,8 +170,69 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
 
     @Override
     public boolean sendText(String text) {
-        lastAvailabilityNote = "Native serial CAT text TX is not attached yet. Use rigctld, USB keyer, or Audio VOX for active TX right now.";
-        return false;
+        ActiveConfiguration configuration = configurationProvider.activeConfiguration();
+        if (configuration == null) {
+            lastAvailabilityNote = "Open Rig Setup, pin a serial CAT profile, and validate the serial link first.";
+            return false;
+        }
+        if (!supportsTextToCw()) {
+            lastAvailabilityNote = "Native serial CAT text TX is currently attached for Yaesu-style profiles first.";
+            return false;
+        }
+        if (!isReady()) {
+            lastAvailabilityNote = describeAvailability();
+            return false;
+        }
+        CwTxRunner activeRunner = txRunner;
+        if (activeRunner != null && activeRunner.isRunning()) {
+            lastAvailabilityNote = "Serial CAT text TX is already running.";
+            return false;
+        }
+        CwTxPlan plan = txEngine.buildPlan(text, wpm, toneFrequencyHz);
+        if (plan.elements().isEmpty()) {
+            lastAvailabilityNote = "Text contained no Morse symbols supported by the current TX engine.";
+            return false;
+        }
+        lastSnapshot = null;
+        if (shouldUseDedicatedKeyingPort(configuration)) {
+            SerialKeyerPort port = ensureOpenKeyingPort(configuration);
+            if (port == null || !port.isOpen()) {
+                lastAvailabilityNote = keyerPortFactory.describeAvailability(configuration.settings.serialCatKeyingPortHint());
+                return false;
+            }
+            CwTxRunner runner = new CwTxRunner(new DedicatedSerialKeyingAudioOutput(port, configuration.settings));
+            txRunner = runner;
+            runner.runPlanBlocking(plan, this::recordSnapshot);
+            return lastSnapshot != null && lastSnapshot.state() == CwTxState.COMPLETED;
+        }
+        String availability = sessionFactory.describeAvailability(configuration.settings.serialCatPortHint());
+        if (!transportLooksUsable(availability)) {
+            lastAvailabilityNote = availability;
+            return false;
+        }
+        try (SerialCatSession session = sessionFactory.openSession(
+                configuration.settings.serialCatPortHint(),
+                configuration.settings.serialCatBaudRate())) {
+            applyYaesuCwProfile(session);
+            CwTxRunner runner = new CwTxRunner(new SessionBackedCatAudioOutput(session));
+            txRunner = runner;
+            runner.runPlanBlocking(plan, this::recordSnapshot);
+            return lastSnapshot != null && lastSnapshot.state() == CwTxState.COMPLETED;
+        } catch (IOException | RuntimeException exception) {
+            lastAvailabilityNote = "Native serial CAT text TX failed: " + safeMessage(exception);
+            return false;
+        } finally {
+            txRunner = null;
+        }
+    }
+
+    @Override
+    public boolean stopTextTransmission() {
+        CwTxRunner runner = txRunner;
+        if (runner != null) {
+            runner.stop();
+        }
+        return keyUp();
     }
 
     @Override
@@ -185,6 +256,11 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
     @Override
     public boolean usesToneFrequencyForTextToCwProfile() {
         return supportsConfigurableTextToCwProfile();
+    }
+
+    @Override
+    public CwTxPlaybackSnapshot currentTxPlaybackSnapshot() {
+        return lastSnapshot;
     }
 
     private boolean supportsFamily(CatProtocolFamily family) {
@@ -302,6 +378,22 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         session.send(buildYaesuKeyPitchCommand(toneFrequencyHz), COMMAND_TIMEOUT_MS);
     }
 
+    private void recordSnapshot(CwTxPlaybackSnapshot snapshot) {
+        lastSnapshot = snapshot;
+        if (snapshot == null) {
+            return;
+        }
+        if (snapshot.state() == CwTxState.COMPLETED) {
+            lastAvailabilityNote = "Native serial CAT text TX completed.";
+        } else if (snapshot.state() == CwTxState.STOPPED) {
+            lastAvailabilityNote = "Native serial CAT text TX stopped.";
+        } else if (snapshot.state() == CwTxState.ERROR) {
+            lastAvailabilityNote = snapshot.statusMessage();
+        } else if (snapshot.state() == CwTxState.PLAYING) {
+            lastAvailabilityNote = "Native serial CAT text TX running.";
+        }
+    }
+
     private boolean keyingLineUp(ActiveConfiguration configuration) {
         SerialKeyerPort port = ensureOpenKeyingPort(configuration);
         if (port == null || !port.isOpen()) {
@@ -389,6 +481,96 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             }
             openKeyingPort = keyerPortFactory.openPort(configuration.settings.serialCatKeyingPortHint());
             return openKeyingPort;
+        }
+    }
+
+    private static final class DedicatedSerialKeyingAudioOutput implements CwTxAudioOutput {
+        private final SerialKeyerPort port;
+        private final RigProfileSettings settings;
+
+        private DedicatedSerialKeyingAudioOutput(SerialKeyerPort port, RigProfileSettings settings) {
+            this.port = port;
+            this.settings = settings;
+        }
+
+        @Override
+        public void playTone(int frequencyHz, int durationMs) throws InterruptedException {
+            if (!applyConfiguredKeyingLevels(port, settings, settings.serialCatKeyingPolarity().assertedLevel())) {
+                throw new IllegalStateException("Dedicated serial keying line could not be asserted.");
+            }
+            sleepQuietly(durationMs);
+        }
+
+        @Override
+        public void playSilence(int durationMs) throws InterruptedException {
+            if (!applyConfiguredKeyingLevels(port, settings, !settings.serialCatKeyingPolarity().assertedLevel())) {
+                throw new IllegalStateException("Dedicated serial keying line could not be released.");
+            }
+            sleepQuietly(durationMs);
+        }
+
+        @Override
+        public void finish() {
+            stop();
+        }
+
+        @Override
+        public void stop() {
+            applyConfiguredKeyingLevels(port, settings, !settings.serialCatKeyingPolarity().assertedLevel());
+        }
+    }
+
+    private static final class SessionBackedCatAudioOutput implements CwTxAudioOutput {
+        private final SerialCatSession session;
+
+        private SessionBackedCatAudioOutput(SerialCatSession session) {
+            this.session = session;
+        }
+
+        @Override
+        public void playTone(int frequencyHz, int durationMs) throws InterruptedException {
+            sendCommand("TX1;");
+            sleepQuietly(durationMs);
+        }
+
+        @Override
+        public void playSilence(int durationMs) throws InterruptedException {
+            sendCommand("TX0;");
+            sleepQuietly(durationMs);
+        }
+
+        @Override
+        public void finish() {
+            stop();
+        }
+
+        @Override
+        public void stop() {
+            try {
+                session.send("TX0;", COMMAND_TIMEOUT_MS);
+            } catch (IOException ignored) {
+                // Best-effort release path during stop/finalize.
+            }
+        }
+
+        private void sendCommand(String command) {
+            try {
+                session.send(command, COMMAND_TIMEOUT_MS);
+            } catch (IOException exception) {
+                throw new IllegalStateException(exception);
+            }
+        }
+    }
+
+    private static void sleepQuietly(int durationMs) throws InterruptedException {
+        int remainingMs = Math.max(0, durationMs);
+        while (remainingMs > 0) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException("Serial CAT TX interrupted");
+            }
+            int sliceMs = Math.min(remainingMs, 25);
+            Thread.sleep(sliceMs);
+            remainingMs -= sliceMs;
         }
     }
 

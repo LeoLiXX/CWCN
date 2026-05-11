@@ -21,7 +21,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Settings"
+                android:text="设置"
                 android:textColor="@color/cwcn_title"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -65,7 +65,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Station"
+                    android:text="台站资料"
                     android:textColor="@color/cwcn_title"
                     android:textSize="15sp"
                     android:textStyle="bold" />
@@ -104,7 +104,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bootstrap_field_background"
-                android:hint="Station callsign"
+                android:hint="我的呼号"
                 android:inputType="textCapCharacters"
                 android:padding="8dp"
                 android:singleLine="true"
@@ -117,7 +117,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bootstrap_field_background"
-                android:hint="Operator name"
+                android:hint="操作员姓名"
                 android:inputType="textPersonName"
                 android:padding="8dp"
                 android:singleLine="true"
@@ -130,26 +130,64 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bootstrap_field_background"
-                android:hint="QTH"
+                android:hint="QTH / 所在地"
                 android:inputType="textCapWords"
                 android:padding="8dp"
                 android:singleLine="true"
                 android:textColor="@color/cwcn_body"
                 android:textColorHint="@color/cwcn_subtitle" />
 
-            <Button
-                android:id="@+id/saveStationProfileButton"
+            <EditText
+                android:id="@+id/maidenheadGridEditText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:background="@drawable/operate_chip_background"
-                android:minHeight="0dp"
-                android:paddingTop="7dp"
-                android:paddingBottom="7dp"
-                android:text="Save"
-                android:textAllCaps="false"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="梅登海格网格，例如 PM01"
+                android:inputType="textCapCharacters"
+                android:padding="8dp"
+                android:singleLine="true"
                 android:textColor="@color/cwcn_body"
-                android:textSize="10sp" />
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <EditText
+                android:id="@+id/rigDescriptionEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="RIG 模板变量，例如 IC-705 5W"
+                android:inputType="textCapSentences"
+                android:padding="8dp"
+                android:singleLine="true"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <EditText
+                android:id="@+id/antennaDescriptionEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="ANT 模板变量，例如 EFHW"
+                android:inputType="textCapSentences"
+                android:padding="8dp"
+                android:singleLine="true"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <EditText
+                android:id="@+id/weatherDescriptionEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="WX 模板变量，例如 SUNNY 28C"
+                android:inputType="textCapSentences"
+                android:padding="8dp"
+                android:singleLine="true"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
 
             <TextView
                 android:id="@+id/stationProfileStatusText"
@@ -178,7 +216,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Radio Route"
+                    android:text="电台链路"
                     android:textColor="@color/cwcn_title"
                     android:textSize="15sp"
                     android:textStyle="bold" />
@@ -211,7 +249,7 @@
                 android:minHeight="0dp"
                 android:paddingTop="7dp"
                 android:paddingBottom="7dp"
-                android:text="Rig Setup"
+                android:text="打开 Rig Setup"
                 android:textAllCaps="false"
                 android:textColor="@color/cwcn_body"
                 android:textSize="10sp" />
@@ -235,7 +273,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="No-Radio Fallback"
+                    android:text="无电台兜底"
                     android:textColor="@color/cwcn_title"
                     android:textSize="15sp"
                     android:textStyle="bold" />
@@ -265,20 +303,6 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" />
 
-            <Button
-                android:id="@+id/saveRouteFallbackButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/operate_chip_background"
-                android:minHeight="0dp"
-                android:paddingTop="7dp"
-                android:paddingBottom="7dp"
-                android:text="Save"
-                android:textAllCaps="false"
-                android:textColor="@color/cwcn_body"
-                android:textSize="10sp" />
-
             <TextView
                 android:id="@+id/routeFallbackStatusText"
                 android:layout_width="match_parent"
@@ -306,7 +330,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="CAT &amp; Keying"
+                    android:text="CAT 与键控"
                     android:textColor="@color/cwcn_title"
                     android:textSize="15sp"
                     android:textStyle="bold" />
@@ -336,7 +360,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:textColor="@color/cwcn_subtitle"
-                android:textSize="1sp" />
+                android:textSize="10sp" />
 
             <TextView
                 android:id="@+id/routeSettingsScopeText"
@@ -356,7 +380,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Serial CAT Defaults"
+                    android:text="串口 CAT"
                     android:textColor="@color/cwcn_title"
                     android:textSize="13sp"
                     android:textStyle="bold" />
@@ -367,7 +391,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="Serial port hint"
+                    android:hint="串口端口提示"
                     android:inputType="text"
                     android:padding="8dp"
                     android:singleLine="true"
@@ -386,7 +410,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:background="@drawable/bootstrap_field_background"
-                        android:hint="Baud"
+                        android:hint="波特率"
                         android:inputType="number"
                         android:padding="10dp"
                         android:singleLine="true"
@@ -413,7 +437,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:background="@drawable/bootstrap_field_background"
-                        android:hint="Keying port hint"
+                        android:hint="键控端口提示"
                         android:inputType="text"
                         android:padding="8dp"
                         android:singleLine="true"
@@ -434,7 +458,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="CI-V address (hex)"
+                    android:hint="CI-V 地址（十六进制）"
                     android:inputType="textCapCharacters"
                     android:padding="10dp"
                     android:singleLine="true"
@@ -452,7 +476,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Network CAT Defaults"
+                    android:text="网络 CAT"
                     android:textColor="@color/cwcn_title"
                     android:textSize="13sp"
                     android:textStyle="bold" />
@@ -463,7 +487,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="Host"
+                    android:hint="主机"
                     android:inputType="textUri"
                     android:padding="8dp"
                     android:singleLine="true"
@@ -476,7 +500,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="Port"
+                    android:hint="端口"
                     android:inputType="number"
                     android:padding="8dp"
                     android:singleLine="true"
@@ -494,7 +518,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="USB Keying Defaults"
+                    android:text="USB 键控"
                     android:textColor="@color/cwcn_title"
                     android:textSize="13sp"
                     android:textStyle="bold" />
@@ -518,28 +542,42 @@
                         android:layout_marginStart="8dp"
                         android:layout_weight="1"
                         android:background="@drawable/bootstrap_field_background"
-                        android:hint="Preferred USB device"
+                        android:hint="偏好 USB 设备"
                         android:inputType="text"
                         android:padding="8dp"
                         android:singleLine="true"
                         android:textColor="@color/cwcn_body"
                         android:textColorHint="@color/cwcn_subtitle" />
                 </LinearLayout>
-            </LinearLayout>
 
-            <Button
-                android:id="@+id/saveRouteSettingsButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/operate_chip_background"
-                android:minHeight="0dp"
-                android:paddingTop="7dp"
-                android:paddingBottom="7dp"
-                android:text="Save"
-                android:textAllCaps="false"
-                android:textColor="@color/cwcn_body"
-                android:textSize="10sp" />
+                <Spinner
+                    android:id="@+id/usbDeviceSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" />
+
+                <Button
+                    android:id="@+id/requestUsbKeyerPermissionButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/operate_chip_background"
+                    android:minHeight="0dp"
+                    android:paddingTop="7dp"
+                    android:paddingBottom="7dp"
+                    android:text="申请 USB 权限"
+                    android:textAllCaps="false"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="10sp" />
+
+                <TextView
+                    android:id="@+id/usbRouteStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="10sp" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/routeSettingsStatusText"
@@ -568,7 +606,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="CW Defaults"
+                    android:text="CW 默认值"
                     android:textColor="@color/cwcn_title"
                     android:textSize="15sp"
                     android:textStyle="bold" />
@@ -618,7 +656,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="Tone Hz"
+                    android:hint="音调 Hz"
                     android:inputType="number"
                     android:padding="8dp"
                     android:singleLine="true"
@@ -626,19 +664,32 @@
                     android:textColorHint="@color/cwcn_subtitle" />
             </LinearLayout>
 
-            <Button
-                android:id="@+id/saveCwDefaultsButton"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:background="@drawable/operate_chip_background"
-                android:minHeight="0dp"
-                android:paddingTop="7dp"
-                android:paddingBottom="7dp"
-                android:text="Save"
-                android:textAllCaps="false"
-                android:textColor="@color/cwcn_body"
-                android:textSize="10sp" />
+                android:orientation="horizontal">
+
+                <Spinner
+                    android:id="@+id/rxInputModeSpinner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <Spinner
+                    android:id="@+id/rxToneModeSpinner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1" />
+
+                <Spinner
+                    android:id="@+id/rxMicSourceModeSpinner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/cwDefaultsStatusText"
@@ -667,7 +718,110 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Advanced / Developer"
+                    android:text="发送模板"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/txTemplatesInfoButton"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="TX templates help"
+                    android:padding="2dp"
+                    android:src="@drawable/ic_ui_info"
+                    android:tint="@color/cwcn_subtitle" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/txTemplatesSummaryText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_body"
+                android:textSize="11sp" />
+
+            <EditText
+                android:id="@+id/templateCqEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="CQ 模板"
+                android:inputType="textCapCharacters|textMultiLine"
+                android:minLines="2"
+                android:padding="8dp"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <EditText
+                android:id="@+id/templateCqDxEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="应答模板"
+                android:inputType="textCapCharacters|textMultiLine"
+                android:minLines="2"
+                android:padding="8dp"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <EditText
+                android:id="@+id/templateQrzEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="设备信息模板"
+                android:inputType="textCapCharacters|textMultiLine"
+                android:minLines="2"
+                android:padding="8dp"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <EditText
+                android:id="@+id/templateTu73EditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:hint="收尾模板"
+                android:inputType="textCapCharacters|textMultiLine"
+                android:minLines="2"
+                android:padding="8dp"
+                android:textColor="@color/cwcn_body"
+                android:textColorHint="@color/cwcn_subtitle" />
+
+            <TextView
+                android:id="@+id/txTemplatesStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bootstrap_panel_background"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="高级 / 开发"
                     android:textColor="@color/cwcn_title"
                     android:textSize="15sp"
                     android:textStyle="bold" />
@@ -700,7 +854,7 @@
                 android:minHeight="0dp"
                 android:paddingTop="7dp"
                 android:paddingBottom="7dp"
-                android:text="Enable Developer Mode"
+                android:text="启用开发者模式"
                 android:textAllCaps="false"
                 android:textColor="@color/cwcn_body"
                 android:textSize="10sp" />
@@ -719,7 +873,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Developer Tools"
+                android:text="开发者工具"
                 android:textColor="@color/cwcn_title"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -741,7 +895,7 @@
                 android:minHeight="0dp"
                 android:paddingTop="7dp"
                 android:paddingBottom="7dp"
-                android:text="Open Tools"
+                android:text="打开工具"
                 android:textAllCaps="false"
                 android:textColor="@color/cwcn_body"
                 android:textSize="10sp" />

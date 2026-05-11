@@ -148,6 +148,142 @@ public final class CwTimingModelTest {
         assertTrue("intra=" + model.snapshot().intraGapEstimateMs(), model.snapshot().intraGapEstimateMs() <= 38L);
     }
 
+    @Test
+    public void hybridTimingUsesSeedWpmAsWeakBootstrapFloor() {
+        CwHybridTimingModel model = new CwHybridTimingModel();
+        model.setSeedWpm(24);
+
+        CwTimingSnapshot snapshot = model.snapshot();
+
+        assertTrue("wpm=" + snapshot.estimatedWpmPrecise(), snapshot.estimatedWpmPrecise() >= 20.5d);
+        assertTrue("wpm=" + snapshot.estimatedWpmPrecise(), snapshot.estimatedWpmPrecise() <= 24.5d);
+    }
+
+    @Test
+    public void hybridTimingStableDecodeAnchorLimitsSuddenWpmJump() {
+        CwHybridTimingModel model = new CwHybridTimingModel();
+        model.setSeedWpm(24);
+
+        model.process(toneOff(50L, 50L));
+        model.notifyStableDecode(50L);
+        model.process(toneOn(100L));
+        model.process(toneOff(150L, 50L));
+        model.notifyStableDecode(150L);
+        model.process(toneOn(200L));
+        model.process(toneOff(250L, 50L));
+        model.notifyStableDecode(250L);
+
+        for (int index = 0; index < 6; index++) {
+            long toneOnTimestampMs = 300L + (index * 34L);
+            model.process(toneOn(toneOnTimestampMs));
+            model.process(toneOff(toneOnTimestampMs + 12L, 12L));
+        }
+
+        CwTimingSnapshot snapshot = model.snapshot();
+        assertTrue("wpm=" + snapshot.estimatedWpmPrecise(), snapshot.estimatedWpmPrecise() <= 29.0d);
+    }
+
+    @Test
+    public void hybridTimingStableDecodeAnchorDoesNotReanchorToTransientFastBurst() {
+        CwHybridTimingModel model = new CwHybridTimingModel();
+        model.setSeedWpm(24);
+
+        model.process(toneOff(50L, 50L));
+        model.notifyStableDecode(50L);
+        model.process(toneOn(100L));
+        model.process(toneOff(150L, 50L));
+        model.notifyStableDecode(150L);
+        model.process(toneOn(200L));
+        model.process(toneOff(250L, 50L));
+        model.notifyStableDecode(250L);
+
+        for (int index = 0; index < 6; index++) {
+            long toneOnTimestampMs = 300L + (index * 34L);
+            model.process(toneOn(toneOnTimestampMs));
+            model.process(toneOff(toneOnTimestampMs + 12L, 12L));
+        }
+        model.notifyStableDecode(520L);
+
+        CwTimingSnapshot snapshot = model.snapshot();
+        assertTrue("wpm=" + snapshot.estimatedWpmPrecise(), snapshot.estimatedWpmPrecise() <= 30.5d);
+    }
+
+    @Test
+    public void hybridTimingDropsStableAnchorAfterLongIdleGap() {
+        CwHybridTimingModel model = new CwHybridTimingModel();
+        model.setSeedWpm(24);
+
+        model.process(toneOff(50L, 50L));
+        model.notifyStableDecode(50L);
+        model.process(toneOn(100L));
+        model.process(toneOff(150L, 50L));
+        model.notifyStableDecode(150L);
+        model.process(toneOn(200L));
+        model.process(toneOff(250L, 50L));
+        model.notifyStableDecode(250L);
+
+        model.flushPendingGap(14000L);
+        model.process(toneOn(14040L));
+        model.process(toneOff(14052L, 12L));
+
+        CwTimingSnapshot snapshot = model.snapshot();
+        assertTrue("wpm=" + snapshot.estimatedWpmPrecise(), snapshot.estimatedWpmPrecise() >= 18.0d);
+    }
+
+    @Test
+    public void hybridTimingLongIdleResetClearsRunawayFastStateBackTowardSeed() {
+        CwHybridTimingModel model = new CwHybridTimingModel();
+        model.setSeedWpm(24);
+
+        model.process(toneOff(50L, 50L));
+        model.notifyStableDecode(50L);
+        model.process(toneOn(100L));
+        model.process(toneOff(150L, 50L));
+        model.notifyStableDecode(150L);
+        model.process(toneOn(200L));
+        model.process(toneOff(250L, 50L));
+        model.notifyStableDecode(250L);
+
+        for (int index = 0; index < 12; index++) {
+            long toneOnTimestampMs = 300L + (index * 30L);
+            model.process(toneOn(toneOnTimestampMs));
+            model.process(toneOff(toneOnTimestampMs + 10L, 10L));
+        }
+
+        CwTimingSnapshot fastSnapshot = model.snapshot();
+        assertTrue("fast wpm=" + fastSnapshot.estimatedWpmPrecise(), fastSnapshot.estimatedWpmPrecise() <= 25.5d);
+
+        model.flushPendingGap(14000L);
+
+        CwTimingSnapshot idleSnapshot = model.snapshot();
+        assertTrue("idle wpm=" + idleSnapshot.estimatedWpmPrecise(), idleSnapshot.estimatedWpmPrecise() <= 24.5d);
+        assertTrue("idle wpm=" + idleSnapshot.estimatedWpmPrecise(), idleSnapshot.estimatedWpmPrecise() >= 20.5d);
+    }
+
+    @Test
+    public void hybridTimingFrozenLearningDoesNotLetFastFragmentsRunAway() {
+        CwHybridTimingModel model = new CwHybridTimingModel();
+        model.setSeedWpm(24);
+
+        model.process(toneOff(50L, 50L));
+        model.notifyStableDecode(50L);
+        model.process(toneOn(100L));
+        model.process(toneOff(150L, 50L));
+        model.notifyStableDecode(150L);
+        model.process(toneOn(200L));
+        model.process(toneOff(250L, 50L));
+        model.notifyStableDecode(250L);
+
+        for (int index = 0; index < 12; index++) {
+            long toneOnTimestampMs = 300L + (index * 30L);
+            model.process(toneOn(toneOnTimestampMs), false);
+            model.process(toneOff(toneOnTimestampMs + 10L, 10L), false);
+        }
+
+        CwTimingSnapshot snapshot = model.rawSnapshot();
+        assertTrue("wpm=" + snapshot.estimatedWpmPrecise(), snapshot.estimatedWpmPrecise() <= 25.0d);
+    }
+
     private void setBooleanField(CwTimingModel model, String name, boolean value) throws Exception {
         Field field = CwTimingModel.class.getDeclaredField(name);
         field.setAccessible(true);

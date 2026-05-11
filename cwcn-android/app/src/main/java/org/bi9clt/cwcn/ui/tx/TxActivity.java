@@ -75,7 +75,7 @@ public final class TxActivity extends AppCompatActivity {
     private RigSelectionStore rigSelectionStore;
     private AudioTrackTxAudioOutput txAudioOutput;
     private ArrayList<TxBackendOption> backendOptions;
-    private CwTxBenchLogBuffer benchLogBuffer;
+    private CwTxBenchLogBuffer sessionLogBuffer;
 
     private CwTxPlan currentPlan;
     private CwTxPlaybackSnapshot lastPlaybackSnapshot;
@@ -87,9 +87,9 @@ public final class TxActivity extends AppCompatActivity {
     private ArrayAdapter<UsbSerialDeviceOption> usbDeviceAdapter;
     private ArrayAdapter<MockUsbSerialBenchScenario> mockUsbScenarioAdapter;
     private String lastLoggedBackendId;
-    private String lastLoggedUsbDiagnosticCode;
+    private String lastLoggedUsbRouteStageCode;
     private CwTxState lastLoggedPlaybackState;
-    private String lastSignificantUsbDiagnosticSummary;
+    private String lastNotableUsbRouteIssueSummary;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -101,7 +101,7 @@ public final class TxActivity extends AppCompatActivity {
         rigSelectionStore = new RigSelectionStore(this);
         txAudioOutput = new AudioTrackTxAudioOutput();
         backendOptions = buildBackendOptions();
-        benchLogBuffer = new CwTxBenchLogBuffer(BENCH_LOG_LIMIT);
+        sessionLogBuffer = new CwTxBenchLogBuffer(BENCH_LOG_LIMIT);
         restoreUsbRoutePreferences();
         registerUsbPermissionReceiver();
         setupBackendSelector();
@@ -109,9 +109,9 @@ public final class TxActivity extends AppCompatActivity {
         setupUsbRouteControls();
         setupDefaults();
         setupActions();
-        renderBenchLog();
+        renderSessionLog();
         rebuildPlanPreview();
-        logBenchEvent("SESSION", "TX console opened.");
+        logSessionEvent("SESSION", "TX console opened.");
     }
 
     @Override
@@ -160,11 +160,11 @@ public final class TxActivity extends AppCompatActivity {
         binding.stopTxButton.setOnClickListener(view -> stopTx());
         binding.refreshUsbDevicesButton.setOnClickListener(view -> refreshSelectedUsbBackend());
         binding.requestUsbPermissionButton.setOnClickListener(view -> requestUsbPermissionForSelectedBackend());
-        binding.loadUsbDitTestButton.setOnClickListener(view -> applyUsbBenchPreset(CwTxPreset.BENCH_DIT, 12));
-        binding.loadUsbPatternTestButton.setOnClickListener(view -> applyUsbBenchPreset(CwTxPreset.BENCH_PATTERN, 15));
+        binding.loadUsbDitTestButton.setOnClickListener(view -> applyUsbValidationPreset(CwTxPreset.BENCH_DIT, 12));
+        binding.loadUsbPatternTestButton.setOnClickListener(view -> applyUsbValidationPreset(CwTxPreset.BENCH_PATTERN, 15));
         binding.releaseUsbKeyLineButton.setOnClickListener(view -> releaseSelectedUsbKeyLine());
-        binding.copyBenchReportButton.setOnClickListener(view -> copyBenchReport());
-        binding.clearBenchLogButton.setOnClickListener(view -> clearBenchLog());
+        binding.copyBenchReportButton.setOnClickListener(view -> copySessionReport());
+        binding.clearBenchLogButton.setOnClickListener(view -> clearSessionLog());
     }
 
     private void setupDismissKeyboardActions() {
@@ -244,7 +244,7 @@ public final class TxActivity extends AppCompatActivity {
                     persistUsbDeviceName(selectedDeviceName);
                     lastPlaybackSnapshot = null;
                     lastLoggedPlaybackState = null;
-                    logBenchEvent(
+                    logSessionEvent(
                             "USB",
                             option.isAuto()
                                     ? "Device selector switched to Auto target mode."
@@ -281,7 +281,7 @@ public final class TxActivity extends AppCompatActivity {
                 if (adapter.selectMockBenchScenario(scenario)) {
                     lastPlaybackSnapshot = null;
                     lastLoggedPlaybackState = null;
-                    logBenchEvent("MOCK", "Mock USB scenario switched to " + scenario.displayName() + ".");
+                    logSessionEvent("MOCK", "Mock USB scenario switched to " + scenario.displayName() + ".");
                     rebuildPlanPreview();
                 }
             }
@@ -313,7 +313,7 @@ public final class TxActivity extends AppCompatActivity {
                     persistUsbKeyLine((SerialKeyerTxOutput.KeyLine) item);
                     lastPlaybackSnapshot = null;
                     lastLoggedPlaybackState = null;
-                    logBenchEvent("USB", "Key line changed to " + item + ".");
+                    logSessionEvent("USB", "Key line changed to " + item + ".");
                     rebuildPlanPreview();
                 } else {
                     Toast.makeText(TxActivity.this, "Unable to change USB key line while TX is active.", Toast.LENGTH_SHORT).show();
@@ -346,7 +346,7 @@ public final class TxActivity extends AppCompatActivity {
             binding.backendSummaryText.setText(renderBackendSummary(backend));
             binding.routeChecklistText.setText(CwTxRouteAdvisor.buildChecklist(backend, currentPlan));
             refreshRouteControls(backend);
-            renderBenchSummary(backend);
+            renderSessionSummary(backend);
             if (lastPlaybackSnapshot == null || !backend.isRunning()) {
                 binding.txStatusText.setText(renderIdleStatus(backend));
                 binding.txProgressText.setText("Progress: 0%");
@@ -365,12 +365,12 @@ public final class TxActivity extends AppCompatActivity {
         CwTxBackend backend = selectedBackend();
         rebuildPlanPreview();
         if (currentPlan == null || currentPlan.elements().isEmpty()) {
-            logBenchEvent("TX", "Start blocked because the current plan is empty.");
+            logSessionEvent("TX", "Start blocked because the current plan is empty.");
             Toast.makeText(this, "Nothing to send yet.", Toast.LENGTH_SHORT).show();
             return;
         }
         if (!backend.isReady()) {
-            logBenchEvent(
+            logSessionEvent(
                     "TX",
                     "Start blocked for " + backend.displayName() + ": " + backend.describeAvailability()
             );
@@ -384,12 +384,12 @@ public final class TxActivity extends AppCompatActivity {
             return;
         }
         if (backend.isRunning()) {
-            logBenchEvent("TX", "Start ignored because the backend is already running.");
+            logSessionEvent("TX", "Start ignored because the backend is already running.");
             Toast.makeText(this, "TX is already running.", Toast.LENGTH_SHORT).show();
             return;
         }
         lastLoggedPlaybackState = null;
-        logBenchEvent(
+        logSessionEvent(
                 "TX",
                 "Start requested on " + backend.displayName() + " using " + currentPlan.elements().size() + " elements."
         );
@@ -397,7 +397,7 @@ public final class TxActivity extends AppCompatActivity {
                 runOnUiThread(() -> applyPlaybackSnapshot(snapshot)));
         if (!started) {
             String recoveryHint = renderBackendRecoveryHint(backend);
-            logBenchEvent(
+            logSessionEvent(
                 "TX",
                 "Start failed on " + backend.displayName() + ". Next: " + recoveryHint
             );
@@ -414,7 +414,7 @@ public final class TxActivity extends AppCompatActivity {
         boolean wasRunning = backend.isRunning();
         backend.stop();
         lastLoggedPlaybackState = null;
-        logBenchEvent(
+        logSessionEvent(
                 "TX",
                 wasRunning
                         ? "Stop requested for " + backend.displayName() + "."
@@ -430,7 +430,7 @@ public final class TxActivity extends AppCompatActivity {
             maybeLogPlaybackSnapshot(snapshot);
             binding.txStatusText.setText(renderTxStatus(snapshot));
             binding.txProgressText.setText(renderTxProgress(snapshot));
-            renderBenchSummary(selectedBackend());
+            renderSessionSummary(selectedBackend());
             refreshButtons();
         });
     }
@@ -566,7 +566,7 @@ public final class TxActivity extends AppCompatActivity {
         boolean usbVisible = backend != null && usbAdapter != null;
         binding.usbRoutePanel.setVisibility(usbVisible ? View.VISIBLE : View.GONE);
         if (!usbVisible) {
-            lastLoggedUsbDiagnosticCode = null;
+            lastLoggedUsbRouteStageCode = null;
             binding.mockUsbScenarioPanel.setVisibility(View.GONE);
             return;
         }
@@ -574,7 +574,7 @@ public final class TxActivity extends AppCompatActivity {
         binding.usbDeviceText.setText(renderUsbRouteSummary(usbAdapter));
         syncUsbKeyLineSelection(usbAdapter);
         syncMockUsbScenarioSelection(usbAdapter);
-        maybeLogUsbDiagnosticStage(usbAdapter);
+        maybeLogUsbRouteStage(usbAdapter);
         boolean hasCandidateDevices = hasRealUsbDeviceOption(deviceOptions);
         boolean hasTargetDevice = usbAdapter.hasTargetDevice();
         boolean needsPermission = hasTargetDevice && !usbAdapter.isReady();
@@ -786,18 +786,18 @@ public final class TxActivity extends AppCompatActivity {
     private void requestUsbPermissionForSelectedBackend() {
         UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
         if (adapter == null) {
-            logBenchEvent("USB", "Permission request ignored because USB serial backend is not selected.");
+            logSessionEvent("USB", "Permission request ignored because USB serial backend is not selected.");
             Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
             return;
         }
         if (!adapter.hasTargetDevice()) {
-            logBenchEvent("USB", "Permission request blocked: " + adapter.describeAvailability());
+            logSessionEvent("USB", "Permission request blocked: " + adapter.describeAvailability());
             Toast.makeText(this, adapter.describeAvailability(), Toast.LENGTH_SHORT).show();
             rebuildPlanPreview();
             return;
         }
         if (adapter.isReady()) {
-            logBenchEvent("USB", "Permission request skipped because the backend is already ready.");
+            logSessionEvent("USB", "Permission request skipped because the backend is already ready.");
             Toast.makeText(this, "USB backend already has permission and is ready.", Toast.LENGTH_SHORT).show();
             rebuildPlanPreview();
             return;
@@ -812,12 +812,12 @@ public final class TxActivity extends AppCompatActivity {
         );
         boolean requested = adapter.requestUsbPermission(permissionIntent);
         if (!requested) {
-            logBenchEvent("USB", "Permission request failed: " + adapter.describeAvailability());
+            logSessionEvent("USB", "Permission request failed: " + adapter.describeAvailability());
             Toast.makeText(this, adapter.describeAvailability(), Toast.LENGTH_SHORT).show();
             rebuildPlanPreview();
             return;
         }
-        logBenchEvent("USB", "Permission request sent for the current target device.");
+        logSessionEvent("USB", "Permission request sent for the current target device.");
         if (adapter.supportsMockBenchScenarios()) {
             lastPlaybackSnapshot = null;
             lastLoggedPlaybackState = null;
@@ -831,11 +831,11 @@ public final class TxActivity extends AppCompatActivity {
     private void refreshSelectedUsbBackend() {
         UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
         if (adapter == null) {
-            logBenchEvent("USB", "Refresh ignored because USB serial backend is not selected.");
+            logSessionEvent("USB", "Refresh ignored because USB serial backend is not selected.");
             Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
             return;
         }
-        logBenchEvent("USB", "Manual USB route refresh requested.");
+        logSessionEvent("USB", "Manual USB route refresh requested.");
         adapter.refreshRouteState();
         lastPlaybackSnapshot = null;
         lastLoggedPlaybackState = null;
@@ -846,7 +846,7 @@ public final class TxActivity extends AppCompatActivity {
     private void releaseSelectedUsbKeyLine() {
         UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
         if (adapter == null) {
-            logBenchEvent("USB", "Release Key Line ignored because USB serial backend is not selected.");
+            logSessionEvent("USB", "Release Key Line ignored because USB serial backend is not selected.");
             Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -856,7 +856,7 @@ public final class TxActivity extends AppCompatActivity {
         lastPlaybackSnapshot = null;
         lastLoggedPlaybackState = null;
         rebuildPlanPreview();
-        logBenchEvent(
+        logSessionEvent(
                 "USB",
                 released
                         ? "Key line released and USB route state refreshed."
@@ -871,10 +871,10 @@ public final class TxActivity extends AppCompatActivity {
         ).show();
     }
 
-    private void applyUsbBenchPreset(CwTxPreset preset, int recommendedWpm) {
+    private void applyUsbValidationPreset(CwTxPreset preset, int recommendedWpm) {
         UsbSerialKeyerRigControlAdapter adapter = selectedUsbSerialAdapter();
         if (adapter == null) {
-            logBenchEvent("USB", "Bench preset ignored because USB serial backend is not selected.");
+            logSessionEvent("USB", "Bench preset ignored because USB serial backend is not selected.");
             Toast.makeText(this, "USB serial backend is not selected.", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -885,7 +885,7 @@ public final class TxActivity extends AppCompatActivity {
         lastPlaybackSnapshot = null;
         lastLoggedPlaybackState = null;
         rebuildPlanPreview();
-        logBenchEvent(
+        logSessionEvent(
                 "USB",
                 "Loaded bench preset " + preset.name() + " at " + recommendedWpm + " WPM."
         );
@@ -906,7 +906,7 @@ public final class TxActivity extends AppCompatActivity {
                 }
                 if (ACTION_USB_PERMISSION.equals(action)) {
                     boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
-                    logBenchEvent(
+                    logSessionEvent(
                             "USB",
                             granted
                                     ? "USB permission granted by the system dialog."
@@ -923,12 +923,12 @@ public final class TxActivity extends AppCompatActivity {
                     return;
                 }
                 if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
-                    logBenchEvent("USB", "USB device attached: " + renderNullableDeviceName(extractUsbDeviceName(intent)) + ".");
+                    logSessionEvent("USB", "USB device attached: " + renderNullableDeviceName(extractUsbDeviceName(intent)) + ".");
                     handleUsbRouteChange(extractUsbDeviceName(intent), false);
                     return;
                 }
                 if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
-                    logBenchEvent("USB", "USB device detached: " + renderNullableDeviceName(extractUsbDeviceName(intent)) + ".");
+                    logSessionEvent("USB", "USB device detached: " + renderNullableDeviceName(extractUsbDeviceName(intent)) + ".");
                     handleUsbRouteChange(extractUsbDeviceName(intent), true);
                 }
             }
@@ -957,7 +957,7 @@ public final class TxActivity extends AppCompatActivity {
         }
         if (detached && adapter != null && adapter.isPreferredDeviceMissing()) {
             String preferred = adapter.preferredDeviceName();
-            logBenchEvent(
+            logSessionEvent(
                     "USB",
                     "Locked target became unavailable: " + renderNullableDeviceName(preferred) + "."
             );
@@ -1144,7 +1144,7 @@ public final class TxActivity extends AppCompatActivity {
         lastPlaybackSnapshot = null;
         lastLoggedPlaybackState = null;
         rebuildPlanPreview();
-        logBenchEvent("TX", "Loaded preset " + preset.name() + ".");
+        logSessionEvent("TX", "Loaded preset " + preset.name() + ".");
     }
 
     private String normalizedStationCallsign() {
@@ -1193,25 +1193,25 @@ public final class TxActivity extends AppCompatActivity {
             return;
         }
         lastLoggedBackendId = backend.id();
-        lastLoggedUsbDiagnosticCode = null;
+        lastLoggedUsbRouteStageCode = null;
         if (!backend.id().startsWith("rig-text:usb-serial-keyer")) {
-            lastSignificantUsbDiagnosticSummary = null;
+            lastNotableUsbRouteIssueSummary = null;
         }
-        logBenchEvent("BACKEND", "Selected " + backend.displayName() + " (" + backend.id() + ").");
+        logSessionEvent("BACKEND", "Selected " + backend.displayName() + " (" + backend.id() + ").");
     }
 
-    private void maybeLogUsbDiagnosticStage(UsbSerialKeyerRigControlAdapter adapter) {
+    private void maybeLogUsbRouteStage(UsbSerialKeyerRigControlAdapter adapter) {
         if (adapter == null) {
-            lastLoggedUsbDiagnosticCode = null;
+            lastLoggedUsbRouteStageCode = null;
             return;
         }
         String diagnosticCode = adapter.diagnosticStageCode();
-        if (diagnosticCode.equals(lastLoggedUsbDiagnosticCode)) {
+        if (diagnosticCode.equals(lastLoggedUsbRouteStageCode)) {
             return;
         }
-        lastLoggedUsbDiagnosticCode = diagnosticCode;
-        captureSignificantUsbDiagnostic(adapter, diagnosticCode);
-        logBenchEvent(
+        lastLoggedUsbRouteStageCode = diagnosticCode;
+        captureNotableUsbRouteIssue(adapter, diagnosticCode);
+        logSessionEvent(
                 "USB",
                 "Diagnostic stage -> "
                         + adapter.diagnosticStageLabel()
@@ -1228,47 +1228,47 @@ public final class TxActivity extends AppCompatActivity {
         }
         lastLoggedPlaybackState = snapshot.state();
         if (snapshot.state() == CwTxState.PLAYING) {
-            logBenchEvent("TX", "Playback started. " + snapshot.statusMessage());
+            logSessionEvent("TX", "Playback started. " + snapshot.statusMessage());
             return;
         }
         if (snapshot.state() == CwTxState.COMPLETED) {
-            logBenchEvent("TX", "Playback completed. " + snapshot.statusMessage());
+            logSessionEvent("TX", "Playback completed. " + snapshot.statusMessage());
             return;
         }
         if (snapshot.state() == CwTxState.ERROR) {
-            logBenchEvent("TX", "Playback error. " + snapshot.statusMessage());
+            logSessionEvent("TX", "Playback error. " + snapshot.statusMessage());
             return;
         }
         if (snapshot.state() == CwTxState.STOPPED) {
-            logBenchEvent("TX", "Playback stopped. " + snapshot.statusMessage());
+            logSessionEvent("TX", "Playback stopped. " + snapshot.statusMessage());
             return;
         }
-        logBenchEvent("TX", "Playback state -> " + snapshot.state().displayName() + ".");
+        logSessionEvent("TX", "Playback state -> " + snapshot.state().displayName() + ".");
     }
 
-    private void clearBenchLog() {
-        benchLogBuffer.clear();
-        lastLoggedUsbDiagnosticCode = null;
+    private void clearSessionLog() {
+        sessionLogBuffer.clear();
+        lastLoggedUsbRouteStageCode = null;
         lastLoggedPlaybackState = null;
-        lastSignificantUsbDiagnosticSummary = null;
-        renderBenchLog();
-        renderBenchSummary(selectedBackend());
+        lastNotableUsbRouteIssueSummary = null;
+        renderSessionLog();
+        renderSessionSummary(selectedBackend());
         Toast.makeText(this, "Bench log cleared.", Toast.LENGTH_SHORT).show();
     }
 
-    private void copyBenchReport() {
+    private void copySessionReport() {
         ClipboardManager clipboardManager = ContextCompat.getSystemService(this, ClipboardManager.class);
         if (clipboardManager == null) {
             Toast.makeText(this, "Clipboard is unavailable on this device.", Toast.LENGTH_SHORT).show();
             return;
         }
-        String report = buildBenchReport();
+        String report = buildSessionReport();
         clipboardManager.setPrimaryClip(ClipData.newPlainText("CWCN TX Bench Report", report));
-        logBenchEvent("SESSION", "Copied the current TX bench report to the clipboard.");
+        logSessionEvent("SESSION", "Copied the current TX bench report to the clipboard.");
         Toast.makeText(this, "Bench report copied.", Toast.LENGTH_SHORT).show();
     }
 
-    private String buildBenchReport() {
+    private String buildSessionReport() {
         CwTxBackend backend = selectedBackend();
         UsbSerialKeyerRigControlAdapter usbAdapter = selectedUsbSerialAdapter();
         String usbSummary = usbAdapter == null
@@ -1281,22 +1281,22 @@ public final class TxActivity extends AppCompatActivity {
                 ? null
                 : binding.txProgressText.getText().toString();
         return CwTxBenchReportFormatter.format(
-                buildBenchSummary(backend),
-                buildRecentUsbIssueSummary(usbAdapter),
+                buildSessionSummary(backend),
+                buildRecentUsbRouteIssueSummary(usbAdapter),
                 renderBackendSummary(backend),
                 currentPlan == null ? null : renderPlanSummary(currentPlan),
                 usbSummary,
                 txStatus,
                 txProgress,
-                benchLogBuffer.renderMultiline()
+                sessionLogBuffer.renderMultiline()
         );
     }
 
-    private void renderBenchSummary(CwTxBackend backend) {
-        binding.benchSummaryText.setText(buildBenchSummary(backend));
+    private void renderSessionSummary(CwTxBackend backend) {
+        binding.benchSummaryText.setText(buildSessionSummary(backend));
     }
 
-    private String buildBenchSummary(CwTxBackend backend) {
+    private String buildSessionSummary(CwTxBackend backend) {
         UsbSerialKeyerRigControlAdapter usbAdapter = selectedUsbSerialAdapter();
         return CwTxBenchSummaryFormatter.format(
                 backend == null ? null : backend.id(),
@@ -1305,13 +1305,13 @@ public final class TxActivity extends AppCompatActivity {
                 backend != null && backend.isRunning(),
                 backend == null ? null : backend.describeAvailability(),
                 usbAdapter == null ? null : usbAdapter.diagnosticStageCode(),
-                buildRecentUsbIssueSummary(usbAdapter),
+                buildRecentUsbRouteIssueSummary(usbAdapter),
                 lastPlaybackSnapshot == null ? null : lastPlaybackSnapshot.state(),
                 backend == null ? null : renderBackendRecoveryHint(backend)
         );
     }
 
-    private void captureSignificantUsbDiagnostic(
+    private void captureNotableUsbRouteIssue(
             UsbSerialKeyerRigControlAdapter adapter,
             String diagnosticCode
     ) {
@@ -1321,8 +1321,8 @@ public final class TxActivity extends AppCompatActivity {
         if ("usb-serial-ready".equals(diagnosticCode)) {
             return;
         }
-        lastSignificantUsbDiagnosticSummary =
-                currentBenchTimestamp()
+        lastNotableUsbRouteIssueSummary =
+                currentSessionTimestamp()
                         + " - "
                         + adapter.diagnosticStageLabel()
                         + " ("
@@ -1331,27 +1331,27 @@ public final class TxActivity extends AppCompatActivity {
                         + renderUsbRecoveryHint(adapter);
     }
 
-    private String buildRecentUsbIssueSummary(@Nullable UsbSerialKeyerRigControlAdapter adapter) {
+    private String buildRecentUsbRouteIssueSummary(@Nullable UsbSerialKeyerRigControlAdapter adapter) {
         if (adapter == null) {
             return null;
         }
         if (!"usb-serial-ready".equals(adapter.diagnosticStageCode())) {
             return null;
         }
-        if (lastSignificantUsbDiagnosticSummary == null
-                || lastSignificantUsbDiagnosticSummary.trim().isEmpty()) {
+        if (lastNotableUsbRouteIssueSummary == null
+                || lastNotableUsbRouteIssueSummary.trim().isEmpty()) {
             return null;
         }
-        return lastSignificantUsbDiagnosticSummary;
+        return lastNotableUsbRouteIssueSummary;
     }
 
-    private void logBenchEvent(String category, String detail) {
-        benchLogBuffer.append(currentBenchTimestamp(), category, detail);
-        renderBenchLog();
+    private void logSessionEvent(String category, String detail) {
+        sessionLogBuffer.append(currentSessionTimestamp(), category, detail);
+        renderSessionLog();
     }
 
-    private void renderBenchLog() {
-        binding.benchLogText.setText(benchLogBuffer.renderMultiline());
+    private void renderSessionLog() {
+        binding.benchLogText.setText(sessionLogBuffer.renderMultiline());
     }
 
     private void dismissKeyboardAndClearNumericFocus() {
@@ -1384,7 +1384,7 @@ public final class TxActivity extends AppCompatActivity {
         binding.txScrollView.post(() -> binding.txScrollView.scrollTo(0, scrollY));
     }
 
-    private String currentBenchTimestamp() {
+    private String currentSessionTimestamp() {
         return new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
     }
 
@@ -1404,3 +1404,4 @@ public final class TxActivity extends AppCompatActivity {
         }
     }
 }
+

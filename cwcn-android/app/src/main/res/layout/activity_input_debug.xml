@@ -100,7 +100,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Fixture Scenario"
+                android:text="夹具场景"
                 android:textColor="@color/cwcn_subtitle"
                 android:textSize="13sp" />
 
@@ -117,7 +117,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Local Replay File"
+                android:text="本地回放文件"
                 android:textColor="@color/cwcn_subtitle"
                 android:textSize="13sp"
                 android:visibility="gone" />
@@ -130,7 +130,7 @@
                 android:background="@drawable/bootstrap_field_background"
                 android:lineSpacingExtra="3dp"
                 android:padding="12dp"
-                android:text="No file selected."
+                android:text="尚未选择文件。"
                 android:textColor="@color/cwcn_body"
                 android:textSize="13sp"
                 android:visibility="gone" />
@@ -143,7 +143,7 @@
                 android:background="@drawable/bootstrap_field_background"
                 android:lineSpacingExtra="3dp"
                 android:padding="12dp"
-                android:text="No batch folder selected."
+                android:text="尚未选择批量文件夹。"
                 android:textColor="@color/cwcn_body"
                 android:textSize="13sp"
                 android:visibility="gone" />
@@ -153,7 +153,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Choose Local Audio File"
+                android:text="选择本地音频文件"
                 android:visibility="gone" />
 
             <Button
@@ -161,7 +161,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Choose Local Audio Folder"
+                android:text="选择批量音频文件夹"
                 android:visibility="gone" />
 
             <TextView
@@ -169,7 +169,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Preferred CW Tone (Hz)"
+                android:text="参考音调（Hz）"
                 android:textColor="@color/cwcn_subtitle"
                 android:textSize="13sp" />
 
@@ -197,7 +197,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Apply Tone" />
+                    android:text="应用参考音调" />
 
                 <Button
                     android:id="@+id/useFixtureToneButton"
@@ -205,7 +205,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="12dp"
                     android:layout_weight="1"
-                    android:text="Use Fixture Tone" />
+                    android:text="套用夹具音调" />
             </LinearLayout>
 
             <TextView
@@ -223,7 +223,7 @@
                 android:layout_marginTop="12dp"
                 android:background="@drawable/bootstrap_field_background"
                 android:padding="12dp"
-                android:text="No fixture evaluation yet."
+                android:text="尚无夹具评估结果。"
                 android:textColor="@color/cwcn_body"
                 android:textSize="13sp" />
 
@@ -232,7 +232,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Show Detailed Panels" />
+                android:text="展开深度诊断面板" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -269,7 +269,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="RX Focus"
+                android:text="RX 主观测区"
                 android:textColor="@color/cwcn_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -300,7 +300,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="Spectrum Preview"
+                android:text="频谱预览"
                 android:textColor="@color/cwcn_body"
                 android:textSize="13sp"
                 android:textStyle="bold" />
@@ -327,14 +327,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Hyp Guard OFF" />
+                android:text="前端实验开关：关闭"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/runBatchAnalysisButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Run All RX Batch" />
+                android:text="运行 RX 批量基准"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/batchRunStatusText"
@@ -342,9 +344,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:lineSpacingExtra="3dp"
-                android:text="Batch run idle."
+                android:text="批量基准空闲。"
                 android:textColor="@color/cwcn_subtitle"
-                android:textSize="13sp" />
+                android:textSize="13sp"
+                android:visibility="gone" />
 
             <LinearLayout
                 android:layout_width="match_parent"

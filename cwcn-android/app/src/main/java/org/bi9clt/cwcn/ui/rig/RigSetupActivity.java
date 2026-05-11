@@ -336,8 +336,9 @@ public final class RigSetupActivity extends AppCompatActivity {
 
     private void refreshUi() {
         boolean developerModeEnabled = developerModeStore.isEnabled();
+        boolean developerLabsVisible = developerModeEnabled && openDeveloperLabs;
         List<RigTransport> transports = RigRegistry.defaultTransports();
-        List<RigProfile> profiles = RigRegistry.defaultProfiles();
+        List<RigProfile> profiles = visibleProfiles(developerLabsVisible);
         binding.readinessSummaryText.setText(renderReadinessSummary(transports, profiles));
         boolean hasLaunchStatus = launchStatusMessage != null && !launchStatusMessage.isEmpty();
         binding.usbAttachStatusPanel.setVisibility(hasLaunchStatus ? View.VISIBLE : View.GONE);
@@ -348,6 +349,21 @@ public final class RigSetupActivity extends AppCompatActivity {
         binding.transportSummaryText.setText(renderTransportSummary(transports));
         binding.profileSummaryText.setText(renderProfileSummary(profiles));
         binding.nextStepText.setText(renderNextStep(profiles));
+    }
+
+    private List<RigProfile> visibleProfiles(boolean developerLabsVisible) {
+        List<RigProfile> allProfiles = RigRegistry.defaultProfiles();
+        if (developerLabsVisible) {
+            return allProfiles;
+        }
+        ArrayList<RigProfile> filtered = new ArrayList<>();
+        for (RigProfile profile : allProfiles) {
+            if (profile.supportLevel() == RigSupportLevel.DEBUG_ONLY) {
+                continue;
+            }
+            filtered.add(profile);
+        }
+        return filtered;
     }
 
     private void syncSelectedProfile(List<RigProfile> profiles) {
@@ -509,7 +525,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "Running legacy native serial CAT TX/PTT pulse test...";
+        serialProbeMessage = "正在运行旧版 CAT TX/PTT 脉冲验证...";
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -527,7 +543,7 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "Native serial CAT TX/PTT pulse crashed before completion: "
+                    serialProbeMessage = "旧版 CAT TX/PTT 脉冲验证在完成前异常退出："
                             + safeThrowableMessage(throwable);
                     refreshSelectedProfileViews();
                 });
@@ -547,7 +563,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "Running dedicated keying port pulse test...";
+        serialProbeMessage = "正在运行独立键控口脉冲验证...";
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -563,7 +579,7 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "Dedicated keying pulse crashed before completion: "
+                    serialProbeMessage = "独立键控口脉冲验证在完成前异常退出："
                             + safeThrowableMessage(throwable);
                     refreshSelectedProfileViews();
                 });
@@ -583,7 +599,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "Running dedicated keying hold test. Watch whether TX stays active during the full 1.5s hold.";
+        serialProbeMessage = "正在运行独立键控保持验证。请观察 1.5 秒保持期间 TX 是否持续有效。";
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -599,7 +615,7 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "Dedicated keying hold crashed before completion: "
+                    serialProbeMessage = "独立键控保持验证在完成前异常退出："
                             + safeThrowableMessage(throwable);
                     refreshSelectedProfileViews();
                 });
@@ -619,7 +635,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "Running keying port open/close test. No DTR/RTS change is requested; watch for any TX flash on open or close.";
+        serialProbeMessage = "正在运行键控口开关验证。不主动切换 DTR/RTS，请观察打开或关闭时是否出现异常 TX 闪动。";
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -635,7 +651,7 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "Dedicated keying open/close test crashed before completion: "
+                    serialProbeMessage = "键控口开关验证在完成前异常退出："
                             + safeThrowableMessage(throwable);
                     refreshSelectedProfileViews();
                 });
@@ -663,7 +679,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         );
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "Running DTR timing lab. Watch TX, RF power, and sidetone together; this path now normalizes the lines, waits, asserts in order, holds, and releases in order.";
+        serialProbeMessage = "正在运行 DTR 时序实验。请同时观察 TX、RF 功率和侧音；这条路径会先归一化控制线，再按顺序拉高、保持、释放。";
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -679,7 +695,7 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "DTR timing lab crashed before completion: "
+                    serialProbeMessage = "DTR 时序实验在完成前异常退出："
                             + safeThrowableMessage(throwable);
                     refreshSelectedProfileViews();
                 });
@@ -710,7 +726,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         );
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "Running short pulse lab. Focus on edge behavior now: TX latch, RF output, sidetone, and whether the rig drops back to RX between short elements.";
+        serialProbeMessage = "正在运行短脉冲实验。请重点观察边沿行为：TX 锁存、RF 输出、侧音，以及短元素之间是否会掉回 RX。";
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -726,7 +742,7 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "Short pulse lab crashed before completion: "
+                    serialProbeMessage = "短脉冲实验在完成前异常退出："
                             + safeThrowableMessage(throwable);
                     refreshSelectedProfileViews();
                 });
@@ -1233,27 +1249,27 @@ public final class RigSetupActivity extends AppCompatActivity {
                 : "Detected " + detectedPorts.size() + " serial CAT ports. Choose one from the port picker before testing.";
         if (!developerLabsVisible) {
             binding.serialCatProbeStatusText.setText(yaesuSelected || icomSelected || kenwoodSelected
-                    ? pickerHint + " Use Test Serial CAT Connection for the minimal handshake check. Extended line checks stay outside the normal setup flow."
-                    : pickerHint + " Serial CAT connection testing is available for Yaesu-style CAT, Icom CI-V, and Kenwood-style CAT.");
+                    ? pickerHint + " 现在只保留最小握手检查。更深入的控制线实验已移到开发工具入口。"
+                    : pickerHint + " 目前串口 CAT 连接验证已优先接到 Yaesu-style、Icom CI-V 和 Kenwood-style。");
             return;
         }
         binding.serialCatProbeStatusText.setText(yaesuSelected
-                ? pickerHint + " Yaesu note: Pulse Legacy CAT TX/PTT still exercises the old CAT TX1/TX0 path. For DTR/RTS validation, use Pulse Keying Port (DTR/RTS). If short E/T/EEE/VVV behavior is the issue, use Short Pulse Lab instead of the long hold test. FT-710 bench note: when the radio menu is set to PC KEYING = DTR, RTS + DTR is the current accepted working combination; RTS-only may show TX/RF without normal sidetone, and DTR-only is currently treated as non-working."
+                ? pickerHint + " Yaesu 说明：旧 CAT TX/PTT 脉冲仍在覆盖早期 TX1/TX0 路径；如果你要验证 DTR/RTS，请优先使用独立键控口脉冲。若问题集中在短 E/T/EEE/VVV 行为，请优先用短脉冲实验，而不是长保持验证。FT-710 当前经验是：当电台菜单设为 PC KEYING = DTR 时，RTS + DTR 仍是当前接受度最高的组合；仅 RTS 可能出现 TX/RF 但侧音不正常，仅 DTR 目前仍视作不可用。"
                 : icomSelected
                         ? settings.serialCatCivAddressHex() == null
-                                ? pickerHint + " Icom CI-V probe is available. Set the CI-V address first, then query a safe transceiver-ID response. After that, a short CI-V PTT pulse can be used as the next smoke test."
-                                : pickerHint + " Icom CI-V probe is available. After the transceiver-ID query looks good, use the short CI-V PTT pulse as the next smoke test."
+                                ? pickerHint + " Icom CI-V 已可探测。先设置 CI-V 地址，再发起一次安全的收发机 ID 查询，之后再用短 CI-V PTT 脉冲做下一步冒烟验证。"
+                                : pickerHint + " Icom CI-V 已可探测。确认收发机 ID 查询正常后，再用短 CI-V PTT 脉冲做下一步冒烟验证。"
                         : kenwoodSelected
-                                ? pickerHint + " Kenwood-style CAT probe is available. Start with a safe ASCII read such as ID;/FA;/IF; before any TX-side work."
-                                : pickerHint + " Serial CAT probe is currently implemented for Yaesu-style CAT, Icom CI-V, and Kenwood-style CAT first.");
+                                ? pickerHint + " Kenwood-style CAT 已可探测。建议先做 ID;/FA;/IF; 这类安全 ASCII 读操作，再进入 TX 侧验证。"
+                                : pickerHint + " 串口 CAT 探测目前优先接入 Yaesu-style、Icom CI-V 和 Kenwood-style。");
     }
 
     private void syncDeveloperModeViews(boolean enabled) {
         boolean developerLabsVisible = enabled && openDeveloperLabs;
-        binding.titleText.setText(developerLabsVisible ? "Rig Bench" : "Rig Setup");
+        binding.titleText.setText(developerLabsVisible ? "电台开发实验" : "电台配置");
         binding.subtitleText.setText(developerLabsVisible
-                ? "Extended probes and timing labs are grouped here so the normal setup path can stay clean."
-                : "Choose your radio path, save the connection defaults, and keep extra diagnostics outside the main setup flow.");
+                ? "扩展探测、控制线实验和时序验证都集中在这里，避免污染正式配置路径。"
+                : "在这里选择正式电台路径并保存连接默认值；更深入的诊断实验放到开发工具入口。");
         int developerSummaryVisibility = developerLabsVisible ? View.VISIBLE : View.GONE;
         binding.readinessSummaryPanel.setVisibility(developerSummaryVisibility);
         binding.transportSummaryPanel.setVisibility(developerSummaryVisibility);
@@ -1286,16 +1302,16 @@ public final class RigSetupActivity extends AppCompatActivity {
             builder.append(", choose the CAT port");
             builder.append(", then choose the CW keying line and keying port if the radio exposes a separate keying endpoint, then save this rig path.");
             if (!developerModeEnabled) {
-                builder.append("\nExtra protocol checks stay hidden during normal operation.");
+                builder.append("\n更深入的协议验证在正常模式下会保持隐藏。");
             } else if (!openDeveloperLabs) {
-                builder.append("\nExtra protocol checks are collected outside this setup page.");
+                builder.append("\n更深入的协议验证已收纳到开发工具入口。");
             }
         } else if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
             builder.append("\nNext: fill the host and port for the radio bridge, then save this rig path.");
             if (!developerModeEnabled) {
-                builder.append("\nConnection probing stays hidden during normal operation.");
+                builder.append("\n连接探测在正常模式下会保持隐藏。");
             } else if (!openDeveloperLabs) {
-                builder.append("\nConnection probing is kept outside this setup page.");
+                builder.append("\n连接探测已收纳到开发工具入口。");
             }
         } else if (profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
             builder.append("\nNext: choose RTS or DTR, optionally lock the preferred USB device, request permission if Android asks for it, then save the profile defaults.");
@@ -1472,16 +1488,16 @@ public final class RigSetupActivity extends AppCompatActivity {
                 readyTransportCount += 1;
             }
         }
-        int benchReadyProfileCount = 0;
+        int readyProfileCount = 0;
         for (RigProfile profile : profiles) {
             if (profile.supportLevel() == RigSupportLevel.BENCH_READY) {
-                benchReadyProfileCount += 1;
+                readyProfileCount += 1;
             }
         }
-        return "Ready transports: " + readyTransportCount + "/" + transports.size()
-                + "\nBench-ready profiles: " + benchReadyProfileCount + "/" + profiles.size()
-                + "\nCurrent strategy: support families first, then fill concrete vendor/model profiles."
-                + "\nAdvanced tools remain available as a secondary diagnostic path while the formal rig UI grows.";
+        return "可用传输层：" + readyTransportCount + "/" + transports.size()
+                + "\n当前可验证路径：" + readyProfileCount + "/" + profiles.size()
+                + "\n当前策略：先把可复用的家族路径接稳，再逐步补具体机型。"
+                + "\n开发实验能力继续保留，但它们是辅助手段，不再和正式配置路径混在一起。";
     }
 
     private String renderTransportSummary(List<RigTransport> transports) {
@@ -1558,34 +1574,34 @@ public final class RigSetupActivity extends AppCompatActivity {
         }
         StringBuilder builder = new StringBuilder("Recommended build order:");
         if (yaesuRigctldProfile != null) {
-            builder.append("\n1. If you are benching Yaesu FT rigs now, start with ")
+            builder.append("\n1. 如果你当前要接 Yaesu FT 系列，优先从 ")
                     .append(yaesuRigctldProfile.displayName())
-                    .append(" so CWCN can reuse the existing rigctld backend for TX while native serial CAT is still being brought up.");
+                    .append(" 开始，这样在原生串口 CAT 继续收口期间，CWCN 仍可先复用现有 rigctld TX 路径。");
         }
         if (icomRigctldProfile != null) {
-            builder.append("\n2. For current Icom-family bench work, prefer ")
+            builder.append("\n2. Icom 家族当前优先选择 ")
                     .append(icomRigctldProfile.displayName())
-                    .append(" as the first formal path.");
+                    .append(" 作为第一条正式路径。");
         }
         if (kenwoodRigctldProfile != null) {
-            builder.append("\n3. For current Kenwood-family bench work, prefer ")
+            builder.append("\n3. Kenwood 家族当前优先选择 ")
                     .append(kenwoodRigctldProfile.displayName())
-                    .append(" as the first formal path.");
+                    .append(" 作为第一条正式路径。");
         }
         if (usbProfile != null) {
-            builder.append("\n4. Harden ").append(usbProfile.displayName())
-                    .append(" as the first real wired-control family.");
+            builder.append("\n4. 把 ").append(usbProfile.displayName())
+                    .append(" 做稳，作为第一条真正可落地的有线控制路径。");
         }
         if (voxProfile != null) {
-            builder.append("\n5. Keep ").append(voxProfile.displayName())
-                    .append(" as the compatibility fallback.");
+            builder.append("\n5. 保留 ").append(voxProfile.displayName())
+                    .append(" 作为兼容兜底路径。");
         }
         if (catProfile != null) {
-            builder.append("\n6. Keep the reusable CAT schema stable before attaching deeper native Yaesu/Icom/Kenwood model code.");
+            builder.append("\n6. 在继续接入更深的 Yaesu/Icom/Kenwood 原生机型逻辑之前，先保持可复用 CAT 结构稳定。");
         }
-        builder.append("\n7. Native serial CAT probe is now available for Yaesu-style, Icom CI-V, and Kenwood-style families in Rig Setup.");
-        builder.append("\n8. Keep advanced tools available, but treat them as a secondary engineering path rather than the main user flow.");
-        builder.append("\n9. Next native step is no longer schema work; it is attaching controlled family-specific serial CAT behavior on top of the shared probe/session seam.");
+        builder.append("\n7. Rig Setup 里已经具备 Yaesu-style、Icom CI-V 和 Kenwood-style 的原生串口 CAT 基础探测能力。");
+        builder.append("\n8. 开发实验能力继续保留，但它们应被视为辅助工程路径，而不是主用户流程。");
+        builder.append("\n9. 下一步原生工作重点不再是 schema，而是在共享探测/会话接缝之上，继续挂接可控的家族级串口 CAT 行为。");
         return builder.toString();
     }
 

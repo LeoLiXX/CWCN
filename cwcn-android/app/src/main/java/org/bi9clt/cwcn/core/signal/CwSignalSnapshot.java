@@ -1092,6 +1092,13 @@ public final class CwSignalSnapshot {
     }
 
     public int effectiveTrackedToneFrequencyHz() {
+        if (targetToneLocked
+                && targetToneFrequencyHz > 0
+                && representativeLockedToneFrameCount > 0
+                && Math.abs(targetToneFrequencyHz - representativeLockedToneFrequencyHz) >= 40
+                && consecutiveLockedFrames >= 4) {
+            return targetToneFrequencyHz;
+        }
         if (representativeLockedToneFrameCount > 0) {
             return representativeLockedToneFrequencyHz;
         }

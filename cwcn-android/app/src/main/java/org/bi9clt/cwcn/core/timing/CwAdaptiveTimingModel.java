@@ -12,6 +12,9 @@ public final class CwAdaptiveTimingModel {
     private static final long MAX_DOT_MS = 220L;
     private static final long FAST_BOOTSTRAP_THRESHOLD_MS = 55L;
     private static final int RECENT_CANDIDATE_WINDOW = 12;
+    private static final double MAX_DOT_SPEEDUP_STEP_RATIO = 0.97d;
+    private static final double MAX_DOT_SLOWDOWN_STEP_RATIO = 1.12d;
+    private static final double FAST_CONTEXT_MAX_DOT_SPEEDUP_STEP_RATIO = 0.985d;
     private static final double INTRA_GAP_MAX_RATIO = 1.95d;
     private static final double LETTER_GAP_MAX_RATIO = 5.2d;
     private static final double WORD_GAP_MAX_RATIO = 10.8d;
@@ -35,13 +38,19 @@ public final class CwAdaptiveTimingModel {
     private CwTimingEvent lastTimingEvent;
 
     public synchronized List<CwTimingEvent> process(CwToneEvent toneEvent) {
+        return process(toneEvent, true);
+    }
+
+    public synchronized List<CwTimingEvent> process(CwToneEvent toneEvent, boolean allowLearning) {
         ArrayList<CwTimingEvent> timingEvents = new ArrayList<>(2);
 
         if (toneEvent.type() == CwToneEvent.Type.TONE_ON) {
             if (lastToneOffTimestampMs > 0L) {
                 long gapDurationMs = Math.max(0L, toneEvent.timestampMs() - lastToneOffTimestampMs);
                 CwTimingEvent.Classification gapClassification = classifyGap(gapDurationMs);
-                updateGapEstimates(gapDurationMs, gapClassification);
+                if (allowLearning) {
+                    updateGapEstimates(gapDurationMs, gapClassification);
+                }
                 CwTimingEvent gapEvent = new CwTimingEvent(
                         CwTimingEvent.Kind.GAP,
                         gapClassification,
@@ -58,7 +67,9 @@ public final class CwAdaptiveTimingModel {
         }
 
         long toneDurationMs = Math.max(0L, toneEvent.toneDurationMs());
-        updateToneEstimates(toneDurationMs);
+        if (allowLearning) {
+            updateToneEstimates(toneDurationMs);
+        }
         CwTimingEvent toneTimingEvent = new CwTimingEvent(
                 CwTimingEvent.Kind.TONE,
                 classifyTone(toneDurationMs),
@@ -75,6 +86,10 @@ public final class CwAdaptiveTimingModel {
     }
 
     public synchronized List<CwTimingEvent> flushPendingGap(long timestampMs) {
+        return flushPendingGap(timestampMs, true);
+    }
+
+    public synchronized List<CwTimingEvent> flushPendingGap(long timestampMs, boolean allowLearning) {
         ArrayList<CwTimingEvent> timingEvents = new ArrayList<>(1);
         if (lastToneOffTimestampMs <= 0L || timestampMs <= lastToneOffTimestampMs) {
             return timingEvents;
@@ -86,7 +101,9 @@ public final class CwAdaptiveTimingModel {
             return timingEvents;
         }
 
-        updateGapEstimates(gapDurationMs, gapClassification);
+        if (allowLearning) {
+            updateGapEstimates(gapDurationMs, gapClassification);
+        }
         CwTimingEvent gapEvent = new CwTimingEvent(
                 CwTimingEvent.Kind.GAP,
                 gapClassification,
@@ -121,12 +138,14 @@ public final class CwAdaptiveTimingModel {
 
     public synchronized CwTimingSnapshot snapshot() {
         long dotRounded = dotEstimateRounded();
-        int estimatedWpm = dotRounded <= 0L ? 0 : (int) Math.round(1200.0d / dotRounded);
+        double estimatedWpmPrecise = dotRounded <= 0L ? 0.0d : 1200.0d / dotRounded;
+        int estimatedWpm = (int) Math.round(estimatedWpmPrecise);
         return new CwTimingSnapshot(
                 dotRounded,
                 Math.max(1L, Math.round(dashEstimateMs)),
                 Math.max(1L, Math.round(intraGapEstimateMs)),
                 estimatedWpm,
+                estimatedWpmPrecise,
                 totalToneEvents,
                 totalGapEvents,
                 lastTimingEvent
@@ -195,7 +214,7 @@ public final class CwAdaptiveTimingModel {
             nextDotEstimateMs = (nextDotEstimateMs * 0.92d) + (DEFAULT_DOT_MS * 0.08d);
         }
 
-        dotEstimateMs = clampDot(nextDotEstimateMs);
+        dotEstimateMs = clampDot(limitDotShift(dotEstimateMs, nextDotEstimateMs));
         intraGapEstimateMs = gapMedianMs > 0L
                 ? clampDot((gapMedianMs * 0.80d) + (dotEstimateMs * 0.20d))
                 : dotEstimateMs;
@@ -265,6 +284,27 @@ public final class CwAdaptiveTimingModel {
 
     private boolean isFastTimingContext() {
         return dotEstimateMs <= FAST_BOOTSTRAP_THRESHOLD_MS || intraGapEstimateMs <= FAST_BOOTSTRAP_THRESHOLD_MS;
+    }
+
+    private double limitDotShift(double currentDotMs, double candidateDotMs) {
+        if (!initialized || currentDotMs <= 0.0d || candidateDotMs <= 0.0d) {
+            return candidateDotMs;
+        }
+        if (candidateDotMs < currentDotMs) {
+            double minDotMs = currentDotMs * maxDotSpeedupStepRatio();
+            return Math.max(candidateDotMs, minDotMs);
+        }
+        if (candidateDotMs <= currentDotMs) {
+            return candidateDotMs;
+        }
+        double maxDotMs = currentDotMs * MAX_DOT_SLOWDOWN_STEP_RATIO;
+        return Math.min(candidateDotMs, maxDotMs);
+    }
+
+    private double maxDotSpeedupStepRatio() {
+        return isFastTimingContext()
+                ? FAST_CONTEXT_MAX_DOT_SPEEDUP_STEP_RATIO
+                : MAX_DOT_SPEEDUP_STEP_RATIO;
     }
 
     private void appendCandidate(long[] buffer, int absoluteCount, long candidateMs) {

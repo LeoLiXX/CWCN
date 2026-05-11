@@ -1,12 +1,18 @@
 package org.bi9clt.cwcn.ui.settings;
 
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
+import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -14,11 +20,14 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import org.bi9clt.cwcn.BuildConfig;
 import org.bi9clt.cwcn.core.app.DeveloperModeStore;
 import org.bi9clt.cwcn.core.app.RouteFallbackStore;
+import org.bi9clt.cwcn.core.app.RxInputSettingsStore;
 import org.bi9clt.cwcn.core.app.StationProfileStore;
+import org.bi9clt.cwcn.core.app.TxTemplateStore;
 import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
 import org.bi9clt.cwcn.core.log.ConfirmedQsoLog;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
@@ -27,29 +36,49 @@ import org.bi9clt.cwcn.core.rig.CatProtocolFamily;
 import org.bi9clt.cwcn.core.rig.RigCapability;
 import org.bi9clt.cwcn.core.rig.RigProfile;
 import org.bi9clt.cwcn.core.rig.RigProfileSettings;
+import org.bi9clt.cwcn.core.rig.RigRouteStatusFormatter;
 import org.bi9clt.cwcn.core.rig.RigSelectionStore;
 import org.bi9clt.cwcn.core.rig.KeyingPolarity;
+import org.bi9clt.cwcn.core.rig.RigControlAdapter;
+import org.bi9clt.cwcn.core.rig.RigRegistry;
 import org.bi9clt.cwcn.core.rig.SerialKeyerTxOutput;
+import org.bi9clt.cwcn.core.rig.UsbSerialDeviceOption;
+import org.bi9clt.cwcn.core.rig.UsbSerialKeyerRigControlAdapter;
 import org.bi9clt.cwcn.databinding.ActivitySettingsBinding;
 import org.bi9clt.cwcn.ui.developer.DeveloperToolsActivity;
 import org.bi9clt.cwcn.ui.rig.RigSetupActivity;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class SettingsActivity extends AppCompatActivity {
+    private static final String ACTION_USB_KEYER_PERMISSION =
+            "org.bi9clt.cwcn.action.SETTINGS_USB_KEYER_PERMISSION";
+
     private ActivitySettingsBinding binding;
     private DeveloperModeStore developerModeStore;
     private StationProfileStore stationProfileStore;
     private RigSelectionStore rigSelectionStore;
     private RouteFallbackStore routeFallbackStore;
+    private RxInputSettingsStore rxInputSettingsStore;
+    private TxTemplateStore txTemplateStore;
     private LocalLogRepository localLogRepository;
     private boolean syncingEditors;
+    private boolean autoSaveEnabled;
     private boolean stationProfileDirty;
     private boolean cwDefaultsDirty;
+    private boolean txTemplatesDirty;
     private boolean routeSettingsDirty;
     private boolean routeFallbackDirty;
     private String stationProfileStatusMessage = "";
     private String cwDefaultsStatusMessage = "";
+    private String txTemplatesStatusMessage = "";
     private String routeSettingsStatusMessage = "";
     private String routeFallbackStatusMessage = "";
+    private BroadcastReceiver usbPermissionReceiver;
+    private ArrayAdapter<UsbSerialDeviceOption> usbDeviceAdapter;
+    private boolean syncingUsbDeviceSelection;
+    private String usbRouteStatusMessage = "";
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -60,14 +89,19 @@ public final class SettingsActivity extends AppCompatActivity {
         stationProfileStore = new StationProfileStore(this);
         rigSelectionStore = new RigSelectionStore(this);
         routeFallbackStore = new RouteFallbackStore(this);
+        rxInputSettingsStore = new RxInputSettingsStore(this);
+        txTemplateStore = new TxTemplateStore(this);
         localLogRepository = new LocalLogRepository(this);
-        binding.versionText.setText("Settings " + BuildConfig.VERSION_NAME);
+        registerUsbPermissionReceiver();
+        binding.versionText.setText("设置 " + BuildConfig.VERSION_NAME);
         setupEditorWatchers();
         setupRouteEditorControls();
         setupRouteFallbackControls();
+        setupRxInputControls();
         setupInfoButtons();
         setupActions();
         refreshUi();
+        autoSaveEnabled = true;
     }
 
     @Override
@@ -76,11 +110,26 @@ public final class SettingsActivity extends AppCompatActivity {
         refreshUi();
     }
 
+    @Override
+    protected void onPause() {
+        commitPendingEdits();
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (usbPermissionReceiver != null) {
+            unregisterReceiver(usbPermissionReceiver);
+            usbPermissionReceiver = null;
+        }
+        super.onDestroy();
+    }
+
     private void setupEditorWatchers() {
         TextWatcher stationWatcher = new SimpleTextWatcher() {
             @Override
             public void afterTextChanged(Editable editable) {
-                if (!syncingEditors) {
+                if (!syncingEditors && autoSaveEnabled) {
                     stationProfileDirty = true;
                     binding.stationProfileStatusText.setText(renderStationProfileEditorStatus());
                 }
@@ -89,21 +138,38 @@ public final class SettingsActivity extends AppCompatActivity {
         TextWatcher cwDefaultsWatcher = new SimpleTextWatcher() {
             @Override
             public void afterTextChanged(Editable editable) {
-                if (!syncingEditors) {
+                if (!syncingEditors && autoSaveEnabled) {
                     cwDefaultsDirty = true;
                     binding.cwDefaultsStatusText.setText(renderCwDefaultsEditorStatus());
+                }
+            }
+        };
+        TextWatcher txTemplatesWatcher = new SimpleTextWatcher() {
+            @Override
+            public void afterTextChanged(Editable editable) {
+                if (!syncingEditors && autoSaveEnabled) {
+                    txTemplatesDirty = true;
+                    binding.txTemplatesStatusText.setText(renderTxTemplatesEditorStatus());
                 }
             }
         };
         binding.stationCallsignEditText.addTextChangedListener(stationWatcher);
         binding.operatorNameEditText.addTextChangedListener(stationWatcher);
         binding.qthEditText.addTextChangedListener(stationWatcher);
+        binding.maidenheadGridEditText.addTextChangedListener(stationWatcher);
+        binding.rigDescriptionEditText.addTextChangedListener(stationWatcher);
+        binding.antennaDescriptionEditText.addTextChangedListener(stationWatcher);
+        binding.weatherDescriptionEditText.addTextChangedListener(stationWatcher);
         binding.defaultWpmEditText.addTextChangedListener(cwDefaultsWatcher);
         binding.defaultToneEditText.addTextChangedListener(cwDefaultsWatcher);
+        binding.templateCqEditText.addTextChangedListener(txTemplatesWatcher);
+        binding.templateCqDxEditText.addTextChangedListener(txTemplatesWatcher);
+        binding.templateQrzEditText.addTextChangedListener(txTemplatesWatcher);
+        binding.templateTu73EditText.addTextChangedListener(txTemplatesWatcher);
         TextWatcher routeWatcher = new SimpleTextWatcher() {
             @Override
             public void afterTextChanged(Editable editable) {
-                if (!syncingEditors) {
+                if (!syncingEditors && autoSaveEnabled) {
                     routeSettingsDirty = true;
                     binding.routeSettingsStatusText.setText(renderRouteSettingsEditorStatus());
                 }
@@ -116,6 +182,71 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.networkHostEditText.addTextChangedListener(routeWatcher);
         binding.networkPortEditText.addTextChangedListener(routeWatcher);
         binding.usbPreferredDeviceNameEditText.addTextChangedListener(routeWatcher);
+
+        attachAutoSaveOnFocusLoss(binding.stationCallsignEditText, this::saveStationProfile);
+        attachAutoSaveOnFocusLoss(binding.operatorNameEditText, this::saveStationProfile);
+        attachAutoSaveOnFocusLoss(binding.qthEditText, this::saveStationProfile);
+        attachAutoSaveOnFocusLoss(binding.maidenheadGridEditText, this::saveStationProfile);
+        attachAutoSaveOnFocusLoss(binding.rigDescriptionEditText, this::saveStationProfile);
+        attachAutoSaveOnFocusLoss(binding.antennaDescriptionEditText, this::saveStationProfile);
+        attachAutoSaveOnFocusLoss(binding.weatherDescriptionEditText, this::saveStationProfile);
+        attachAutoSaveOnFocusLoss(binding.defaultWpmEditText, this::saveCwDefaults);
+        attachAutoSaveOnFocusLoss(binding.defaultToneEditText, this::saveCwDefaults);
+        attachAutoSaveOnFocusLoss(binding.templateCqEditText, this::saveTxTemplates);
+        attachAutoSaveOnFocusLoss(binding.templateCqDxEditText, this::saveTxTemplates);
+        attachAutoSaveOnFocusLoss(binding.templateQrzEditText, this::saveTxTemplates);
+        attachAutoSaveOnFocusLoss(binding.templateTu73EditText, this::saveTxTemplates);
+        attachAutoSaveOnFocusLoss(binding.serialCatPortHintEditText, this::saveRouteSettings);
+        attachAutoSaveOnFocusLoss(binding.serialCatBaudRateEditText, this::saveRouteSettings);
+        attachAutoSaveOnFocusLoss(binding.serialCatKeyingPortHintEditText, this::saveRouteSettings);
+        attachAutoSaveOnFocusLoss(binding.serialCatCivAddressEditText, this::saveRouteSettings);
+        attachAutoSaveOnFocusLoss(binding.networkHostEditText, this::saveRouteSettings);
+        attachAutoSaveOnFocusLoss(binding.networkPortEditText, this::saveRouteSettings);
+        attachAutoSaveOnFocusLoss(binding.usbPreferredDeviceNameEditText, this::saveRouteSettings);
+    }
+
+    private void setupRxInputControls() {
+        ArrayAdapter<RxInputSettingsStore.RxInputMode> inputModeAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                RxInputSettingsStore.RxInputMode.values()
+        );
+        inputModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.rxInputModeSpinner.setAdapter(inputModeAdapter);
+
+        ArrayAdapter<RxInputSettingsStore.MicSourceMode> micSourceAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                RxInputSettingsStore.MicSourceMode.values()
+        );
+        micSourceAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.rxMicSourceModeSpinner.setAdapter(micSourceAdapter);
+
+        ArrayAdapter<RxInputSettingsStore.RxToneMode> toneModeAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                RxInputSettingsStore.RxToneMode.values()
+        );
+        toneModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.rxToneModeSpinner.setAdapter(toneModeAdapter);
+
+        AdapterView.OnItemSelectedListener cwDefaultsSpinnerListener = new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (!syncingEditors && autoSaveEnabled) {
+                    cwDefaultsDirty = true;
+                    binding.cwDefaultsStatusText.setText(renderCwDefaultsEditorStatus());
+                    saveCwDefaults();
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        };
+        binding.rxInputModeSpinner.setOnItemSelectedListener(cwDefaultsSpinnerListener);
+        binding.rxMicSourceModeSpinner.setOnItemSelectedListener(cwDefaultsSpinnerListener);
+        binding.rxToneModeSpinner.setOnItemSelectedListener(cwDefaultsSpinnerListener);
     }
 
     private void setupRouteEditorControls() {
@@ -146,9 +277,10 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.serialCatKeyLineSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (!syncingEditors) {
+                if (!syncingEditors && autoSaveEnabled) {
                     routeSettingsDirty = true;
                     binding.routeSettingsStatusText.setText(renderRouteSettingsEditorStatus());
+                    saveRouteSettings();
                 }
             }
 
@@ -159,9 +291,10 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.serialCatKeyingPolaritySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (!syncingEditors) {
+                if (!syncingEditors && autoSaveEnabled) {
                     routeSettingsDirty = true;
                     binding.routeSettingsStatusText.setText(renderRouteSettingsEditorStatus());
+                    saveRouteSettings();
                 }
             }
 
@@ -172,10 +305,47 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.usbKeyLineSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (!syncingEditors) {
+                if (!syncingEditors && autoSaveEnabled) {
                     routeSettingsDirty = true;
                     binding.routeSettingsStatusText.setText(renderRouteSettingsEditorStatus());
+                    saveRouteSettings();
                 }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+
+        usbDeviceAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                new ArrayList<>()
+        );
+        usbDeviceAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.usbDeviceSpinner.setAdapter(usbDeviceAdapter);
+        binding.usbDeviceSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (syncingUsbDeviceSelection) {
+                    return;
+                }
+                Object item = parent.getItemAtPosition(position);
+                if (!(item instanceof UsbSerialDeviceOption)) {
+                    return;
+                }
+                UsbSerialDeviceOption option = (UsbSerialDeviceOption) item;
+                syncingEditors = true;
+                binding.usbPreferredDeviceNameEditText.setText(option.isAuto()
+                        ? ""
+                        : valueOrEmpty(option.deviceName()));
+                syncingEditors = false;
+                if (autoSaveEnabled) {
+                    routeSettingsDirty = true;
+                    binding.routeSettingsStatusText.setText(renderRouteSettingsEditorStatus());
+                    saveRouteSettings();
+                }
+                syncUsbRouteState();
             }
 
             @Override
@@ -195,9 +365,10 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.routeFallbackModeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (!syncingEditors) {
+                if (!syncingEditors && autoSaveEnabled) {
                     routeFallbackDirty = true;
                     binding.routeFallbackStatusText.setText(renderRouteFallbackEditorStatus());
+                    saveRouteFallback();
                 }
             }
 
@@ -209,44 +380,45 @@ public final class SettingsActivity extends AppCompatActivity {
 
     private void setupActions() {
         binding.backButton.setOnClickListener(view -> finish());
-        binding.saveStationProfileButton.setOnClickListener(view -> saveStationProfile());
         binding.openRigSetupButton.setOnClickListener(view ->
                 startActivity(new Intent(this, RigSetupActivity.class)));
-        binding.saveCwDefaultsButton.setOnClickListener(view -> saveCwDefaults());
-        binding.saveRouteSettingsButton.setOnClickListener(view -> saveRouteSettings());
-        binding.saveRouteFallbackButton.setOnClickListener(view -> saveRouteFallback());
         binding.toggleDeveloperModeButton.setOnClickListener(view -> {
             developerModeStore.toggle();
             refreshUi();
         });
         binding.openDeveloperToolsButton.setOnClickListener(view ->
                 startActivity(new Intent(this, DeveloperToolsActivity.class)));
+        binding.requestUsbKeyerPermissionButton.setOnClickListener(view -> requestUsbKeyerPermission());
     }
 
     private void setupInfoButtons() {
         binding.stationInfoButton.setOnClickListener(view -> showInfoDialog(
-                "Station",
-                "Station identity and daily defaults live here. Saved callsign, operator name, and QTH are reused by Operate, macros, and draft building."
+                "台站资料",
+                "这里保存正式使用的台站信息。呼号、姓名、QTH、梅登海格网格，以及 <RIG> / <ANT> / <WX> 这类模板变量都从这里取值，不再需要单独点保存。"
         ));
         binding.radioRouteInfoButton.setOnClickListener(view -> showInfoDialog(
-                "Radio Route",
-                "Choose the formal rig path here. If no rig is pinned, the no-radio fallback rule decides whether the app should use the phone microphone and phone audio."
+                "电台链路",
+                "这里查看当前正式路由，真正的电台选择和探测仍在 Rig Setup 完成。如果没有固定路由，是否回落到手机麦克风和手机音频，由“无电台兜底”决定。"
         ));
         binding.routeFallbackInfoButton.setOnClickListener(view -> showInfoDialog(
-                "No-Radio Fallback",
-                "Auto means RX falls back to the phone microphone and TX falls back to phone audio when no rig is pinned. Radio only disables that fallback."
+                "无电台兜底",
+                "自动模式下，没有固定电台时，RX 可回落到手机麦克风，TX 可回落到手机音频。仅电台模式则完全禁止这种兜底。"
         ));
         binding.catKeyingInfoButton.setOnClickListener(view -> showInfoDialog(
-                "CAT & Keying",
-                "This section owns saved CAT family, host or baud, keying line, polarity, and USB preferences. Rig Setup remains the place for probing and diagnostics."
+                "CAT 与键控",
+                "这里保存当前固定路由的 CAT、网络、USB 键控参数。Rig Setup 负责探测和诊断，这里负责日常使用时的正式参数。"
         ));
         binding.cwDefaultsInfoButton.setOnClickListener(view -> showInfoDialog(
-                "CW Defaults",
-                "Default WPM and tone are applied to text-to-CW sending paths and quick macros."
+                "CW 默认值",
+                "这里配置默认 WPM、固定音调和 RX 输入策略。改动会立即生效，用来约束正式操作时的默认收发行为。"
+        ));
+        binding.txTemplatesInfoButton.setOnClickListener(view -> showInfoDialog(
+                "发送模板",
+                "这里定义 Operate 页的 4 个正式发送模板：呼叫、应答、设备信息、收尾。支持 <MYCALL>、<CALL>、<RST>、<RST_SENT>、<RST_RCVD>、<NAME>、<QTH>、<GRID>、<RIG>、<ANT>、<WX> 占位符，修改后会自动保存。\n\n其中：<RST> 与 <RST_SENT> 等价，表示我发给对方的信号报告，内容描述的是“对方信号到我这里的接收情况”；<RST_RCVD> 表示对方发给我的信号报告，内容描述的是“我的信号到对方那里的接收情况”。"
         ));
         binding.developerInfoButton.setOnClickListener(view -> showInfoDialog(
-                "Advanced / Developer",
-                "Developer mode reveals debug RX, TX bench, and rig diagnostics. Normal operating flow should stay outside these tools."
+                "高级 / 开发",
+                "只有开发者模式保留显式开关。打开后会显示 RX 调试、TX 调试台和链路诊断工具，正常操作时建议保持关闭。"
         ));
     }
 
@@ -264,6 +436,7 @@ public final class SettingsActivity extends AppCompatActivity {
         String catKeyingHint = renderCatKeyingHintText();
         syncStationProfileEditors(overview);
         syncCwDefaultsEditors();
+        syncTxTemplateEditors();
         syncRouteEditors();
         syncRouteFallbackEditor();
         updateRoutePanelVisibility();
@@ -276,22 +449,26 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.catKeyingHintText.setVisibility(catKeyingHint.isEmpty() ? View.GONE : View.VISIBLE);
         binding.routeSettingsScopeText.setText(renderRouteSettingsScopeText());
         binding.cwDefaultsText.setText(renderCwDefaultsText());
+        binding.txTemplatesSummaryText.setText(renderTxTemplatesSummary());
         binding.stationProfileStatusText.setText(renderStationProfileEditorStatus());
         binding.cwDefaultsStatusText.setText(renderCwDefaultsEditorStatus());
+        binding.txTemplatesStatusText.setText(renderTxTemplatesEditorStatus());
         binding.routeSettingsStatusText.setText(renderRouteSettingsEditorStatus());
         binding.routeFallbackStatusText.setText(renderRouteFallbackEditorStatus());
         setVisibleWhenHasText(binding.stationProfileStatusText);
         setVisibleWhenHasText(binding.cwDefaultsStatusText);
+        setVisibleWhenHasText(binding.txTemplatesStatusText);
         setVisibleWhenHasText(binding.routeSettingsStatusText);
         setVisibleWhenHasText(binding.routeFallbackStatusText);
         binding.developerModeStatusText.setText(renderDeveloperModeStatus(developerModeEnabled));
         binding.toggleDeveloperModeButton.setText(developerModeEnabled
-                ? "Disable Developer Mode"
-                : "Enable Developer Mode");
+                ? "关闭开发者模式"
+                : "启用开发者模式");
         binding.developerToolsPanel.setVisibility(developerModeEnabled ? View.VISIBLE : View.GONE);
         binding.developerToolsNoteText.setText(developerModeEnabled
-                ? "RX inspect / TX console / rig diagnostics"
-                : "Advanced tools hidden");
+                ? "RX 观察 / TX 调试台 / 电台诊断"
+                : "开发工具已隐藏");
+        syncUsbRouteState();
     }
 
     private String renderStationProfileText(@Nullable AppOverviewSnapshot overview) {
@@ -306,92 +483,71 @@ public final class SettingsActivity extends AppCompatActivity {
     }
 
     private String renderOperatingDefaultsText() {
+        String grid = stationProfileStore.maidenheadGrid();
+        String rig = stationProfileStore.rigDescription();
+        String ant = stationProfileStore.antennaDescription();
+        String wx = stationProfileStore.weatherDescription();
         RigProfile profile = rigSelectionStore.selectedProfile();
         RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
-        return "CW "
+        return "网格 " + safeValue(grid)
+                + "  |  RIG " + safeValue(rig)
+                + "\nANT " + safeValue(ant)
+                + "  |  WX " + safeValue(wx)
+                + "\nCW "
                 + settings.defaultWpm()
                 + " WPM / "
                 + settings.defaultToneFrequencyHz()
-                + " Hz";
+                + " Hz"
+                + "\nRX "
+                + rxInputSettingsStore.rxInputMode().displayName()
+                + " / "
+                + rxInputSettingsStore.rxToneMode().displayName()
+                + " / "
+                + rxInputSettingsStore.micSourceMode().displayName();
     }
 
     private String renderRadioRouteText() {
         RigProfile profile = rigSelectionStore.selectedProfile();
-        if (profile == null) {
-            return "Pinned route: none"
-                    + "\nFallback: " + renderRouteFallbackSummary();
-        }
         RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
-        return "Pinned route: " + profile.displayName()
-                + "\n" + profile.transportKind().name()
-                + "  |  " + renderRouteFallbackSummary()
-                + "\nTX: "
-                + settings.defaultToneFrequencyHz()
-                + " Hz / "
-                + settings.defaultWpm()
-                + " WPM";
+        RigControlAdapter adapter = resolveRouteStatusAdapter(profile, settings);
+        String readiness = RigRouteStatusFormatter.describeRouteReadiness(
+                profile,
+                adapter,
+                settings,
+                profile != null && profile.hasCapability(RigCapability.KEY_LINE_CONTROL)
+                        ? usbRouteStatusMessage
+                        : null
+        );
+        return RigRouteStatusFormatter.describeSettingsRouteSummary(
+                profile,
+                settings,
+                routeFallbackStore.usePhoneFallback(),
+                readiness
+        );
     }
 
     private String renderRouteFallbackText() {
         RouteFallbackStore.Mode mode = routeFallbackStore.mode();
-        return "Mode: " + mode.displayName()
-                + "\nRX " + (routeFallbackStore.usePhoneFallback() ? "Phone Mic" : "Off")
-                + "  |  TX " + (routeFallbackStore.usePhoneFallback() ? "Phone Audio" : "Off");
+        return "模式: " + mode.displayName()
+                + "\nRX " + (routeFallbackStore.usePhoneFallback() ? "手机麦克风" : "关闭")
+                + "  |  TX " + (routeFallbackStore.usePhoneFallback() ? "手机音频" : "关闭");
     }
 
     private String renderRouteFallbackSummary() {
-        return routeFallbackStore.usePhoneFallback()
-                ? "Phone Mic RX / Phone Audio TX"
-                : "Disabled until a radio route is pinned";
+        return RigRouteStatusFormatter.describeFallbackSummary(routeFallbackStore.usePhoneFallback());
     }
 
     private String renderCatKeyingText() {
         RigProfile profile = rigSelectionStore.selectedProfile();
-        if (profile == null) {
-            return "CAT: -\nKeying: -";
-        }
         RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
-        StringBuilder builder = new StringBuilder();
-        if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            builder.append("Serial CAT: ")
-                    .append(settings.serialCatProtocolFamily().displayName())
-                    .append(" / ")
-                    .append(settings.serialCatBaudRate());
-            builder.append("\nKey: ").append(settings.serialCatKeyLine().name())
-                    .append(" / ")
-                    .append(settings.serialCatKeyingPolarity());
-            if (settings.serialCatPortHint() != null) {
-                builder.append("\nPort ").append(settings.serialCatPortHint());
-            }
-            if (settings.serialCatKeyingPortHint() != null) {
-                builder.append("  |  Key ").append(settings.serialCatKeyingPortHint());
-            }
-            if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
-                builder.append("\nCI-V: ").append(safeValue(settings.serialCatCivAddressHex()));
-            }
-            return builder.toString();
-        }
-        if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
-            return "Network CAT: "
-                    + settings.networkCatProtocolFamily().displayName()
-                    + "\nHost: "
-                    + safeValue(settings.networkHost())
-                    + (settings.networkHost() == null ? "" : ":" + settings.networkPort());
-        }
-        if (profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
-            return "USB keying route: "
-                    + settings.usbKeyLine().name()
-                    + "\nUSB device: "
-                    + safeValue(settings.usbPreferredDeviceName());
-        }
-        if (profile.hasCapability(RigCapability.AUDIO_VOX)) {
-            return "Audio VOX route active.\nCAT / line keying: -";
-        }
-        return "Selected route does not currently expose a richer CAT / keying summary.";
+        return RigRouteStatusFormatter.describeSettingsCatKeyingSummary(profile, settings);
     }
 
     private String renderCatKeyingHintText() {
-        return "";
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
+        RigControlAdapter adapter = resolveRouteStatusAdapter(profile, settings);
+        return renderRouteActionHint(profile, adapter, settings);
     }
 
     private String renderCwDefaultsText() {
@@ -399,13 +555,34 @@ public final class SettingsActivity extends AppCompatActivity {
         RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
         return settings.defaultWpm() + " WPM"
                 + "  |  "
-                + settings.defaultToneFrequencyHz() + " Hz";
+                + settings.defaultToneFrequencyHz() + " Hz"
+                + "\n"
+                + rxInputSettingsStore.rxInputMode().displayName()
+                + "  |  "
+                + rxInputSettingsStore.rxToneMode().displayName()
+                + "  |  "
+                + rxInputSettingsStore.micSourceMode().displayName();
+    }
+
+    private String renderTxTemplatesSummary() {
+        return "宏定义说明:\n"
+                + "<MYCALL>  我的呼号\n"
+                + "<CALL>  对方呼号\n"
+                + "<RST>  我发给对方的信号报告（等同 <RST_SENT>）\n"
+                + "<RST_SENT>  我发给对方的信号报告，描述对方信号到我这里的情况\n"
+                + "<RST_RCVD>  对方发给我的信号报告，描述我的信号到对方那里的情况\n"
+                + "<NAME>  我的姓名\n"
+                + "<QTH>  我的 QTH\n"
+                + "<GRID>  我的梅登海格网格\n"
+                + "<RIG>  我的设备信息\n"
+                + "<ANT>  我的天线信息\n"
+                + "<WX>  我的天气/环境说明";
     }
 
     private String renderDeveloperModeStatus(boolean enabled) {
         return enabled
-                ? "Advanced tools are available from this page."
-                : "Advanced tools are hidden during normal operation.";
+                ? "当前已显示开发调试入口。"
+                : "当前为正式使用视图，开发调试入口已隐藏。";
     }
 
     private String resolveStationCallsign(@Nullable AppOverviewSnapshot overview) {
@@ -464,6 +641,10 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.stationCallsignEditText.setText(valueOrEmpty(resolveStationCallsign(overview)));
         binding.operatorNameEditText.setText(valueOrEmpty(resolveStationName(overview)));
         binding.qthEditText.setText(valueOrEmpty(resolveStationQth(overview)));
+        binding.maidenheadGridEditText.setText(valueOrEmpty(stationProfileStore.maidenheadGrid()));
+        binding.rigDescriptionEditText.setText(valueOrEmpty(stationProfileStore.rigDescription()));
+        binding.antennaDescriptionEditText.setText(valueOrEmpty(stationProfileStore.antennaDescription()));
+        binding.weatherDescriptionEditText.setText(valueOrEmpty(stationProfileStore.weatherDescription()));
         syncingEditors = false;
     }
 
@@ -475,11 +656,27 @@ public final class SettingsActivity extends AppCompatActivity {
         syncingEditors = true;
         binding.defaultWpmEditText.setText(String.valueOf(settings.defaultWpm()));
         binding.defaultToneEditText.setText(String.valueOf(settings.defaultToneFrequencyHz()));
+        selectSpinnerValue(binding.rxInputModeSpinner, rxInputSettingsStore.rxInputMode());
+        selectSpinnerValue(binding.rxMicSourceModeSpinner, rxInputSettingsStore.micSourceMode());
+        selectSpinnerValue(binding.rxToneModeSpinner, rxInputSettingsStore.rxToneMode());
+        syncingEditors = false;
+    }
+
+    private void syncTxTemplateEditors() {
+        if (txTemplatesDirty) {
+            return;
+        }
+        syncingEditors = true;
+        binding.templateCqEditText.setText(txTemplateStore.cqTemplate());
+        binding.templateCqDxEditText.setText(txTemplateStore.cqDxTemplate());
+        binding.templateQrzEditText.setText(txTemplateStore.qrzTemplate());
+        binding.templateTu73EditText.setText(txTemplateStore.tu73Template());
         syncingEditors = false;
     }
 
     private void syncRouteEditors() {
         if (routeSettingsDirty) {
+            syncUsbDeviceEditorSelection(rigSelectionStore.selectedProfile(), readCurrentRouteEditorSettings());
             return;
         }
         RigProfile profile = rigSelectionStore.selectedProfile();
@@ -496,6 +693,7 @@ public final class SettingsActivity extends AppCompatActivity {
         selectSpinnerValue(binding.serialCatKeyingPolaritySpinner, settings.serialCatKeyingPolarity());
         selectSpinnerValue(binding.usbKeyLineSpinner, settings.usbKeyLine());
         syncingEditors = false;
+        syncUsbDeviceEditorSelection(profile, settings);
     }
 
     private void syncRouteFallbackEditor() {
@@ -511,12 +709,31 @@ public final class SettingsActivity extends AppCompatActivity {
         String stationCallsign = normalizedEditorValue(binding.stationCallsignEditText.getText());
         String operatorName = normalizedEditorValue(binding.operatorNameEditText.getText());
         String qth = normalizedEditorValue(binding.qthEditText.getText());
-        stationProfileStore.save(stationCallsign, operatorName, qth);
+        String maidenheadGrid = normalizedEditorValue(binding.maidenheadGridEditText.getText());
+        String rigDescription = normalizedEditorValue(binding.rigDescriptionEditText.getText());
+        String antennaDescription = normalizedEditorValue(binding.antennaDescriptionEditText.getText());
+        String weatherDescription = normalizedEditorValue(binding.weatherDescriptionEditText.getText());
+        stationProfileStore.save(
+                stationCallsign,
+                operatorName,
+                qth,
+                maidenheadGrid,
+                rigDescription,
+                antennaDescription,
+                weatherDescription
+        );
         stationProfileDirty = false;
-        stationProfileStatusMessage = (stationCallsign == null && operatorName == null && qth == null)
-                ? "Cleared saved station profile. Live draft/log fallback is active again."
-                : "Saved station profile for normal operation.";
-        Toast.makeText(this, "Station profile saved.", Toast.LENGTH_SHORT).show();
+        stationProfileStatusMessage = isStationProfileEmpty(
+                stationCallsign,
+                operatorName,
+                qth,
+                maidenheadGrid,
+                rigDescription,
+                antennaDescription,
+                weatherDescription
+        )
+                ? "台站资料已清空，正在回退到草稿/日志推断。"
+                : "台站资料已自动保存。";
         refreshUi();
     }
 
@@ -527,10 +744,10 @@ public final class SettingsActivity extends AppCompatActivity {
         Integer defaultWpm = parsePositiveInt(
                 binding.defaultWpmEditText.getText(),
                 binding.defaultWpmEditText,
-                "WPM must be a whole number.",
+                "WPM 必须是整数。",
                 5,
                 80,
-                "WPM should stay between 5 and 80."
+                "WPM 建议保持在 5 到 80 之间。"
         );
         if (defaultWpm == null) {
             return;
@@ -539,10 +756,10 @@ public final class SettingsActivity extends AppCompatActivity {
         Integer defaultTone = parsePositiveInt(
                 binding.defaultToneEditText.getText(),
                 binding.defaultToneEditText,
-                "Tone must be a whole number.",
+                "音调必须是整数。",
                 200,
                 2000,
-                "Tone should stay between 200 and 2000 Hz."
+                "音调建议保持在 200 到 2000 Hz 之间。"
         );
         if (defaultTone == null) {
             return;
@@ -570,26 +787,50 @@ public final class SettingsActivity extends AppCompatActivity {
                 existing.bluetoothDeviceHint()
         );
         rigSelectionStore.saveSettings(profile, updated);
+        rxInputSettingsStore.setRxInputMode(selectedSpinnerValue(
+                binding.rxInputModeSpinner,
+                rxInputSettingsStore.rxInputMode()
+        ));
+        rxInputSettingsStore.setMicSourceMode(selectedSpinnerValue(
+                binding.rxMicSourceModeSpinner,
+                rxInputSettingsStore.micSourceMode()
+        ));
+        rxInputSettingsStore.setRxToneMode(selectedSpinnerValue(
+                binding.rxToneModeSpinner,
+                rxInputSettingsStore.rxToneMode()
+        ));
         cwDefaultsDirty = false;
-        cwDefaultsStatusMessage = "Saved CW defaults for " + resolveCwDefaultsScope(profile) + ".";
-        Toast.makeText(this, "CW defaults saved.", Toast.LENGTH_SHORT).show();
+        cwDefaultsStatusMessage = "CW / RX 默认值已自动保存到 " + resolveCwDefaultsScope(profile) + "。";
+        refreshUi();
+    }
+
+    private void saveTxTemplates() {
+        txTemplateStore.save(
+                normalizedEditorValue(binding.templateCqEditText.getText()),
+                normalizedEditorValue(binding.templateCqDxEditText.getText()),
+                normalizedEditorValue(binding.templateQrzEditText.getText()),
+                normalizedEditorValue(binding.templateTu73EditText.getText())
+        );
+        txTemplatesDirty = false;
+        txTemplatesStatusMessage = "发送模板已自动保存。";
         refreshUi();
     }
 
     private void saveRouteSettings() {
         RigProfile profile = rigSelectionStore.selectedProfile();
         if (profile == null) {
-            Toast.makeText(this, "Select a radio route in Radio Setup first.", Toast.LENGTH_SHORT).show();
+            routeSettingsStatusMessage = "当前还没有固定正式路由，请先到 Rig Setup 选择。";
+            refreshUi();
             return;
         }
         RigProfileSettings existing = rigSelectionStore.loadSettings(profile);
         Integer serialBaud = parsePositiveInt(
                 binding.serialCatBaudRateEditText.getText(),
                 binding.serialCatBaudRateEditText,
-                "Baud must be a whole number.",
+                "波特率必须是整数。",
                 300,
                 921600,
-                "Baud should stay between 300 and 921600."
+                "波特率建议保持在 300 到 921600 之间。"
         );
         if (serialBaud == null) {
             return;
@@ -597,10 +838,10 @@ public final class SettingsActivity extends AppCompatActivity {
         Integer networkPort = parsePositiveInt(
                 binding.networkPortEditText.getText(),
                 binding.networkPortEditText,
-                "Port must be a whole number.",
+                "端口必须是整数。",
                 1,
                 65535,
-                "Port should stay between 1 and 65535."
+                "端口建议保持在 1 到 65535 之间。"
         );
         if (networkPort == null) {
             return;
@@ -642,8 +883,7 @@ public final class SettingsActivity extends AppCompatActivity {
         );
         rigSelectionStore.saveSettings(profile, updated);
         routeSettingsDirty = false;
-        routeSettingsStatusMessage = "Saved route defaults for " + profile.displayName() + ".";
-        Toast.makeText(this, "Route defaults saved.", Toast.LENGTH_SHORT).show();
+        routeSettingsStatusMessage = "链路参数已自动保存到 " + profile.displayName() + "。";
         refreshUi();
     }
 
@@ -654,44 +894,50 @@ public final class SettingsActivity extends AppCompatActivity {
         );
         routeFallbackStore.setMode(selectedMode);
         routeFallbackDirty = false;
-        routeFallbackStatusMessage = "Saved fallback route: " + routeFallbackStore.mode().displayName() + ".";
-        Toast.makeText(this, "Fallback route saved.", Toast.LENGTH_SHORT).show();
+        routeFallbackStatusMessage = "无电台兜底已自动保存为：" + routeFallbackStore.mode().displayName() + "。";
         refreshUi();
     }
 
     private String renderStationProfileEditorStatus() {
         if (stationProfileDirty) {
-            return "Unsaved changes";
+            return "编辑中，离开输入框后自动保存";
         }
         return stationProfileStatusMessage;
     }
 
     private String renderCwDefaultsEditorStatus() {
         if (cwDefaultsDirty) {
-            return "Unsaved changes";
+            return "编辑中，离开输入框后自动保存";
         }
         return cwDefaultsStatusMessage;
+    }
+
+    private String renderTxTemplatesEditorStatus() {
+        if (txTemplatesDirty) {
+            return "编辑中，离开输入框后自动保存";
+        }
+        return txTemplatesStatusMessage;
     }
 
     private String renderRouteSettingsScopeText() {
         RigProfile profile = rigSelectionStore.selectedProfile();
         if (profile == null) {
-            return "Editing: no pinned route";
+            return "当前未固定正式路由";
         }
-        return "Editing: " + profile.displayName()
-                + "\nTransport: " + profile.transportKind().name();
+        return "当前编辑: " + profile.displayName()
+                + "\n传输: " + profile.transportKind().name();
     }
 
     private String renderRouteSettingsEditorStatus() {
         if (routeSettingsDirty) {
-            return "Unsaved changes";
+            return "编辑中，离开输入框后自动保存";
         }
         return routeSettingsStatusMessage;
     }
 
     private String renderRouteFallbackEditorStatus() {
         if (routeFallbackDirty) {
-            return "Unsaved changes";
+            return "正在切换，自动保存中";
         }
         return routeFallbackStatusMessage;
     }
@@ -700,15 +946,19 @@ public final class SettingsActivity extends AppCompatActivity {
         boolean hasSavedCallsign = hasMeaningfulText(stationProfileStore.stationCallsign());
         boolean hasSavedName = hasMeaningfulText(stationProfileStore.operatorName());
         boolean hasSavedQth = hasMeaningfulText(stationProfileStore.qth());
-        if (hasSavedCallsign && hasSavedName && hasSavedQth) {
-            return "saved station profile";
+        boolean hasSavedGrid = hasMeaningfulText(stationProfileStore.maidenheadGrid());
+        boolean hasSavedRig = hasMeaningfulText(stationProfileStore.rigDescription());
+        boolean hasSavedAnt = hasMeaningfulText(stationProfileStore.antennaDescription());
+        boolean hasSavedWx = hasMeaningfulText(stationProfileStore.weatherDescription());
+        if (hasSavedCallsign && hasSavedName && hasSavedQth && hasSavedGrid) {
+            return "完整台站资料";
         }
-        if (hasSavedCallsign || hasSavedName || hasSavedQth) {
-            return "partial saved profile with live fallback";
+        if (hasSavedCallsign || hasSavedName || hasSavedQth || hasSavedGrid || hasSavedRig || hasSavedAnt || hasSavedWx) {
+            return "部分台站资料，缺项继续回退";
         }
         return hasInferredStationProfile(overview)
-                ? "inferred from active draft / latest log"
-                : "no saved station identity yet";
+                ? "来自活动草稿 / 最近日志的推断"
+                : "还没有保存正式台站资料";
     }
 
     private boolean hasInferredStationProfile(@Nullable AppOverviewSnapshot overview) {
@@ -723,7 +973,7 @@ public final class SettingsActivity extends AppCompatActivity {
     }
 
     private String resolveCwDefaultsScope(@Nullable RigProfile profile) {
-        return profile == null ? "fallback route defaults" : profile.displayName();
+        return profile == null ? "兜底链路默认值" : profile.displayName();
     }
 
     private void updateRoutePanelVisibility() {
@@ -737,7 +987,298 @@ public final class SettingsActivity extends AppCompatActivity {
                 : View.GONE);
         binding.networkRouteSettingsPanel.setVisibility(hasProfile && profile.hasCapability(RigCapability.NETWORK_CAT) ? View.VISIBLE : View.GONE);
         binding.usbRouteSettingsPanel.setVisibility(hasProfile && profile.hasCapability(RigCapability.KEY_LINE_CONTROL) ? View.VISIBLE : View.GONE);
-        binding.saveRouteSettingsButton.setEnabled(hasProfile);
+    }
+
+    private void syncUsbRouteState() {
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        RigProfileSettings settings = readCurrentRouteEditorSettings();
+        boolean usbVisible = profile != null && profile.hasCapability(RigCapability.KEY_LINE_CONTROL);
+        binding.usbDeviceSpinner.setVisibility(usbVisible ? View.VISIBLE : View.GONE);
+        binding.requestUsbKeyerPermissionButton.setVisibility(usbVisible ? View.VISIBLE : View.GONE);
+        binding.usbRouteStatusText.setVisibility(usbVisible ? View.VISIBLE : View.GONE);
+        if (!usbVisible) {
+            return;
+        }
+        UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(profile, settings);
+        if (adapter == null) {
+            binding.requestUsbKeyerPermissionButton.setEnabled(false);
+            binding.usbRouteStatusText.setText("当前固定路由还没有接上 USB 键控适配器。");
+            return;
+        }
+        List<UsbSerialDeviceOption> devices = refreshUsbDeviceSelection(adapter, settings.usbPreferredDeviceName());
+        boolean hasTargetDevice = adapter.hasTargetDevice();
+        boolean ready = adapter.isReady();
+        binding.requestUsbKeyerPermissionButton.setEnabled(hasTargetDevice && !ready);
+        binding.requestUsbKeyerPermissionButton.setText(ready
+                ? "USB 权限已就绪"
+                : hasTargetDevice
+                ? "申请 USB 权限"
+                : "未检测到 USB 设备");
+        if (usbRouteStatusMessage != null && !usbRouteStatusMessage.trim().isEmpty()) {
+            binding.usbRouteStatusText.setText(usbRouteStatusMessage);
+            if (!hasTargetDevice || ready) {
+                usbRouteStatusMessage = "";
+            }
+            return;
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append("路由: ").append(adapter.displayName())
+                .append("\n状态: ").append(RigRouteStatusFormatter.describeUsbKeyerReadiness(adapter, null))
+                .append("\n键控线: ").append(settings.usbKeyLine())
+                .append("\n设备: ").append(hasRealUsbDeviceOption(devices)
+                        ? valueOrEmpty(settings.usbPreferredDeviceName()).isEmpty()
+                        ? "自动 / 首个可用设备"
+                        : settings.usbPreferredDeviceName()
+                        : "没有可用候选设备");
+        binding.usbRouteStatusText.setText(builder.toString());
+    }
+
+    private List<UsbSerialDeviceOption> refreshUsbDeviceSelection(
+            UsbSerialKeyerRigControlAdapter adapter,
+            @Nullable String preferredDeviceName
+    ) {
+        List<UsbSerialDeviceOption> devices = new ArrayList<>();
+        devices.add(UsbSerialDeviceOption.autoOption());
+        devices.addAll(adapter.availableDevices());
+        syncingUsbDeviceSelection = true;
+        usbDeviceAdapter.clear();
+        usbDeviceAdapter.addAll(devices);
+        usbDeviceAdapter.notifyDataSetChanged();
+        binding.usbDeviceSpinner.setSelection(findUsbDeviceSelectionIndex(devices, preferredDeviceName), false);
+        syncingUsbDeviceSelection = false;
+        return devices;
+    }
+
+    private void syncUsbDeviceEditorSelection(@Nullable RigProfile profile, RigProfileSettings settings) {
+        if (usbDeviceAdapter == null || profile == null || !profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
+            return;
+        }
+        UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(profile, settings);
+        if (adapter == null) {
+            return;
+        }
+        refreshUsbDeviceSelection(adapter, settings.usbPreferredDeviceName());
+    }
+
+    private int findUsbDeviceSelectionIndex(
+            List<UsbSerialDeviceOption> devices,
+            @Nullable String preferredDeviceName
+    ) {
+        if (preferredDeviceName == null || preferredDeviceName.trim().isEmpty()) {
+            return 0;
+        }
+        for (int index = 0; index < devices.size(); index++) {
+            UsbSerialDeviceOption device = devices.get(index);
+            if (!device.isAuto() && preferredDeviceName.equals(device.deviceName())) {
+                return index;
+            }
+        }
+        return 0;
+    }
+
+    private boolean hasRealUsbDeviceOption(List<UsbSerialDeviceOption> devices) {
+        for (UsbSerialDeviceOption device : devices) {
+            if (!device.isAuto()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nullable
+    private RigControlAdapter resolveRouteStatusAdapter(
+            @Nullable RigProfile profile,
+            RigProfileSettings settings
+    ) {
+        if (profile == null) {
+            return null;
+        }
+        for (RigControlAdapter candidate : RigRegistry.defaultAdapters(this)) {
+            if (!profile.adapterId().equals(candidate.id())) {
+                continue;
+            }
+            if (candidate.supportsConfigurableTextToCwProfile()) {
+                candidate.configureTextToCwProfile(
+                        settings.defaultWpm(),
+                        settings.defaultToneFrequencyHz()
+                );
+            }
+            if (candidate instanceof UsbSerialKeyerRigControlAdapter) {
+                UsbSerialKeyerRigControlAdapter adapter = (UsbSerialKeyerRigControlAdapter) candidate;
+                adapter.setKeyLine(settings.usbKeyLine());
+                adapter.selectDevice(settings.usbPreferredDeviceName());
+            }
+            return candidate;
+        }
+        return null;
+    }
+
+    private String renderRouteActionHint(
+            @Nullable RigProfile profile,
+            @Nullable RigControlAdapter adapter,
+            RigProfileSettings settings
+    ) {
+        if (profile == null) {
+            return "下一步：先进入 Rig Setup 固定一个正式路由；如果暂时没有电台，可保留手机兜底。";
+        }
+        if (profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
+            if (!(adapter instanceof UsbSerialKeyerRigControlAdapter)) {
+                return "下一步：当前 USB 键控适配器尚未挂接，请先回 Rig Setup 检查固定路由。";
+            }
+            UsbSerialKeyerRigControlAdapter usbAdapter = (UsbSerialKeyerRigControlAdapter) adapter;
+            if (usbAdapter.isReady()) {
+                return "下一步：USB 键控已经就绪，可以回 Operate 做真实发射联调。";
+            }
+            if (!usbAdapter.hasTargetDevice()) {
+                return "下一步：插入 OTG / USB 线控设备，然后回到这里申请权限。";
+            }
+            return "下一步：先点“申请 USB 权限”，确认 Android 授权通过。";
+        }
+        if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
+            if (!hasMeaningfulText(settings.serialCatPortHint())
+                    && !hasMeaningfulText(settings.serialCatKeyingPortHint())) {
+                return "下一步：补齐串口 CAT 端口，或填写独立键控端口，再保存设置。";
+            }
+            if (adapter != null && adapter.isReady()) {
+                return "下一步：串口 CAT 基础链路已具备，可开始 PTT / 键控联调。";
+            }
+            if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
+                    && !hasMeaningfulText(settings.serialCatCivAddressHex())) {
+                return "下一步：补充 CI-V 地址，再继续做串口 CAT 联调。";
+            }
+            return "下一步：检查串口权限、波特率和端口提示是否与实际电台一致。";
+        }
+        if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
+            if (!hasMeaningfulText(settings.networkHost())) {
+                return "下一步：填写 rigctld 主机和端口，再保存设置。";
+            }
+            if (adapter != null && adapter.isReady()) {
+                return "下一步：网络 CAT 已具备基础配置，可开始验证 rigctld 连通和发射控制。";
+            }
+            return "下一步：确认 rigctld 已在目标主机启动，并且手机当前网络可达。";
+        }
+        if (profile.hasCapability(RigCapability.AUDIO_VOX)) {
+            return "下一步：连接音频线、校准 VOX 门限，然后回 Operate 做短报文发射验证。";
+        }
+        return "下一步：先完成当前路由的基础配置，再回 Operate 验证正式链路。";
+    }
+
+    @Nullable
+    private UsbSerialKeyerRigControlAdapter resolveUsbKeyerAdapter(
+            @Nullable RigProfile profile,
+            RigProfileSettings settings
+    ) {
+        if (profile == null || !profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
+            return null;
+        }
+        for (RigControlAdapter candidate : RigRegistry.defaultAdapters(this)) {
+            if (!profile.adapterId().equals(candidate.id())) {
+                continue;
+            }
+            if (!(candidate instanceof UsbSerialKeyerRigControlAdapter)) {
+                continue;
+            }
+            UsbSerialKeyerRigControlAdapter adapter = (UsbSerialKeyerRigControlAdapter) candidate;
+            adapter.setKeyLine(settings.usbKeyLine());
+            adapter.selectDevice(settings.usbPreferredDeviceName());
+            return adapter;
+        }
+        return null;
+    }
+
+    private RigProfileSettings readCurrentRouteEditorSettings() {
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        RigProfileSettings existing = rigSelectionStore.loadSettings(profile);
+        return new RigProfileSettings(
+                existing.defaultWpm(),
+                existing.defaultToneFrequencyHz(),
+                selectedSpinnerValue(binding.usbKeyLineSpinner, existing.usbKeyLine()),
+                normalizedEditorValue(binding.usbPreferredDeviceNameEditText.getText()),
+                existing.serialCatProtocolFamily(),
+                parsePositiveIntOrFallback(binding.serialCatBaudRateEditText.getText(), existing.serialCatBaudRate()),
+                normalizedEditorValue(binding.serialCatPortHintEditText.getText()),
+                selectedSpinnerValue(binding.serialCatKeyLineSpinner, existing.serialCatKeyLine()),
+                normalizedEditorValue(binding.serialCatKeyingPortHintEditText.getText()),
+                selectedSpinnerValue(binding.serialCatKeyingPolaritySpinner, existing.serialCatKeyingPolarity()),
+                existing.serialCatAssertRtsDuringKeying(),
+                existing.serialCatAssertDtrDuringKeying(),
+                normalizedEditorValue(binding.serialCatCivAddressEditText.getText()),
+                existing.networkCatProtocolFamily(),
+                normalizedEditorValue(binding.networkHostEditText.getText()),
+                parsePositiveIntOrFallback(binding.networkPortEditText.getText(), existing.networkPort()),
+                existing.bluetoothDeviceHint()
+        );
+    }
+
+    private int parsePositiveIntOrFallback(Editable editable, int fallback) {
+        String raw = normalizedEditorValue(editable);
+        if (raw == null) {
+            return fallback;
+        }
+        try {
+            int value = Integer.parseInt(raw);
+            return value > 0 ? value : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private void requestUsbKeyerPermission() {
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(
+                profile,
+                readCurrentRouteEditorSettings()
+        );
+        if (adapter == null) {
+            return;
+        }
+        try {
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                    this,
+                    0,
+                    new Intent(ACTION_USB_KEYER_PERMISSION).setPackage(getPackageName()),
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                            ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+                            : PendingIntent.FLAG_UPDATE_CURRENT
+            );
+            boolean requested = adapter.requestUsbPermission(pendingIntent);
+            usbRouteStatusMessage = requested
+                    ? "USB 权限请求已发出，请在 Android 弹窗中允许后再返回这里。"
+                    : "当前无法发起 USB 权限请求。状态：" + adapter.describeAvailability();
+        } catch (RuntimeException exception) {
+            usbRouteStatusMessage = "USB 权限请求失败：" + safeThrowableMessage(exception);
+        }
+        refreshUi();
+    }
+
+    private void registerUsbPermissionReceiver() {
+        usbPermissionReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(android.content.Context context, Intent intent) {
+                if (!ACTION_USB_KEYER_PERMISSION.equals(intent.getAction())) {
+                    return;
+                }
+                boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                usbRouteStatusMessage = granted
+                        ? "Android 已授予 USB 权限。"
+                        : "Android 拒绝了 USB 权限。";
+                refreshUi();
+            }
+        };
+        IntentFilter filter = new IntentFilter(ACTION_USB_KEYER_PERMISSION);
+        ContextCompat.registerReceiver(
+                this,
+                usbPermissionReceiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+        );
+    }
+
+    private String safeThrowableMessage(Throwable throwable) {
+        if (throwable == null || throwable.getMessage() == null || throwable.getMessage().trim().isEmpty()) {
+            return throwable == null ? "unknown failure" : throwable.getClass().getSimpleName();
+        }
+        return throwable.getMessage().trim();
     }
 
     @Nullable
@@ -753,6 +1294,53 @@ public final class SettingsActivity extends AppCompatActivity {
         } catch (ClassCastException ignored) {
             return fallback;
         }
+    }
+
+    private void attachAutoSaveOnFocusLoss(EditText editText, Runnable saveAction) {
+        if (editText == null || saveAction == null) {
+            return;
+        }
+        editText.setOnFocusChangeListener((view, hasFocus) -> {
+            if (!hasFocus && !syncingEditors && autoSaveEnabled) {
+                saveAction.run();
+            }
+        });
+    }
+
+    private void commitPendingEdits() {
+        if (stationProfileDirty) {
+            saveStationProfile();
+        }
+        if (cwDefaultsDirty) {
+            saveCwDefaults();
+        }
+        if (txTemplatesDirty) {
+            saveTxTemplates();
+        }
+        if (routeSettingsDirty) {
+            saveRouteSettings();
+        }
+        if (routeFallbackDirty) {
+            saveRouteFallback();
+        }
+    }
+
+    private boolean isStationProfileEmpty(
+            @Nullable String stationCallsign,
+            @Nullable String operatorName,
+            @Nullable String qth,
+            @Nullable String maidenheadGrid,
+            @Nullable String rigDescription,
+            @Nullable String antennaDescription,
+            @Nullable String weatherDescription
+    ) {
+        return !hasMeaningfulText(stationCallsign)
+                && !hasMeaningfulText(operatorName)
+                && !hasMeaningfulText(qth)
+                && !hasMeaningfulText(maidenheadGrid)
+                && !hasMeaningfulText(rigDescription)
+                && !hasMeaningfulText(antennaDescription)
+                && !hasMeaningfulText(weatherDescription);
     }
 
     private void selectSpinnerValue(Spinner spinner, Object value) {

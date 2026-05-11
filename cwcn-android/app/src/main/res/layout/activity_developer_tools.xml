@@ -14,7 +14,7 @@
             android:id="@+id/titleText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Developer Tools"
+            android:text="开发工具"
             android:textColor="@color/cwcn_title"
             android:textSize="30sp"
             android:textStyle="bold" />
@@ -23,7 +23,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Bench-only tools live here so the normal user path can stay focused."
+            android:text="开发者模式下的试验入口集中放在这里，避免干扰正式用户路径。"
             android:textColor="@color/cwcn_subtitle"
             android:textSize="15sp" />
 
@@ -41,7 +41,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Back" />
+            android:text="返回" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -54,7 +54,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Developer Mode"
+                android:text="开发者模式"
                 android:textColor="@color/cwcn_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -73,7 +73,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Enable Developer Mode" />
+                android:text="开启开发者模式" />
         </LinearLayout>
 
         <LinearLayout
@@ -89,7 +89,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Bench Entrances"
+                android:text="实验入口"
                 android:textColor="@color/cwcn_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -108,21 +108,21 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Open RX Debug" />
+                android:text="打开 RX 实验台" />
 
             <Button
                 android:id="@+id/openTxConsoleButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Open TX Console" />
+                android:text="打开 TX 开发控制台" />
 
             <Button
                 android:id="@+id/openRigBenchButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Open Rig Bench" />
+                android:text="打开电台实验台" />
         </LinearLayout>
 
     </LinearLayout>

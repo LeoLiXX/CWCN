@@ -71,6 +71,20 @@
                     android:textSize="7sp"
                     android:textStyle="bold" />
             </LinearLayout>
+
+            <org.bi9clt.cwcn.ui.spectrum.SqlSignalMeterView
+                android:id="@+id/spectrumSqlMeterView"
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
+                android:layout_marginTop="3dp" />
+
+            <TextView
+                android:id="@+id/spectrumSqlHintText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="7sp" />
         </LinearLayout>
 
         <ImageButton

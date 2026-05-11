@@ -35,13 +35,19 @@ public final class CwTimingModel {
     private CwTimingEvent lastTimingEvent;
 
     public synchronized List<CwTimingEvent> process(CwToneEvent toneEvent) {
+        return process(toneEvent, true);
+    }
+
+    public synchronized List<CwTimingEvent> process(CwToneEvent toneEvent, boolean allowLearning) {
         ArrayList<CwTimingEvent> timingEvents = new ArrayList<>(2);
 
         if (toneEvent.type() == CwToneEvent.Type.TONE_ON) {
             if (lastToneOffTimestampMs > 0L) {
                 long gapDurationMs = Math.max(0L, toneEvent.timestampMs() - lastToneOffTimestampMs);
                 CwTimingEvent.Classification gapClassification = classifyGap(gapDurationMs);
-                updateGapEstimates(gapDurationMs, gapClassification);
+                if (allowLearning) {
+                    updateGapEstimates(gapDurationMs, gapClassification);
+                }
                 CwTimingEvent gapEvent = new CwTimingEvent(
                         CwTimingEvent.Kind.GAP,
                         gapClassification,
@@ -58,7 +64,9 @@ public final class CwTimingModel {
         }
 
         long toneDurationMs = Math.max(0L, toneEvent.toneDurationMs());
-        updateDotEstimate(toneDurationMs);
+        if (allowLearning) {
+            updateDotEstimate(toneDurationMs);
+        }
         CwTimingEvent toneTimingEvent = new CwTimingEvent(
                 CwTimingEvent.Kind.TONE,
                 classifyTone(toneDurationMs),
@@ -75,6 +83,10 @@ public final class CwTimingModel {
     }
 
     public synchronized List<CwTimingEvent> flushPendingGap(long timestampMs) {
+        return flushPendingGap(timestampMs, true);
+    }
+
+    public synchronized List<CwTimingEvent> flushPendingGap(long timestampMs, boolean allowLearning) {
         ArrayList<CwTimingEvent> timingEvents = new ArrayList<>(1);
         if (lastToneOffTimestampMs <= 0L || timestampMs <= lastToneOffTimestampMs) {
             return timingEvents;
@@ -86,7 +98,9 @@ public final class CwTimingModel {
             return timingEvents;
         }
 
-        updateGapEstimates(gapDurationMs, gapClassification);
+        if (allowLearning) {
+            updateGapEstimates(gapDurationMs, gapClassification);
+        }
         CwTimingEvent gapEvent = new CwTimingEvent(
                 CwTimingEvent.Kind.GAP,
                 gapClassification,
@@ -115,12 +129,14 @@ public final class CwTimingModel {
 
     public synchronized CwTimingSnapshot snapshot() {
         long dotRounded = dotEstimateRounded();
-        int estimatedWpm = dotRounded <= 0L ? 0 : (int) Math.round(1200.0d / dotRounded);
+        double estimatedWpmPrecise = dotRounded <= 0L ? 0.0d : 1200.0d / dotRounded;
+        int estimatedWpm = (int) Math.round(estimatedWpmPrecise);
         return new CwTimingSnapshot(
                 dotRounded,
                 Math.max(1L, Math.round(dashEstimateMs)),
                 Math.max(1L, Math.round(intraGapEstimateMs)),
                 estimatedWpm,
+                estimatedWpmPrecise,
                 totalToneEvents,
                 totalGapEvents,
                 lastTimingEvent

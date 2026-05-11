@@ -5,6 +5,7 @@ public final class CwTimingSnapshot {
     private final long dashEstimateMs;
     private final long intraGapEstimateMs;
     private final int estimatedWpm;
+    private final double estimatedWpmPrecise;
     private final int totalToneEvents;
     private final int totalGapEvents;
     private final CwTimingEvent lastTimingEvent;
@@ -14,6 +15,7 @@ public final class CwTimingSnapshot {
             long dashEstimateMs,
             long intraGapEstimateMs,
             int estimatedWpm,
+            double estimatedWpmPrecise,
             int totalToneEvents,
             int totalGapEvents,
             CwTimingEvent lastTimingEvent
@@ -22,6 +24,7 @@ public final class CwTimingSnapshot {
         this.dashEstimateMs = dashEstimateMs;
         this.intraGapEstimateMs = intraGapEstimateMs;
         this.estimatedWpm = estimatedWpm;
+        this.estimatedWpmPrecise = estimatedWpmPrecise;
         this.totalToneEvents = totalToneEvents;
         this.totalGapEvents = totalGapEvents;
         this.lastTimingEvent = lastTimingEvent;
@@ -41,6 +44,10 @@ public final class CwTimingSnapshot {
 
     public int estimatedWpm() {
         return estimatedWpm;
+    }
+
+    public double estimatedWpmPrecise() {
+        return estimatedWpmPrecise;
     }
 
     public int totalToneEvents() {

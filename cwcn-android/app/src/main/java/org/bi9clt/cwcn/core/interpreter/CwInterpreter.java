@@ -237,9 +237,40 @@ public final class CwInterpreter {
                 readableParts.addAll(repeatedCallsignSplit);
                 continue;
             }
+            List<String> reportOrControlTailSplit = splitReadableRawCopyTailToken(token);
+            if (!reportOrControlTailSplit.isEmpty()) {
+                readableParts.addAll(reportOrControlTailSplit);
+                continue;
+            }
             readableParts.add(token);
         }
         return readableParts;
+    }
+
+    private List<String> splitReadableRawCopyTailToken(String token) {
+        ArrayList<String> splitParts = new ArrayList<>();
+        if (token == null || token.length() < 4 || token.contains("?")) {
+            return splitParts;
+        }
+        for (String controlToken : CONTROL_TOKEN_VARIANTS) {
+            if (!token.endsWith(controlToken) || token.length() <= controlToken.length()) {
+                continue;
+            }
+            String prefix = token.substring(0, token.length() - controlToken.length());
+            if (prefix.isEmpty()) {
+                continue;
+            }
+            String semanticPrefix = semanticToken(prefix);
+            if (REPORT_TOKEN_VARIANTS.contains(prefix)
+                    || "599".equals(semanticPrefix)
+                    || "UR".equals(semanticPrefix)
+                    || "R".equals(semanticPrefix)) {
+                splitParts.add(prefix);
+                splitParts.add(controlToken);
+                return splitParts;
+            }
+        }
+        return splitParts;
     }
 
     private void parseRawCopyFocusText(long timestampMs) {

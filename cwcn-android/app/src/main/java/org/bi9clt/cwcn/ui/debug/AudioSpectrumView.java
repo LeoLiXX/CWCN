@@ -10,6 +10,8 @@ import android.view.View;
 
 import androidx.annotation.Nullable;
 
+import org.bi9clt.cwcn.core.spectrum.AudioSpectrumSnapshot;
+
 public final class AudioSpectrumView extends View {
     private static final int[][] MARKER_ROWS = new int[][]{
             {0, 1},

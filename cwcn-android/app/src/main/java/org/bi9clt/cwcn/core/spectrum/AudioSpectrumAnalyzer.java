@@ -1,4 +1,4 @@
-package org.bi9clt.cwcn.ui.debug;
+package org.bi9clt.cwcn.core.spectrum;
 
 import org.bi9clt.cwcn.core.audio.AudioFrame;
 

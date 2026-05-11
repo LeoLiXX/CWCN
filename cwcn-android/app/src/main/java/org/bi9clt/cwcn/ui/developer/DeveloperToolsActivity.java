@@ -24,7 +24,7 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
         binding = ActivityDeveloperToolsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         developerModeStore = new DeveloperModeStore(this);
-        binding.versionText.setText("Developer Tools " + BuildConfig.VERSION_NAME);
+        binding.versionText.setText("开发工具 " + BuildConfig.VERSION_NAME);
         setupActions();
         refreshUi();
     }
@@ -55,15 +55,15 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
     private void refreshUi() {
         boolean enabled = developerModeStore.isEnabled();
         binding.developerModeStatusText.setText(enabled
-                ? "Developer mode is enabled.\nRX Debug, TX Console, and rig bench tools are available from this screen."
-                : "Developer mode is disabled.\nEnable it only when you need protocol probes, bench TX, or low-level RX inspection.");
+                ? "开发者模式已开启。\n当前优先保留 RX 实验台、TX 开发控制台和电台实验台，其他杂项不再放进正式路径。"
+                : "开发者模式已关闭。\n只有在需要底层收发排查、链路实验或协议验证时才建议开启。");
         binding.toggleDeveloperModeButton.setText(enabled
-                ? "Disable Developer Mode"
-                : "Enable Developer Mode");
+                ? "关闭开发者模式"
+                : "开启开发者模式");
         int visibility = enabled ? View.VISIBLE : View.GONE;
         binding.toolsPanel.setVisibility(visibility);
         binding.toolsHintText.setText(enabled
-                ? "Use RX Debug for decode analysis, TX Console for send-side benching, and Rig Bench for CAT/keying experiments."
-                : "Developer tools stay hidden until developer mode is enabled.");
+                ? "RX 实验台聚焦接收链路与解码问题，TX 控制台用于发射验证，电台实验台用于 CAT / 键控实验。"
+                : "开发工具会在开启开发者模式后显示。");
     }
 }

@@ -14,7 +14,7 @@
             android:id="@+id/titleText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Rig Setup"
+            android:text="电台配置"
             android:textColor="@color/cwcn_title"
             android:textSize="30sp"
             android:textStyle="bold" />
@@ -24,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Choose your radio path, save the connection defaults, and keep bench tools outside the main setup flow."
+            android:text="在这里选择正式电台路径并保存连接默认值，更深入的实验工具放到开发入口。"
             android:textColor="@color/cwcn_subtitle"
             android:textSize="15sp" />
 
@@ -274,14 +274,14 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="Request USB Keyer Permission" />
+                    android:text="请求 USB 键控权限" />
 
                 <Button
                     android:id="@+id/testUsbKeyerPulseButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Pulse USB Key Line" />
+                    android:text="脉冲验证 USB 键控线" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -294,7 +294,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Send VVV" />
+                        android:text="发送 VVV 验证" />
 
                     <Button
                         android:id="@+id/stopUsbKeyerTextButton"
@@ -302,7 +302,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="10dp"
                         android:layout_weight="1"
-                        android:text="Stop" />
+                        android:text="停止" />
                 </LinearLayout>
 
                 <TextView
@@ -464,56 +464,56 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="Request Serial CAT USB Permission" />
+                    android:text="请求串口 CAT USB 权限" />
 
                 <Button
                     android:id="@+id/testSerialCatConnectionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Test Serial CAT Connection" />
+                    android:text="验证串口 CAT 连接" />
 
                 <Button
                     android:id="@+id/testSerialCatPttButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Pulse Legacy CAT TX/PTT" />
+                    android:text="旧版 CAT TX/PTT 脉冲验证" />
 
                 <Button
                     android:id="@+id/testSerialCatKeyingButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Pulse Keying Port (DTR/RTS)" />
+                    android:text="独立键控口脉冲验证（DTR/RTS）" />
 
                 <Button
                     android:id="@+id/holdSerialCatKeyingButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Hold Keying Line (1.5s)" />
+                    android:text="独立键控保持验证（1.5s）" />
 
                 <Button
                     android:id="@+id/openCloseSerialCatKeyingPortButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Open/Close Keying Port Only" />
+                    android:text="键控口开关验证" />
 
                 <Button
                     android:id="@+id/runSerialCatKeyingSweepButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Run Keying Sweep (All Ports/Lines)" />
+                    android:text="运行键控线全量扫描" />
 
                 <TextView
                     android:id="@+id/serialCatTimingLabLabelText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="DTR Timing Lab"
+                    android:text="DTR 时序实验"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -606,14 +606,14 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Run DTR Timing Lab" />
+                    android:text="运行 DTR 时序实验" />
 
                 <TextView
                     android:id="@+id/serialCatShortPulseLabLabelText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="Short Pulse Lab"
+                    android:text="短脉冲实验"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 

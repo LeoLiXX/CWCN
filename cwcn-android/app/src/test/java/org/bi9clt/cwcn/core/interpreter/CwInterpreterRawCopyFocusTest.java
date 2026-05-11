@@ -90,6 +90,23 @@ public final class CwInterpreterRawCopyFocusTest {
         assertEquals(CwInterpretedToken.Type.FREE_TEXT, tokens.get(3).type());
     }
 
+    @Test
+    public void rawCopyFocusModeSplitsReadableReportAndControlTailInsideSingleToken() {
+        CwInterpreter interpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
+
+        interpreter.process(decoded("BI9CLT DE BG7YOZ UR 5NNBK", 1000L));
+
+        CwInterpreterSnapshot snapshot = interpreter.snapshot();
+        assertEquals("BI9CLT DE BG7YOZ UR 5NNBK", snapshot.rawText());
+        assertEquals("BI9CLT DE BG7YOZ UR 5NN BK", snapshot.normalizedText());
+
+        List<CwInterpretedToken> tokens = snapshot.tokens();
+        assertEquals("5NN", tokens.get(tokens.size() - 2).normalizedText());
+        assertEquals(CwInterpretedToken.Type.REPORT, tokens.get(tokens.size() - 2).type());
+        assertEquals("BK", tokens.get(tokens.size() - 1).normalizedText());
+        assertEquals(CwInterpretedToken.Type.CONTROL, tokens.get(tokens.size() - 1).type());
+    }
+
     private CwDecodeEvent decoded(String text, long timestampMs) {
         return new CwDecodeEvent(
                 CwDecodeEvent.Type.CHARACTER_DECODED,

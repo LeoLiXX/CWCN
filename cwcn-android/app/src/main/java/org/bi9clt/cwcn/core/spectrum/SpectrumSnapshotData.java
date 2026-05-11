@@ -1,6 +1,6 @@
 package org.bi9clt.cwcn.core.spectrum;
 
-import org.bi9clt.cwcn.ui.debug.AudioSpectrumSnapshot;
+import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 
 public final class SpectrumSnapshotData {
     private final long capturedAtEpochMs;
@@ -22,6 +22,12 @@ public final class SpectrumSnapshotData {
     private final boolean hypothesisGuardApplied;
     private final int hypothesisGuardAppliedToneHz;
     private final String hypothesisGuardDecision;
+    private final int sqlAttackThreshold;
+    private final int sqlReleaseThreshold;
+    private final int sqlNoiseFloorEstimate;
+    private final int sqlSignalFloorEstimate;
+    private final float sqlToneRmsAmplitude;
+    private final float sqlFrameRmsAmplitude;
     private final boolean syntheticFallback;
 
     public SpectrumSnapshotData(
@@ -46,6 +52,64 @@ public final class SpectrumSnapshotData {
             String hypothesisGuardDecision,
             boolean syntheticFallback
     ) {
+        this(
+                capturedAtEpochMs,
+                frequenciesHz,
+                magnitudes,
+                peakFrequencyHz,
+                peakMagnitude,
+                noiseFloorMagnitude,
+                preferredToneHz,
+                trackedToneHz,
+                hypothesisToneHz,
+                preferredWindowWinnerToneHz,
+                wideScanWinnerToneHz,
+                acquisitionWinnerToneHz,
+                finalAdoptedToneHz,
+                acquisitionWinnerSource,
+                finalAdoptedSource,
+                hypothesisGuardEnabled,
+                hypothesisGuardApplied,
+                hypothesisGuardAppliedToneHz,
+                hypothesisGuardDecision,
+                0,
+                0,
+                0,
+                0,
+                0.0f,
+                0.0f,
+                syntheticFallback
+        );
+    }
+
+    public SpectrumSnapshotData(
+            long capturedAtEpochMs,
+            int[] frequenciesHz,
+            float[] magnitudes,
+            int peakFrequencyHz,
+            float peakMagnitude,
+            float noiseFloorMagnitude,
+            int preferredToneHz,
+            int trackedToneHz,
+            int hypothesisToneHz,
+            int preferredWindowWinnerToneHz,
+            int wideScanWinnerToneHz,
+            int acquisitionWinnerToneHz,
+            int finalAdoptedToneHz,
+            String acquisitionWinnerSource,
+            String finalAdoptedSource,
+            boolean hypothesisGuardEnabled,
+            boolean hypothesisGuardApplied,
+            int hypothesisGuardAppliedToneHz,
+            String hypothesisGuardDecision,
+            int sqlAttackThreshold,
+            int sqlReleaseThreshold,
+            int sqlNoiseFloorEstimate,
+            int sqlSignalFloorEstimate,
+            float sqlToneRmsAmplitude,
+            float sqlFrameRmsAmplitude,
+            boolean syntheticFallback
+    ) {
         this.capturedAtEpochMs = capturedAtEpochMs;
         this.frequenciesHz = frequenciesHz == null ? new int[0] : frequenciesHz;
         this.magnitudes = magnitudes == null ? new float[0] : magnitudes;
@@ -65,10 +129,24 @@ public final class SpectrumSnapshotData {
         this.hypothesisGuardApplied = hypothesisGuardApplied;
         this.hypothesisGuardAppliedToneHz = hypothesisGuardAppliedToneHz;
         this.hypothesisGuardDecision = hypothesisGuardDecision == null ? "NONE" : hypothesisGuardDecision;
+        this.sqlAttackThreshold = Math.max(0, sqlAttackThreshold);
+        this.sqlReleaseThreshold = Math.max(0, sqlReleaseThreshold);
+        this.sqlNoiseFloorEstimate = Math.max(0, sqlNoiseFloorEstimate);
+        this.sqlSignalFloorEstimate = Math.max(0, sqlSignalFloorEstimate);
+        this.sqlToneRmsAmplitude = Math.max(0.0f, sqlToneRmsAmplitude);
+        this.sqlFrameRmsAmplitude = Math.max(0.0f, sqlFrameRmsAmplitude);
         this.syntheticFallback = syntheticFallback;
     }
 
     public static SpectrumSnapshotData fromAudioSnapshot(AudioSpectrumSnapshot snapshot, long capturedAtEpochMs) {
+        return fromAudioSnapshot(snapshot, capturedAtEpochMs, null);
+    }
+
+    public static SpectrumSnapshotData fromAudioSnapshot(
+            AudioSpectrumSnapshot snapshot,
+            long capturedAtEpochMs,
+            CwSignalSnapshot signalSnapshot
+    ) {
         if (snapshot == null) {
             return null;
         }
@@ -92,6 +170,12 @@ public final class SpectrumSnapshotData {
                 snapshot.hypothesisGuardApplied(),
                 snapshot.hypothesisGuardAppliedToneHz(),
                 snapshot.hypothesisGuardDecision(),
+                signalSnapshot == null ? 0 : signalSnapshot.currentThreshold(),
+                signalSnapshot == null ? 0 : signalSnapshot.releaseThreshold(),
+                signalSnapshot == null ? 0 : signalSnapshot.noiseFloorEstimate(),
+                signalSnapshot == null ? 0 : signalSnapshot.signalFloorEstimate(),
+                signalSnapshot == null ? 0.0f : (float) signalSnapshot.lastToneRmsAmplitude(),
+                signalSnapshot == null ? 0.0f : (float) signalSnapshot.lastRmsAmplitude(),
                 false
         );
     }
@@ -170,6 +254,30 @@ public final class SpectrumSnapshotData {
 
     public String hypothesisGuardDecision() {
         return hypothesisGuardDecision;
+    }
+
+    public int sqlAttackThreshold() {
+        return sqlAttackThreshold;
+    }
+
+    public int sqlReleaseThreshold() {
+        return sqlReleaseThreshold;
+    }
+
+    public int sqlNoiseFloorEstimate() {
+        return sqlNoiseFloorEstimate;
+    }
+
+    public int sqlSignalFloorEstimate() {
+        return sqlSignalFloorEstimate;
+    }
+
+    public float sqlToneRmsAmplitude() {
+        return sqlToneRmsAmplitude;
+    }
+
+    public float sqlFrameRmsAmplitude() {
+        return sqlFrameRmsAmplitude;
     }
 
     public boolean syntheticFallback() {

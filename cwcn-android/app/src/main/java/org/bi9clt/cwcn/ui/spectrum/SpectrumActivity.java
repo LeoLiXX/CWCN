@@ -12,6 +12,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.bi9clt.cwcn.R;
+import org.bi9clt.cwcn.core.app.DeveloperModeStore;
+import org.bi9clt.cwcn.core.app.RxInputSettingsStore;
 import org.bi9clt.cwcn.core.app.SqlLevelStore;
 import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
@@ -35,16 +37,19 @@ import java.util.List;
 import java.util.Locale;
 
 public final class SpectrumActivity extends AppCompatActivity {
-    private static final long LIVE_SPECTRUM_REFRESH_INTERVAL_MS = 350L;
+    private static final long LIVE_SPECTRUM_REFRESH_INTERVAL_MS = 120L;
     private static final int DISPLAY_MAX_FREQUENCY_HZ = 3000;
     private static final int MIN_FOCUS_FREQUENCY_HZ = 100;
     private static final int MAX_FOCUS_FREQUENCY_HZ = 2900;
     private static final int FOCUS_FREQUENCY_STEP_HZ = 5;
+    private static final int FIXED_TONE_TRACKING_HALF_WINDOW_HZ = 50;
 
     private ActivitySpectrumBinding binding;
     private RxSessionStore rxSessionStore;
     private LocalLogRepository localLogRepository;
     private RigSelectionStore rigSelectionStore;
+    private DeveloperModeStore developerModeStore;
+    private RxInputSettingsStore rxInputSettingsStore;
     private SqlLevelStore sqlLevelStore;
     private SpectrumHistoryStore spectrumHistoryStore;
     private long waterfallSequence;
@@ -68,6 +73,8 @@ public final class SpectrumActivity extends AppCompatActivity {
         rxSessionStore = new RxSessionStore(this);
         localLogRepository = new LocalLogRepository(this);
         rigSelectionStore = new RigSelectionStore(this);
+        developerModeStore = new DeveloperModeStore(this);
+        rxInputSettingsStore = new RxInputSettingsStore(this);
         sqlLevelStore = new SqlLevelStore(this);
         spectrumHistoryStore = new SpectrumHistoryStore(this);
         sqlLevel = sqlLevelStore.load();
@@ -146,8 +153,11 @@ public final class SpectrumActivity extends AppCompatActivity {
 
         binding.spectrumStatusMainText.setText(renderStatusMain(snapshot, profile, latestSpectrum));
         binding.spectrumStatusDetailText.setText(renderStatusDetail(snapshot, spectrumHistory, latestSpectrum));
-        binding.spectrumSqlValueText.setText(String.valueOf(sqlLevel));
-        binding.spectrumSummaryText.setText(renderSummary(snapshot, latestSpectrum));
+        binding.spectrumSqlValueText.setText(renderSqlValue(latestSpectrum));
+        binding.spectrumSqlHintText.setText(renderSqlHint(latestSpectrum));
+        String summaryText = renderSummary(snapshot, latestSpectrum);
+        binding.spectrumSummaryText.setText(summaryText);
+        binding.spectrumSummaryText.setVisibility(hasMeaningfulText(summaryText) ? View.VISIBLE : View.GONE);
         binding.spectrumDraftText.setText(renderDraftText(overview));
         binding.emptySpectrumStateText.setText(latestSpectrum == null ? "Waiting for live spectrum" : "");
         binding.emptySpectrumStateText.setVisibility(latestSpectrum == null ? View.VISIBLE : View.GONE);
@@ -156,6 +166,8 @@ public final class SpectrumActivity extends AppCompatActivity {
         }
 
         applyFocusFrequency(focusFrequencyHz, autoTrackedFrequencyHz);
+        binding.columnarView.setSqlReferenceLevel(resolveSqlReferenceWaveLevel(latestSpectrum), sqlLevel);
+        applySqlMeter(latestSpectrum);
         binding.columnarView.setWaveData(waveData);
         binding.waterfallView.setWaveData(waveData, waterfallSequence++);
 
@@ -194,7 +206,7 @@ public final class SpectrumActivity extends AppCompatActivity {
     private void setupSqlControls() {
         binding.spectrumSqlSeekBar.setMax(100);
         binding.spectrumSqlSeekBar.setProgress(sqlLevel);
-        binding.spectrumSqlValueText.setText(String.valueOf(sqlLevel));
+        binding.spectrumSqlValueText.setText("SET " + sqlLevel);
         binding.spectrumSqlSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -202,7 +214,7 @@ public final class SpectrumActivity extends AppCompatActivity {
                     return;
                 }
                 sqlLevel = progress;
-                binding.spectrumSqlValueText.setText(String.valueOf(sqlLevel));
+                binding.spectrumSqlValueText.setText(renderSqlValue(latestSpectrum(loadSpectrumHistory(rxSessionStore.load()))));
                 if (sqlLevelStore != null) {
                     sqlLevelStore.save(sqlLevel);
                 }
@@ -220,12 +232,17 @@ public final class SpectrumActivity extends AppCompatActivity {
     }
 
     private void applyFocusFrequency(int focusFrequencyHz, int autoTrackedFrequencyHz) {
+        boolean fixedToneMode = rxInputSettingsStore != null
+                && rxInputSettingsStore.rxToneMode() == RxInputSettingsStore.RxToneMode.FIXED_TONE;
+        int trackingHalfWindowHz = fixedToneMode ? FIXED_TONE_TRACKING_HALF_WINDOW_HZ : 0;
         binding.rulerFrequencyView.setCenterFrequencyHz(focusFrequencyHz);
         binding.rulerFrequencyView.setAutoTrackedFrequencyHz(autoTrackedFrequencyHz);
         binding.columnarView.setTouchFrequencyHz(focusFrequencyHz);
         binding.columnarView.setAutoTrackedFrequencyHz(autoTrackedFrequencyHz);
+        binding.columnarView.setTrackingWindowHz(focusFrequencyHz, trackingHalfWindowHz);
         binding.waterfallView.setTouchFrequencyHz(focusFrequencyHz);
         binding.waterfallView.setAutoTrackedFrequencyHz(autoTrackedFrequencyHz);
+        binding.waterfallView.setTrackingWindowHz(focusFrequencyHz, trackingHalfWindowHz);
     }
 
     private int resolveFocusFrequency(
@@ -259,6 +276,103 @@ public final class SpectrumActivity extends AppCompatActivity {
         return waveData;
     }
 
+    private int resolveSqlReferenceWaveLevel(@Nullable SpectrumSnapshotData latestSpectrum) {
+        if (latestSpectrum == null) {
+            return -1;
+        }
+        float[] magnitudes = latestSpectrum.magnitudes();
+        if (magnitudes.length == 0) {
+            return -1;
+        }
+
+        float floor = latestSpectrum.noiseFloorMagnitude();
+        float ceiling = Math.max(latestSpectrum.peakMagnitude(), floor + 1f);
+        float sqlReferenceMagnitude = resolveSqlReferenceMagnitude(latestSpectrum, floor, ceiling);
+        float normalized = (sqlReferenceMagnitude - floor) / Math.max(1f, ceiling - floor);
+        return Math.round(Math.max(0f, Math.min(1f, normalized)) * 255f);
+    }
+
+    private float resolveSqlReferenceMagnitude(
+            SpectrumSnapshotData latestSpectrum,
+            float floor,
+            float ceiling
+    ) {
+        int sqlAttackThreshold = latestSpectrum.sqlAttackThreshold();
+        int sqlNoiseFloorEstimate = latestSpectrum.sqlNoiseFloorEstimate();
+        int sqlSignalFloorEstimate = latestSpectrum.sqlSignalFloorEstimate();
+        float sqlToneRmsAmplitude = latestSpectrum.sqlToneRmsAmplitude();
+
+        if (sqlAttackThreshold <= 0) {
+            return floor + ((ceiling - floor) * (sqlLevel / 100f));
+        }
+
+        float thresholdRatio = 0f;
+        if (sqlSignalFloorEstimate > sqlNoiseFloorEstimate) {
+            thresholdRatio = (sqlAttackThreshold - sqlNoiseFloorEstimate)
+                    / (float) Math.max(1, sqlSignalFloorEstimate - sqlNoiseFloorEstimate);
+        } else if (sqlToneRmsAmplitude > 0f) {
+            thresholdRatio = sqlAttackThreshold / Math.max(1f, sqlToneRmsAmplitude);
+        }
+        thresholdRatio = Math.max(0f, Math.min(1.35f, thresholdRatio));
+        float mappedMagnitude = floor + ((ceiling - floor) * thresholdRatio);
+
+        if (sqlToneRmsAmplitude > 0f && latestSpectrum.peakMagnitude() > 0f) {
+            float tonePeakRatio = sqlAttackThreshold / Math.max(1f, sqlToneRmsAmplitude);
+            float peakMappedMagnitude = latestSpectrum.peakMagnitude() * Math.max(0f, Math.min(1.2f, tonePeakRatio));
+            mappedMagnitude = Math.max(mappedMagnitude, floor + ((peakMappedMagnitude - floor) * 0.5f));
+        }
+
+        return Math.max(floor, Math.min(ceiling, mappedMagnitude));
+    }
+
+    private void applySqlMeter(@Nullable SpectrumSnapshotData latestSpectrum) {
+        if (latestSpectrum == null) {
+            binding.spectrumSqlMeterView.setLevels(0f, 0f, 0f, 0f, 0f);
+            return;
+        }
+        binding.spectrumSqlMeterView.setLevels(
+                latestSpectrum.sqlFrameRmsAmplitude(),
+                latestSpectrum.sqlToneRmsAmplitude(),
+                latestSpectrum.sqlNoiseFloorEstimate(),
+                latestSpectrum.sqlAttackThreshold(),
+                latestSpectrum.sqlReleaseThreshold()
+        );
+    }
+
+    private String renderSqlValue(@Nullable SpectrumSnapshotData latestSpectrum) {
+        if (latestSpectrum == null || latestSpectrum.sqlAttackThreshold() <= 0) {
+            return "SET " + sqlLevel;
+        }
+        int threshold = latestSpectrum.sqlAttackThreshold();
+        int current = Math.round(latestSpectrum.sqlFrameRmsAmplitude());
+        int delta = current - threshold;
+        return "IN " + current + " / SQL " + threshold + " (" + String.format(Locale.US, "%+d", delta) + ")";
+    }
+
+    private String renderSqlHint(@Nullable SpectrumSnapshotData latestSpectrum) {
+        if (latestSpectrum == null || latestSpectrum.sqlAttackThreshold() <= 0) {
+            return "把环境底噪压在线左侧，让有效 CW 过线。";
+        }
+        float frameLevel = latestSpectrum.sqlFrameRmsAmplitude();
+        float toneLevel = latestSpectrum.sqlToneRmsAmplitude();
+        int threshold = latestSpectrum.sqlAttackThreshold();
+        int noise = latestSpectrum.sqlNoiseFloorEstimate();
+        int delta = Math.round(frameLevel) - threshold;
+        if (frameLevel < threshold) {
+            if ((threshold - frameLevel) <= Math.max(4f, threshold * 0.08f)) {
+                return "当前总体输入刚好在线下方，适合等有效 CW 冲线。";
+            }
+            return "当前总体输入低于 SQL 线 " + Math.abs(delta) + "，背景噪声会被压住。";
+        }
+        if (toneLevel > threshold) {
+            return "当前音调分量已越过 SQL 线 " + Math.abs(Math.round(toneLevel) - threshold) + "，应允许 CW 通过。";
+        }
+        if (noise >= threshold) {
+            return "背景噪声已经贴近或越过 SQL 线，建议继续上调 SQL。";
+        }
+        return "当前总体输入已越过 SQL 线 " + Math.abs(delta) + "，若不是 CW 可再提高 SQL。";
+    }
+
     private String renderStatusMain(
             @Nullable RxSessionSnapshot snapshot,
             @Nullable RigProfile profile,
@@ -268,7 +382,7 @@ public final class SpectrumActivity extends AppCompatActivity {
         if (snapshot == null && latestSpectrum == null) {
             return "IDLE  |  " + route;
         }
-        int wpm = snapshot == null ? 0 : snapshot.estimatedWpm();
+        int wpm = resolveDisplayWpm(snapshot);
         int tone = latestSpectrum != null
                 ? positiveOrFallback(latestSpectrum.finalAdoptedToneHz(), latestSpectrum.trackedToneHz())
                 : resolveBestTone(snapshot);
@@ -292,17 +406,33 @@ public final class SpectrumActivity extends AppCompatActivity {
     }
 
     private String renderSummary(@Nullable RxSessionSnapshot snapshot, @Nullable SpectrumSnapshotData latestSpectrum) {
+        String baseSummary;
         if (snapshot == null && latestSpectrum == null) {
-            return "PEAK -  |  TRK -  |  FIN -";
-        }
-        if (latestSpectrum != null) {
-            return (latestSpectrum.syntheticFallback() ? "SYNTH  |  " : "LIVE  |  ")
+            baseSummary = "PEAK -  |  TRK -  |  FIN -";
+        } else if (latestSpectrum != null) {
+            baseSummary = (latestSpectrum.syntheticFallback() ? "SYNTH  |  " : "LIVE  |  ")
                     + "PEAK " + positiveOrDash(latestSpectrum.peakFrequencyHz()) + "Hz"
                     + "  |  TRK " + positiveOrDash(latestSpectrum.trackedToneHz())
                     + "  |  FIN " + positiveOrDash(latestSpectrum.finalAdoptedToneHz());
+        } else {
+            baseSummary = "PEAK -  |  TRK " + positiveOrDash(snapshot.targetToneFrequencyHz())
+                    + "  |  FIN " + positiveOrDash(snapshot.effectiveToneFrequencyHz());
         }
-        return "PEAK -  |  TRK " + positiveOrDash(snapshot.targetToneFrequencyHz())
-                + "  |  FIN " + positiveOrDash(snapshot.effectiveToneFrequencyHz());
+        String developerFrontEndSummary = renderDeveloperFrontEndSummary(snapshot);
+        if (!hasMeaningfulText(developerFrontEndSummary)) {
+            return baseSummary;
+        }
+        return baseSummary + "\nFRONT  |  " + developerFrontEndSummary;
+    }
+
+    private String renderDeveloperFrontEndSummary(@Nullable RxSessionSnapshot snapshot) {
+        if (snapshot == null
+                || developerModeStore == null
+                || !developerModeStore.isEnabled()
+                || !hasMeaningfulText(snapshot.developerFrontEndSummary())) {
+            return "";
+        }
+        return snapshot.developerFrontEndSummary();
     }
 
     private String renderDraftText(@Nullable AppOverviewSnapshot overview) {
@@ -494,6 +624,17 @@ public final class SpectrumActivity extends AppCompatActivity {
 
     private String safeValue(String value) {
         return value == null || value.trim().isEmpty() ? "-" : value.trim();
+    }
+
+    private boolean hasMeaningfulText(@Nullable String value) {
+        return value != null && !value.trim().isEmpty() && !"-".equals(value.trim());
+    }
+
+    private int resolveDisplayWpm(@Nullable RxSessionSnapshot snapshot) {
+        if (snapshot == null) {
+            return 0;
+        }
+        return snapshot.stableEstimatedWpm() > 0 ? snapshot.stableEstimatedWpm() : snapshot.estimatedWpm();
     }
 
     private String positiveOrDash(int value) {

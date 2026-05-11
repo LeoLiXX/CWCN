@@ -84,6 +84,25 @@ public final class CwAdaptiveTimingModelTest {
         assertTrue("intra=" + model.snapshot().intraGapEstimateMs(), model.snapshot().intraGapEstimateMs() <= 38L);
     }
 
+    @Test
+    public void fragmentedFastCandidatesCannotRunDotEstimateAwayInSingleBurst() {
+        CwAdaptiveTimingModel model = new CwAdaptiveTimingModel();
+
+        model.process(toneOff(48L, 48L));
+        long startingDotMs = model.snapshot().dotEstimateMs();
+
+        for (int index = 0; index < 6; index++) {
+            long toneOffTimestampMs = 96L + (index * 32L);
+            model.process(toneOn(toneOffTimestampMs - 12L));
+            model.process(toneOff(toneOffTimestampMs, 12L));
+        }
+
+        CwTimingSnapshot snapshot = model.snapshot();
+        assertTrue("start=" + startingDotMs + " end=" + snapshot.dotEstimateMs(),
+                snapshot.dotEstimateMs() >= Math.round(startingDotMs * 0.78d));
+        assertTrue("wpm=" + snapshot.estimatedWpm(), snapshot.estimatedWpm() <= 34);
+    }
+
     private void setBooleanField(CwAdaptiveTimingModel model, String name, boolean value) throws Exception {
         Field field = CwAdaptiveTimingModel.class.getDeclaredField(name);
         field.setAccessible(true);

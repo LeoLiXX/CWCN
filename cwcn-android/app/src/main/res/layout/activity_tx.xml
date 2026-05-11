@@ -16,7 +16,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="TX Console"
+            android:text="TX 开发控制台"
             android:textColor="@color/cwcn_title"
             android:textSize="30sp"
             android:textStyle="bold" />
@@ -25,7 +25,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Minimal text-to-CW sidetone loop for plan preview, presets, backend routing, and progress observation."
+            android:text="这里用于开发阶段的发射链路验证，包括计划预览、预置文本、后端路由与进度观察。"
             android:textColor="@color/cwcn_subtitle"
             android:textSize="15sp" />
 
@@ -34,7 +34,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Back" />
+            android:text="返回" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -84,7 +84,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="USB Keyer Route"
+                    android:text="USB 键控路由"
                     android:textColor="@color/cwcn_title"
                     android:textSize="15sp"
                     android:textStyle="bold" />
@@ -119,7 +119,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Refresh USB Devices" />
+                    android:text="刷新 USB 设备" />
 
                 <LinearLayout
                     android:id="@+id/mockUsbScenarioPanel"
@@ -132,7 +132,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Mock bench scenario"
+                        android:text="Mock 场景"
                         android:textColor="@color/cwcn_subtitle"
                         android:textSize="12sp" />
 
@@ -166,7 +166,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Request USB Permission" />
+                    android:text="请求 USB 权限" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -179,7 +179,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Load DIT Test" />
+                        android:text="载入 DIT 验证" />
 
                     <Button
                         android:id="@+id/loadUsbPatternTestButton"
@@ -187,7 +187,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp"
                         android:layout_weight="1"
-                        android:text="Load VVV Test" />
+                        android:text="载入 VVV 验证" />
                 </LinearLayout>
 
                 <Button
@@ -195,7 +195,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Release Key Line" />
+                    android:text="释放键控线" />
             </LinearLayout>
 
             <EditText

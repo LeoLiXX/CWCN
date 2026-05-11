@@ -3,7 +3,9 @@ package org.bi9clt.cwcn.core.audio;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.media.audiofx.AcousticEchoCanceler;
@@ -12,13 +14,14 @@ import android.media.audiofx.NoiseSuppressor;
 import android.os.Build;
 import android.os.SystemClock;
 
+import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import org.bi9clt.cwcn.core.app.RxInputSettingsStore;
 
 import java.util.Arrays;
 
-public final class MicrophoneRxAudioSource implements RxAudioSource {
+public final class UsbExternalRxAudioSource implements RxAudioSource {
     private static final int SAMPLE_RATE_HZ = 16000;
     private static final int CHANNEL_COUNT = 1;
     private static final int FRAME_SIZE_SAMPLES = 256;
@@ -36,8 +39,9 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
     private NoiseSuppressor noiseSuppressor;
     private AutomaticGainControl automaticGainControl;
     private AcousticEchoCanceler acousticEchoCanceler;
+    private String activeDeviceLabel = "USB External Audio";
 
-    public MicrophoneRxAudioSource(Context context, RxInputSettingsStore.MicSourceMode sourceMode) {
+    public UsbExternalRxAudioSource(Context context, RxInputSettingsStore.MicSourceMode sourceMode) {
         this.appContext = context.getApplicationContext();
         this.sourceMode = sourceMode == null
                 ? RxInputSettingsStore.MicSourceMode.UNPROCESSED
@@ -46,17 +50,17 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
 
     @Override
     public String id() {
-        return "phone-microphone";
+        return "usb-external-audio";
     }
 
     @Override
     public String displayName() {
-        return "Phone Microphone (" + sourceMode.displayName() + ")";
+        return activeDeviceLabel + " (" + sourceMode.displayName() + ")";
     }
 
     @Override
     public boolean isAvailable() {
-        return appContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_MICROPHONE);
+        return findUsbInputDevice() != null;
     }
 
     @Override
@@ -74,15 +78,15 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
         if (state == State.RUNNING || state == State.STARTING) {
             return;
         }
-
-        if (!isAvailable()) {
-            setErrorState("设备没有可用麦克风。", null);
+        if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            setErrorState("还没有授予录音权限。", null);
             return;
         }
 
-        if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-            setErrorState("还没有授予麦克风权限。", null);
+        AudioDeviceInfo usbDevice = findUsbInputDevice();
+        if (usbDevice == null) {
+            setErrorState("没有检测到可用的 USB 音频输入设备。", null);
             return;
         }
 
@@ -97,29 +101,43 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
         }
 
         int bufferSize = Math.max(minBufferSize, FRAME_SIZE_SAMPLES * 4);
+        activeDeviceLabel = buildDeviceLabel(usbDevice);
         try {
-            audioRecord = new AudioRecord(
-                    resolveAudioSource(),
-                    SAMPLE_RATE_HZ,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    bufferSize
-            );
+            AudioFormat audioFormat = new AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(SAMPLE_RATE_HZ)
+                    .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                    .build();
+            audioRecord = new AudioRecord.Builder()
+                    .setAudioSource(resolveAudioSource())
+                    .setAudioFormat(audioFormat)
+                    .setBufferSizeInBytes(bufferSize)
+                    .build();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                audioRecord.setPreferredDevice(usbDevice);
+            }
         } catch (IllegalArgumentException exception) {
-            setErrorState("AudioRecord 初始化失败。", exception);
+            setErrorState("USB 音频输入初始化失败。", exception);
             return;
         }
 
         if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
-            setErrorState("AudioRecord 未能正常初始化。", null);
+            setErrorState("USB 音频输入未能正常初始化。", null);
             releaseRecorder();
             return;
         }
 
+        AudioDeviceInfo routedDevice = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? audioRecord.getRoutedDevice()
+                : null;
+        if (routedDevice != null && isUsbInputDevice(routedDevice)) {
+            activeDeviceLabel = buildDeviceLabel(routedDevice);
+        }
+
         attachMinimalAudioEffectsPolicy();
         running = true;
-        updateState(State.STARTING, "正在准备麦克风采集。");
-        workerThread = new Thread(this::captureLoop, "cwcn-mic-source");
+        updateState(State.STARTING, "正在准备外部音频输入。");
+        workerThread = new Thread(this::captureLoop, "cwcn-usb-rx-source");
         workerThread.start();
     }
 
@@ -129,11 +147,11 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
             return;
         }
         running = false;
-        updateState(State.STOPPING, "正在停止采集。");
+        updateState(State.STOPPING, "正在停止外部音频输入。");
         stopRecorderSafely();
         joinWorkerThread();
         releaseRecorder();
-        updateState(State.IDLE, "采集已停止。");
+        updateState(State.IDLE, "外部音频输入已停止。");
     }
 
     @Override
@@ -144,7 +162,13 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
     private void captureLoop() {
         try {
             audioRecord.startRecording();
-            updateState(State.RUNNING, "麦克风采集已启动。");
+            AudioDeviceInfo routedDevice = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                    ? audioRecord.getRoutedDevice()
+                    : null;
+            if (routedDevice != null && isUsbInputDevice(routedDevice)) {
+                activeDeviceLabel = buildDeviceLabel(routedDevice);
+            }
+            updateState(State.RUNNING, activeDeviceLabel + " 已启动。");
 
             short[] readBuffer = new short[FRAME_SIZE_SAMPLES];
             while (running) {
@@ -183,12 +207,12 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
                 }
             }
         } catch (IllegalStateException exception) {
-            setErrorState("麦克风采集过程中发生错误。", exception);
+            setErrorState("外部音频输入过程中发生错误。", exception);
         } finally {
             stopRecorderSafely();
             releaseRecorder();
             if (state != State.ERROR) {
-                updateState(State.IDLE, "采集线程已退出。");
+                updateState(State.IDLE, "外部音频输入线程已退出。");
             }
         }
     }
@@ -201,7 +225,7 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
         }
     }
 
-    private void setErrorState(String message, Throwable throwable) {
+    private void setErrorState(String message, @Nullable Throwable throwable) {
         state = State.ERROR;
         Callback currentCallback = callback;
         if (currentCallback != null) {
@@ -256,6 +280,47 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
             default:
                 return MediaRecorder.AudioSource.MIC;
         }
+    }
+
+    @Nullable
+    private AudioDeviceInfo findUsbInputDevice() {
+        AudioManager audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) {
+            return null;
+        }
+        AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
+        AudioDeviceInfo headsetCandidate = null;
+        for (AudioDeviceInfo device : devices) {
+            if (!device.isSource()) {
+                continue;
+            }
+            if (device.getType() == AudioDeviceInfo.TYPE_USB_DEVICE) {
+                return device;
+            }
+            if (device.getType() == AudioDeviceInfo.TYPE_USB_HEADSET && headsetCandidate == null) {
+                headsetCandidate = device;
+            }
+        }
+        return headsetCandidate;
+    }
+
+    private boolean isUsbInputDevice(@Nullable AudioDeviceInfo device) {
+        if (device == null || !device.isSource()) {
+            return false;
+        }
+        int type = device.getType();
+        return type == AudioDeviceInfo.TYPE_USB_DEVICE || type == AudioDeviceInfo.TYPE_USB_HEADSET;
+    }
+
+    private String buildDeviceLabel(@Nullable AudioDeviceInfo device) {
+        if (device == null) {
+            return "USB External Audio";
+        }
+        CharSequence productName = device.getProductName();
+        if (productName == null || productName.toString().trim().isEmpty()) {
+            return "USB External Audio";
+        }
+        return "USB " + productName.toString().trim();
     }
 
     private void attachMinimalAudioEffectsPolicy() {

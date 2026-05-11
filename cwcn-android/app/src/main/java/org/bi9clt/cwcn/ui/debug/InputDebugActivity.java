@@ -39,6 +39,7 @@ import org.bi9clt.cwcn.BuildConfig;
 import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.core.adif.CwAdifExporter;
 import org.bi9clt.cwcn.core.adif.CwAdifFileWriter;
+import org.bi9clt.cwcn.core.app.RxInputSettingsStore;
 import org.bi9clt.cwcn.core.audio.AudioFrame;
 import org.bi9clt.cwcn.core.audio.AudioInputHealthFormatter;
 import org.bi9clt.cwcn.core.audio.AudioInputHealthSnapshot;
@@ -74,6 +75,8 @@ import org.bi9clt.cwcn.core.rig.RigTransport;
 import org.bi9clt.cwcn.core.signal.CwSignalProcessor;
 import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 import org.bi9clt.cwcn.core.signal.CwToneEvent;
+import org.bi9clt.cwcn.core.spectrum.AudioSpectrumAnalyzer;
+import org.bi9clt.cwcn.core.spectrum.AudioSpectrumSnapshot;
 import org.bi9clt.cwcn.core.spectrum.SpectrumHistoryStore;
 import org.bi9clt.cwcn.core.spectrum.SpectrumSnapshotData;
 import org.bi9clt.cwcn.core.timing.CwTimingEvent;
@@ -175,7 +178,10 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 new ActivityResultContracts.OpenDocumentTree(),
                 this::handleLocalFolderPicked
         );
-        microphoneRxAudioSource = new MicrophoneRxAudioSource(this);
+        microphoneRxAudioSource = new MicrophoneRxAudioSource(
+                this,
+                RxInputSettingsStore.MicSourceMode.UNPROCESSED
+        );
         microphoneRxAudioSource.setCallback(this);
         syntheticFixtureRxAudioSource = new SyntheticFixtureRxAudioSource();
         syntheticFixtureRxAudioSource.setCallback(this);
@@ -186,6 +192,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         cwSignalProcessor = new CwSignalProcessor();
         cwSignalProcessor.setExperimentalHypothesisGuardEnabled(false);
         cwTimingModel = new CwHybridTimingModel();
+        cwTimingModel.setSeedWpm(18);
         cwDecoder = new CwDecoder();
         cwInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
         qsoInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.SEMANTIC_RECOVERY);
@@ -347,7 +354,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             return;
         }
         binding.toggleHypothesisGuardButton.setText(
-                hypothesisGuardExperimentEnabled ? "Hyp Guard ON" : "Hyp Guard OFF"
+                hypothesisGuardExperimentEnabled
+                        ? "前端实验开关：开启"
+                        : "前端实验开关：关闭"
         );
     }
 
@@ -463,8 +472,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private void updateDebugPanelVisibility() {
         int detailedVisibility = detailedPanelsVisible ? View.VISIBLE : View.GONE;
         binding.toggleDebugDetailsButton.setText(detailedPanelsVisible
-                ? "Hide Detailed Panels"
-                : "Show Detailed Panels");
+                ? "收起深度诊断面板"
+                : "展开深度诊断面板");
         binding.deviceStatusPanel.setVisibility(detailedVisibility);
         binding.adifPanel.setVisibility(View.GONE);
         binding.qsoPanel.setVisibility(View.GONE);
@@ -474,6 +483,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.capturePanel.setVisibility(detailedVisibility);
         binding.signalPanel.setVisibility(detailedVisibility);
         binding.modulePanel.setVisibility(detailedVisibility);
+        binding.toggleHypothesisGuardButton.setVisibility(detailedVisibility);
+        binding.runBatchAnalysisButton.setVisibility(detailedVisibility);
+        binding.batchRunStatusText.setVisibility(detailedVisibility);
     }
 
     private String renderRxFocusStatus(InputSourceOption selectedOption, RxAudioSource selectedSource) {
@@ -545,108 +557,111 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private String renderSelectedSourceStatus(InputSourceOption option, CwFixtureScenario scenario) {
-        StringBuilder builder = new StringBuilder(option.description());
+        CwSignalSnapshot signalSnapshot = cwSignalProcessor.snapshot();
+        StringBuilder builder = new StringBuilder()
+                .append("输入说明：")
+                .append(option.description());
         RxAudioSource source = sourceForOption(option);
         if (source != null) {
-            builder.append("\nSource: ").append(source.displayName());
+            builder.append("\n实际来源：")
+                    .append(source.displayName())
+                    .append(" | 状态：")
+                    .append(source.state().displayName());
         }
         if (option == InputSourceOption.SYNTHETIC_FIXTURE && scenario != null) {
-            builder.append("\nFixture: ").append(scenario.displayName())
+            builder.append("\n夹具：").append(scenario.displayName())
                     .append(" [").append(scenario.id()).append("]")
-                    .append("\nMessage: ").append(scenario.message())
-                    .append("\nScript parts: ").append(scenario.messageParts().size());
+                    .append("\n报文：").append(scenario.message())
+                    .append("\n画像：")
+                    .append(scenario.wpm()).append(" WPM，")
+                    .append(scenario.toneFrequencyHz()).append(" Hz，噪声 ")
+                    .append(scenario.noiseAmplitude())
+                    .append("\n分段数：").append(scenario.messageParts().size());
             if (scenario.messageParts().size() > 1) {
-                builder.append(" (gap ").append(scenario.interMessageGapMs()).append(" ms)");
+                builder.append("（段间隔 ")
+                        .append(scenario.interMessageGapMs())
+                        .append(" ms）");
             }
-            builder.append("\nProfile: ")
-                    .append(scenario.wpm()).append(" WPM, ")
-                    .append(scenario.toneFrequencyHz()).append(" Hz, noise ")
-                    .append(scenario.noiseAmplitude());
-            if (scenario.interfererToneAmplitude() > 0 && scenario.interfererToneFrequencyHz() > 0) {
-                builder.append(", interferer ")
-                        .append(scenario.interfererToneFrequencyHz())
-                        .append(" Hz @ ")
-                        .append(scenario.interfererToneAmplitude());
-                if (Math.abs(scenario.interfererToneDriftHz()) > 0.0d) {
-                    builder.append(" (drift ")
-                            .append(String.format(Locale.US, "%+.1f", scenario.interfererToneDriftHz()))
-                            .append(" Hz)");
-                }
-            }
-            if (!scenario.additionalInterferers().isEmpty()) {
-                for (CwFixtureScenario.ContinuousInterfererProfile interferer : scenario.additionalInterferers()) {
-                    builder.append(", extra ")
-                            .append(interferer.toneFrequencyHz())
+            if (detailedPanelsVisible) {
+                if (scenario.interfererToneAmplitude() > 0 && scenario.interfererToneFrequencyHz() > 0) {
+                    builder.append("\n主干扰：")
+                            .append(scenario.interfererToneFrequencyHz())
                             .append(" Hz @ ")
-                            .append(interferer.toneAmplitude());
-                    if (Math.abs(interferer.toneDriftHz()) > 0.0d) {
-                        builder.append(" (drift ")
-                                .append(String.format(Locale.US, "%+.1f", interferer.toneDriftHz()))
-                                .append(" Hz)");
-                    }
-                    if (interferer.isBursting()) {
-                        builder.append(" [burst ")
-                                .append(interferer.burstOnMs())
-                                .append("/")
-                                .append(interferer.burstOffMs())
-                                .append(" ms");
-                        if (interferer.burstOffsetMs() > 0) {
-                            builder.append(", offset ")
-                                    .append(interferer.burstOffsetMs())
-                                    .append(" ms");
-                        }
-                        if (interferer.hasBurstWobble()) {
-                            builder.append(", wobble ")
-                                    .append(Math.round(interferer.burstWobbleDepth() * 100.0d))
-                                    .append("%/")
-                                    .append(interferer.burstWobbleCycleMs())
-                                    .append(" ms");
-                        }
-                        builder.append("]");
+                            .append(scenario.interfererToneAmplitude());
+                    if (Math.abs(scenario.interfererToneDriftHz()) > 0.0d) {
+                        builder.append("（漂移 ")
+                                .append(String.format(Locale.US, "%+.1f", scenario.interfererToneDriftHz()))
+                                .append(" Hz）");
                     }
                 }
+                if (!scenario.additionalInterferers().isEmpty()) {
+                    builder.append("\n额外干扰数：").append(scenario.additionalInterferers().size());
+                }
+                if (scenario.qsbDepth() > 0.0d) {
+                    builder.append("\nQSB：")
+                            .append(Math.round(scenario.qsbDepth() * 100.0d))
+                            .append("% / ")
+                            .append(scenario.qsbCycleMs())
+                            .append(" ms");
+                }
+                if (Math.abs(scenario.toneDriftHz()) > 0.0d) {
+                    builder.append("\n主音漂移：")
+                            .append(String.format(Locale.US, "%+.1f", scenario.toneDriftHz()))
+                            .append(" Hz");
+                }
+                if (scenario.riseRampMs() > 0 || scenario.fallRampMs() > 0) {
+                    builder.append("\n边沿：")
+                            .append(scenario.riseRampMs())
+                            .append("/")
+                            .append(scenario.fallRampMs())
+                            .append(" ms");
+                }
+                builder.append("\n时序：").append(scenario.timingProfileSummary());
+                if (scenario.expectedFrontEndQualityCode() != null) {
+                    builder.append("\n期望前端：")
+                            .append(scenario.expectedFrontEndQualityCode())
+                            .append("\n实际前端：")
+                            .append(renderObservedFrontEndStatus(scenario.expectedFrontEndQualityCode()));
+                }
+                builder.append("\n备注：").append(scenario.notes());
             }
-            if (scenario.qsbDepth() > 0.0d) {
-                builder.append(", QSB ")
-                        .append(Math.round(scenario.qsbDepth() * 100.0d))
-                        .append("% / ")
-                        .append(scenario.qsbCycleMs())
-                        .append(" ms");
-            }
-            if (Math.abs(scenario.toneDriftHz()) > 0.0d) {
-                builder.append(", drift ")
-                        .append(String.format(Locale.US, "%+.1f", scenario.toneDriftHz()))
-                        .append(" Hz");
-            }
-            if (scenario.riseRampMs() > 0 || scenario.fallRampMs() > 0) {
-                builder.append(", edge ")
-                        .append(scenario.riseRampMs())
-                        .append("/")
-                        .append(scenario.fallRampMs())
-                        .append(" ms");
-            }
-            builder.append("\nTiming: ").append(scenario.timingProfileSummary());
-            if (scenario.expectedFrontEndQualityCode() != null) {
-                builder.append("\nExpected front-end: ")
-                        .append(scenario.expectedFrontEndQualityCode())
-                        .append("\nObserved front-end: ")
-                        .append(renderObservedFrontEndStatus(scenario.expectedFrontEndQualityCode()));
-            }
-            builder.append("\nNotes: ").append(scenario.notes());
         }
         if (option == InputSourceOption.LOCAL_FILE_REPLAY) {
-            builder.append("\n").append(localFileRxAudioSource.selectionSummary());
+            builder.append("\n文件：").append(localFileRxAudioSource.selectionSummary());
         }
         if (option == InputSourceOption.PHONE_MICROPHONE) {
-            builder.append("\n").append(renderMicrophoneInputHealth());
-            builder.append("\n").append(renderMicrophoneToneWatch());
+            builder.append("\n输入健康：")
+                    .append(AudioInputHealthFormatter.summaryLabel(audioInputHealthTracker.snapshot()));
+            builder.append("\n前端状态：")
+                    .append(CwFrontEndHealthClassifier.qualityCode(signalSnapshot))
+                    .append(" / ")
+                    .append(CwFrontEndHealthClassifier.bottleneckCode(signalSnapshot))
+                    .append(" - ")
+                    .append(CwFrontEndHealthClassifier.qualityLabel(signalSnapshot));
+            builder.append("\n音调跟踪：").append(renderTrackedToneQuickSummary(signalSnapshot));
         }
-        builder.append("\nPreferred Tone: ")
-                .append(cwSignalProcessor.snapshot().preferredToneFrequencyHz())
+        builder.append("\n参考音调：")
+                .append(signalSnapshot.preferredToneFrequencyHz())
                 .append(" Hz")
                 .append("\n")
                 .append(renderSourceHealthCoach(option, scenario));
         return builder.toString();
+    }
+
+    private String renderTrackedToneQuickSummary(CwSignalSnapshot snapshot) {
+        if (snapshot == null) {
+            return "尚无前端快照。";
+        }
+        int offsetHz = snapshot.targetToneFrequencyHz() - snapshot.preferredToneFrequencyHz();
+        return (snapshot.targetToneLocked() ? "已锁定" : "搜索中")
+                + "，当前 "
+                + snapshot.targetToneFrequencyHz()
+                + " Hz（"
+                + String.format(Locale.US, "%+d", offsetHz)
+                + " Hz）"
+                + "，近窗口锁定 "
+                + Math.round(snapshot.recentLockedFrameRatio() * 100.0d)
+                + "%";
     }
 
     private String renderObservedFrontEndStatus(@Nullable String expectedQualityCode) {
@@ -661,9 +676,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 .append(CwFrontEndHealthClassifier.qualityLabel(snapshot));
         if (expectedQualityCode != null) {
             if (expectedQualityCode.equals(observedQualityCode)) {
-                builder.append(" (matches expected)");
+                builder.append("（符合预期）");
             } else {
-                builder.append(" (expected ").append(expectedQualityCode).append(")");
+                builder.append("（期望 ").append(expectedQualityCode).append("）");
             }
         }
         return builder.toString();
@@ -674,82 +689,82 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         int trackingErrorHz = CwFrontEndHealthClassifier.trackingErrorHz(snapshot);
         String offsetLabel;
         if (Math.abs(trackingErrorHz) <= 15) {
-            offsetLabel = "near target";
+            offsetLabel = "接近参考音调";
         } else if (trackingErrorHz > 0) {
-            offsetLabel = "above preferred";
+            offsetLabel = "高于参考音调";
         } else {
-            offsetLabel = "below preferred";
+            offsetLabel = "低于参考音调";
         }
-        return "Mic Front-End: "
+        return "麦克风前端："
                 + CwFrontEndHealthClassifier.qualityCode(snapshot)
                 + " / "
                 + CwFrontEndHealthClassifier.bottleneckCode(snapshot)
                 + " - "
                 + CwFrontEndHealthClassifier.qualityLabel(snapshot)
-                + "\nMic Reason: "
+                + "\n判断原因："
                 + CwFrontEndHealthClassifier.reason(snapshot)
-                + "\nMic Trend: "
+                + "\n当前趋势："
                 + renderMicrophoneTrend(snapshot)
-                + "\nMic Tone Watch: "
-                + (snapshot.targetToneLocked() ? "LOCKED" : "SEARCH")
-                + " | tracked "
+                + "\n音调跟踪："
+                + (snapshot.targetToneLocked() ? "已锁定" : "搜索中")
+                + " | 当前 "
                 + snapshot.targetToneFrequencyHz()
                 + " Hz ("
                 + String.format(Locale.US, "%+d", trackingErrorHz)
                 + " Hz, "
                 + offsetLabel
                 + ")"
-                + "\nMic confidence: dominance "
+                + "\n锁定置信：主导度 "
                 + Math.round(snapshot.toneDominanceRatio() * 100.0d)
-                + "%, tone RMS "
+                + "%，音调 RMS "
                 + String.format(Locale.US, "%.1f", snapshot.lastToneRmsAmplitude())
-                + ", isolation "
+                + "，隔离度 "
                 + Math.round(snapshot.narrowbandIsolationRatio() * 100.0d)
                 + "%"
-                + "\nMic run stats: peak isolation "
+                + "\n运行统计：峰值隔离度 "
                 + Math.round(snapshot.peakNarrowbandIsolationRatio() * 100.0d)
-                + "%, lock coverage "
+                + "%，锁定覆盖率 "
                 + Math.round(snapshot.lockedFrameRatio() * 100.0d)
                 + "%"
-                + "\nMic recent window: lock "
+                + "\n最近窗口：锁定 "
                 + Math.round(snapshot.recentLockedFrameRatio() * 100.0d)
-                + "%, search "
+                + "%，搜索 "
                 + Math.round(snapshot.recentSearchFrameRatio() * 100.0d)
-                + "%, active unlock "
+                + "%，有音未锁 "
                 + Math.round(snapshot.recentActiveUnlockedFrameRatio() * 100.0d)
                 + "%"
-                + "\nMic recent alignment: near-target lock "
+                + "\n最近对准：近目标锁定 "
                 + Math.round(snapshot.recentNearTargetLockedFrameRatio() * 100.0d)
-                + "%, off-target lock "
+                + "%，偏目标锁定 "
                 + Math.round(snapshot.recentFarOffTargetLockedFrameRatio() * 100.0d)
                 + "%"
-                + "\nMic recent trend: "
+                + "\n前端走势："
                 + CwFrontEndHealthClassifier.recentTrendLabel(snapshot)
-                + "\nMic history: "
+                + "\n历史轨迹："
                 + renderRecentFrontEndHistory(snapshot)
-                + "\nMic active leaders: "
+                + "\n当前主峰候选："
                 + cwSignalProcessor.debugActiveLeaderCompactSummary()
-                + "\nMic release view: active unlock "
+                + "\n释放观察：有音未锁 "
                 + Math.round(snapshot.toneActiveUnlockedFrameRatio() * 100.0d)
-                + "%, worst gap "
+                + "%，最坏连续段 "
                 + snapshot.maxConsecutiveToneActiveUnlockedFrames()
-                + " frame(s)";
+                + " 帧";
     }
 
     private String renderMicrophoneInputHealth() {
         AudioInputHealthSnapshot snapshot = audioInputHealthTracker.snapshot();
-        return "Mic Input: "
+        return "麦克风输入："
                 + AudioInputHealthFormatter.summaryLabel(snapshot)
-                + "\nMic input window: "
+                + "\n输入窗口："
                 + AudioInputHealthFormatter.compactWindowSummary(snapshot)
-                + "\nMic input detail: peak "
+                + "\n输入细节：峰值 "
                 + snapshot.lastPeakAmplitude()
-                + ", RMS "
+                + "，RMS "
                 + String.format(Locale.US, "%.1f", snapshot.lastRmsAmplitude())
-                + ", clipped "
+                + "，削顶 "
                 + Math.round(snapshot.lastClippedSampleRatio() * 100.0d)
                 + "%"
-                + "\nMic input history: "
+                + "\n输入历史："
                 + AudioInputHealthFormatter.stateHistory(snapshot);
     }
 
@@ -759,7 +774,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     ) {
         CwSignalSnapshot snapshot = cwSignalProcessor.snapshot();
         StringBuilder builder = new StringBuilder();
-        builder.append("Focus: ");
+        builder.append("当前建议：");
         if (option == InputSourceOption.PHONE_MICROPHONE) {
             builder.append(renderMicrophoneHealthCoach(snapshot));
         } else if (option == InputSourceOption.LOCAL_FILE_REPLAY) {
@@ -790,12 +805,12 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         if (inputSnapshot.recentClippingFrameRatio() >= 0.10d
                 || inputSnapshot.recentQuietFrameRatio() >= 0.60d
                 || inputSnapshot.recentHotFrameRatio() >= 0.50d) {
-            return "Live mic check: " + AudioInputHealthFormatter.coachHint(inputSnapshot);
+            return "真机麦克风： " + AudioInputHealthFormatter.coachHint(inputSnapshot);
         }
         if (!CwFrontEndHealthClassifier.hasFrontEndHistory(snapshot)) {
-            return "Start the mic source, key a steady tone near the preferred pitch, and watch for the history row to leave idle/search.";
+            return "先启动麦克风输入，在参考音调附近给一个稳定单音，观察历史轨迹是否脱离 idle/search。";
         }
-        return "Live mic check: " + CwFrontEndHealthClassifier.liveCheckHint(snapshot);
+        return "真机麦克风： " + CwFrontEndHealthClassifier.liveCheckHint(snapshot);
     }
 
     private String renderFixtureHealthCoach(
@@ -1601,7 +1616,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         }
         SpectrumSnapshotData snapshotData = SpectrumSnapshotData.fromAudioSnapshot(
                 lastSpectrumSnapshot,
-                System.currentTimeMillis()
+                System.currentTimeMillis(),
+                cwSignalProcessor == null ? null : cwSignalProcessor.snapshot()
         );
         if (snapshotData != null) {
             spectrumHistoryStore.append(snapshotData);
@@ -2542,6 +2558,10 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         }
         List<CwDecodeEvent> trailingDecodeEvents = cwDecoder.flushPendingCharacter(timestampMs);
         for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
+            if (decodeEvent.type() == CwDecodeEvent.Type.CHARACTER_DECODED
+                    && !decodeEvent.unknownCharacter()) {
+                cwTimingModel.notifyStableDecode(decodeEvent.timestampMs());
+            }
             cwInterpreter.process(decodeEvent);
             qsoInterpreter.process(decodeEvent);
             qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
@@ -2578,6 +2598,10 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             for (CwTimingEvent timingEvent : timingEvents) {
                 List<CwDecodeEvent> decodeEvents = cwDecoder.process(timingEvent);
                 for (CwDecodeEvent decodeEvent : decodeEvents) {
+                    if (decodeEvent.type() == CwDecodeEvent.Type.CHARACTER_DECODED
+                            && !decodeEvent.unknownCharacter()) {
+                        cwTimingModel.notifyStableDecode(decodeEvent.timestampMs());
+                    }
                     cwInterpreter.process(decodeEvent);
                     qsoInterpreter.process(decodeEvent);
                     qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
@@ -2618,6 +2642,10 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
         List<CwDecodeEvent> trailingDecodeEvents = cwDecoder.flushPendingCharacter(flushTimestampMs);
         for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
+            if (decodeEvent.type() == CwDecodeEvent.Type.CHARACTER_DECODED
+                    && !decodeEvent.unknownCharacter()) {
+                cwTimingModel.notifyStableDecode(decodeEvent.timestampMs());
+            }
             cwInterpreter.process(decodeEvent);
             qsoInterpreter.process(decodeEvent);
             qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
@@ -2706,6 +2734,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         RxAudioSource selectedSource = sourceForOption(selectedOption);
         CwSignalSnapshot signalSnapshot = cwSignalProcessor.snapshot();
         CwTimingSnapshot timingSnapshot = cwTimingModel.snapshot();
+        AudioInputHealthSnapshot inputHealthSnapshot = audioInputHealthTracker == null
+                ? null
+                : audioInputHealthTracker.snapshot();
         rxSessionStore.save(new RxSessionSnapshot(
                 System.currentTimeMillis(),
                 selectedOption == null ? "" : selectedOption.toString(),
@@ -2715,12 +2746,18 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 signalSnapshot.targetToneFrequencyHz(),
                 signalSnapshot.effectiveTrackedToneFrequencyHz(),
                 timingSnapshot.estimatedWpm(),
+                timingSnapshot.estimatedWpm(),
                 interpreterSnapshot == null ? "" : interpreterSnapshot.rawText(),
                 qsoSnapshot == null ? "" : qsoSnapshot.normalizedText(),
                 qsoSnapshot == null || qsoSnapshot.phase() == null ? "" : qsoSnapshot.phase().displayName(),
                 qsoSnapshot == null ? "" : qsoSnapshot.remoteCallsignCandidate(),
                 qsoSnapshot != null && qsoSnapshot.readyForDraftConfirmation(),
-                qsoSnapshot != null && qsoSnapshot.needManualReview()
+                qsoSnapshot != null && qsoSnapshot.needManualReview(),
+                inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.summaryLabel(inputHealthSnapshot),
+                inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.coachHint(inputHealthSnapshot),
+                inputHealthSnapshot != null && inputHealthSnapshot.recentHotFrameRatio() >= 0.50d,
+                inputHealthSnapshot != null && inputHealthSnapshot.recentClippingFrameRatio() >= 0.10d,
+                ""
         ));
     }
 

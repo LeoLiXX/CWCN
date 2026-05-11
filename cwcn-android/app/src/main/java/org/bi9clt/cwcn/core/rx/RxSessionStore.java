@@ -31,12 +31,18 @@ public final class RxSessionStore {
             object.put("targetToneFrequencyHz", snapshot.targetToneFrequencyHz());
             object.put("effectiveToneFrequencyHz", snapshot.effectiveToneFrequencyHz());
             object.put("estimatedWpm", snapshot.estimatedWpm());
+            object.put("stableEstimatedWpm", snapshot.stableEstimatedWpm());
             object.put("rawText", snapshot.rawText());
             object.put("normalizedText", snapshot.normalizedText());
             object.put("phaseDisplayName", snapshot.phaseDisplayName());
             object.put("remoteCallsign", snapshot.remoteCallsign());
             object.put("readyForDraftConfirmation", snapshot.readyForDraftConfirmation());
             object.put("needManualReview", snapshot.needManualReview());
+            object.put("inputHealthLabel", snapshot.inputHealthLabel());
+            object.put("inputHealthHint", snapshot.inputHealthHint());
+            object.put("inputLevelHot", snapshot.inputLevelHot());
+            object.put("inputLevelClipping", snapshot.inputLevelClipping());
+            object.put("developerFrontEndSummary", snapshot.developerFrontEndSummary());
         } catch (JSONException exception) {
             throw new IllegalStateException("Failed to serialize RX session snapshot", exception);
         }
@@ -59,12 +65,18 @@ public final class RxSessionStore {
                     object.optInt("targetToneFrequencyHz", 0),
                     object.optInt("effectiveToneFrequencyHz", 0),
                     object.optInt("estimatedWpm", 0),
+                    object.optInt("stableEstimatedWpm", object.optInt("estimatedWpm", 0)),
                     object.optString("rawText", ""),
                     object.optString("normalizedText", ""),
                     object.optString("phaseDisplayName", ""),
                     object.optString("remoteCallsign", ""),
                     object.optBoolean("readyForDraftConfirmation", false),
-                    object.optBoolean("needManualReview", false)
+                    object.optBoolean("needManualReview", false),
+                    object.optString("inputHealthLabel", ""),
+                    object.optString("inputHealthHint", ""),
+                    object.optBoolean("inputLevelHot", false),
+                    object.optBoolean("inputLevelClipping", false),
+                    object.optString("developerFrontEndSummary", "")
             );
         } catch (JSONException ignored) {
             return null;

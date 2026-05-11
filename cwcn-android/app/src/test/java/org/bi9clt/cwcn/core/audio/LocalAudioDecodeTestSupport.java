@@ -5,7 +5,10 @@ import org.bi9clt.cwcn.core.decoder.CwDecoder;
 import org.bi9clt.cwcn.core.decoder.CwDecoderSnapshot;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreter;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreterSnapshot;
+import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoStateMachine;
+import org.bi9clt.cwcn.core.rx.LiveRxToneEventStabilizer;
+import org.bi9clt.cwcn.core.rx.LiveRxWpmGuard;
 import org.bi9clt.cwcn.core.signal.CwSignalProcessor;
 import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 import org.bi9clt.cwcn.core.signal.CwToneEvent;
@@ -31,6 +34,13 @@ import java.util.stream.Stream;
 final class LocalAudioDecodeTestSupport {
     private static final int FRAME_SIZE_SAMPLES = 256;
     private static final int CLIPPING_SAMPLE_THRESHOLD = 32700;
+    private static final int DEFAULT_SQL_PERCENT = 55;
+    private static final double LIVE_CHARACTER_FLUSH_GAP_RATIO = 3.35d;
+    private static final double STABLE_DECODE_LOCKED_RATIO_MIN = 0.60d;
+    private static final double STABLE_DECODE_NEAR_TARGET_RATIO_MIN = 0.64d;
+    private static final double STABLE_DECODE_ACTIVE_UNLOCKED_RATIO_MAX = 0.24d;
+    private static final double STABLE_DECODE_TONE_DOMINANCE_MIN = 0.44d;
+    private static final double STABLE_DECODE_ISOLATION_MIN = 0.54d;
 
     private LocalAudioDecodeTestSupport() {
     }
@@ -148,6 +158,164 @@ final class LocalAudioDecodeTestSupport {
                 timingModel.debugStrategySummary(),
                 decoder.snapshot(),
                 interpreter.snapshot()
+        );
+        return new OfflineDetailedProbeResult(
+                probeResult,
+                capturedFrames,
+                capturedToneEvents,
+                capturedTimingEvents,
+                capturedDecodeEvents,
+                frameSignalTraces,
+                flushTimestampMs
+        );
+    }
+
+    static OfflineDetailedProbeResult decodeFramesDetailedLiveLike(
+            String sourceLabel,
+            List<AudioFrame> frames,
+            int preferredToneFrequencyHz,
+            int seedWpm,
+            boolean experimentalHypothesisGuardEnabled,
+            CwInterpreter.RecoveryMode recoveryMode
+    ) {
+        return decodeFramesDetailedLiveLike(
+                sourceLabel,
+                frames,
+                preferredToneFrequencyHz,
+                seedWpm,
+                DEFAULT_SQL_PERCENT,
+                experimentalHypothesisGuardEnabled,
+                recoveryMode
+        );
+    }
+
+    static OfflineDetailedProbeResult decodeFramesDetailedLiveLike(
+            String sourceLabel,
+            List<AudioFrame> frames,
+            int preferredToneFrequencyHz,
+            int seedWpm,
+            int sqlPercent,
+            boolean experimentalHypothesisGuardEnabled,
+            CwInterpreter.RecoveryMode recoveryMode
+    ) {
+        CwSignalProcessor signalProcessor = new CwSignalProcessor();
+        signalProcessor.setPreferredToneFrequencyHz(preferredToneFrequencyHz);
+        signalProcessor.setSqlPercent(sqlPercent);
+        signalProcessor.setExperimentalHypothesisGuardEnabled(experimentalHypothesisGuardEnabled);
+
+        CwHybridTimingModel timingModel = new CwHybridTimingModel();
+        timingModel.setSeedWpm(seedWpm);
+        CwDecoder decoder = new CwDecoder();
+        CwInterpreter interpreter = new CwInterpreter(recoveryMode);
+        QsoStateMachine qsoStateMachine = new QsoStateMachine();
+        AudioInputHealthTracker inputHealthTracker = new AudioInputHealthTracker();
+        LiveRxWpmGuard wpmGuard = new LiveRxWpmGuard();
+        wpmGuard.setSeedWpm(seedWpm);
+        LiveRxToneEventStabilizer toneEventStabilizer = new LiveRxToneEventStabilizer();
+
+        ArrayList<AudioFrame> capturedFrames = new ArrayList<>();
+        ArrayList<CwToneEvent> capturedToneEvents = new ArrayList<>();
+        ArrayList<CwTimingEvent> capturedTimingEvents = new ArrayList<>();
+        ArrayList<CwDecodeEvent> capturedDecodeEvents = new ArrayList<>();
+        ArrayList<FrameSignalTrace> frameSignalTraces = new ArrayList<>();
+
+        AudioFrame lastFrame = null;
+        AudioInputHealthSnapshot lastInputHealthSnapshot = null;
+        for (AudioFrame frame : frames) {
+            lastFrame = frame;
+            capturedFrames.add(frame);
+            inputHealthTracker.process(frame);
+            lastInputHealthSnapshot = inputHealthTracker.snapshot();
+
+            List<CwToneEvent> toneEvents = signalProcessor.process(frame);
+            frameSignalTraces.add(new FrameSignalTrace(frame.capturedAtMs(), signalProcessor.snapshot()));
+            for (CwToneEvent toneEvent : toneEvents) {
+                routeLiveLikeToneEvent(
+                        toneEvent,
+                        toneEvent.timestampMs(),
+                        lastInputHealthSnapshot,
+                        signalProcessor,
+                        timingModel,
+                        decoder,
+                        interpreter,
+                        qsoStateMachine,
+                        wpmGuard,
+                        toneEventStabilizer,
+                        capturedToneEvents,
+                        capturedTimingEvents,
+                        capturedDecodeEvents
+                );
+            }
+
+            long frameEndTimestampMs = estimateFrameEndTimestampMs(frame);
+            flushLiveLikeToneEventStabilizer(
+                    frameEndTimestampMs,
+                    lastInputHealthSnapshot,
+                    signalProcessor,
+                    timingModel,
+                    decoder,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    toneEventStabilizer,
+                    capturedToneEvents,
+                    capturedTimingEvents,
+                    capturedDecodeEvents
+            );
+            maybeFlushPendingCharacterDuringSilence(
+                    frame,
+                    lastInputHealthSnapshot,
+                    signalProcessor,
+                    timingModel,
+                    decoder,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    capturedDecodeEvents
+            );
+            timingModel.observeClock(frameEndTimestampMs);
+        }
+
+        long flushTimestampMs = 0L;
+        if (lastFrame != null) {
+            flushTimestampMs = estimateFrameEndTimestampMs(lastFrame);
+            flushLiveLikeToneEventStabilizer(
+                    flushTimestampMs,
+                    lastInputHealthSnapshot,
+                    signalProcessor,
+                    timingModel,
+                    decoder,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    toneEventStabilizer,
+                    capturedToneEvents,
+                    capturedTimingEvents,
+                    capturedDecodeEvents
+            );
+            flushPendingDecode(
+                    flushTimestampMs,
+                    signalProcessor,
+                    timingModel,
+                    decoder,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    capturedTimingEvents,
+                    capturedDecodeEvents
+            );
+        }
+
+        OfflineProbeResult probeResult = new OfflineProbeResult(
+                sourceLabel,
+                sanitize(decoder.snapshot().decodedText()),
+                signalProcessor.snapshot(),
+                signalProcessor.debugActiveLeaderCompactSummary(),
+                timingModel.snapshot(),
+                timingModel.debugStrategySummary(),
+                decoder.snapshot(),
+                interpreter.snapshot(),
+                qsoStateMachine.snapshot()
         );
         return new OfflineDetailedProbeResult(
                 probeResult,
@@ -278,6 +446,425 @@ final class LocalAudioDecodeTestSupport {
         }
         String normalized = text.replace('\u25A1', '?').trim();
         return normalized.isEmpty() ? "(empty)" : normalized;
+    }
+
+    private static void routeLiveLikeToneEvent(
+            CwToneEvent toneEvent,
+            long nowTimestampMs,
+            AudioInputHealthSnapshot inputHealthSnapshot,
+            CwSignalProcessor signalProcessor,
+            CwHybridTimingModel timingModel,
+            CwDecoder decoder,
+            CwInterpreter interpreter,
+            QsoStateMachine qsoStateMachine,
+            LiveRxWpmGuard wpmGuard,
+            LiveRxToneEventStabilizer toneEventStabilizer,
+            List<CwToneEvent> capturedToneEvents,
+            List<CwTimingEvent> capturedTimingEvents,
+            List<CwDecodeEvent> capturedDecodeEvents
+    ) {
+        if (toneEvent == null) {
+            return;
+        }
+        CwSignalSnapshot currentSignalSnapshot = signalProcessor.snapshot();
+        CwTimingSnapshot currentTimingSnapshot = timingModel.rawSnapshot();
+        long referenceDotEstimateMs = resolveReferenceDotEstimateMs(
+                currentSignalSnapshot,
+                currentTimingSnapshot,
+                nowTimestampMs,
+                wpmGuard
+        );
+        List<CwToneEvent> stabilizedEvents = toneEventStabilizer.process(
+                toneEvent,
+                currentSignalSnapshot,
+                inputHealthSnapshot,
+                referenceDotEstimateMs
+        );
+        for (CwToneEvent stabilizedEvent : stabilizedEvents) {
+            dispatchLiveLikeToneEvent(
+                    stabilizedEvent,
+                    stabilizedEvent.timestampMs(),
+                    inputHealthSnapshot,
+                    signalProcessor,
+                    timingModel,
+                    decoder,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    toneEventStabilizer,
+                    capturedToneEvents,
+                    capturedTimingEvents,
+                    capturedDecodeEvents
+            );
+        }
+    }
+
+    private static void flushLiveLikeToneEventStabilizer(
+            long nowTimestampMs,
+            AudioInputHealthSnapshot inputHealthSnapshot,
+            CwSignalProcessor signalProcessor,
+            CwHybridTimingModel timingModel,
+            CwDecoder decoder,
+            CwInterpreter interpreter,
+            QsoStateMachine qsoStateMachine,
+            LiveRxWpmGuard wpmGuard,
+            LiveRxToneEventStabilizer toneEventStabilizer,
+            List<CwToneEvent> capturedToneEvents,
+            List<CwTimingEvent> capturedTimingEvents,
+            List<CwDecodeEvent> capturedDecodeEvents
+    ) {
+        List<CwToneEvent> stabilizedEvents = toneEventStabilizer.flush(nowTimestampMs);
+        for (CwToneEvent stabilizedEvent : stabilizedEvents) {
+            dispatchLiveLikeToneEvent(
+                    stabilizedEvent,
+                    nowTimestampMs,
+                    inputHealthSnapshot,
+                    signalProcessor,
+                    timingModel,
+                    decoder,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    toneEventStabilizer,
+                    capturedToneEvents,
+                    capturedTimingEvents,
+                    capturedDecodeEvents
+            );
+        }
+    }
+
+    private static void dispatchLiveLikeToneEvent(
+            CwToneEvent toneEvent,
+            long nowTimestampMs,
+            AudioInputHealthSnapshot inputHealthSnapshot,
+            CwSignalProcessor signalProcessor,
+            CwHybridTimingModel timingModel,
+            CwDecoder decoder,
+            CwInterpreter interpreter,
+            QsoStateMachine qsoStateMachine,
+            LiveRxWpmGuard wpmGuard,
+            LiveRxToneEventStabilizer toneEventStabilizer,
+            List<CwToneEvent> capturedToneEvents,
+            List<CwTimingEvent> capturedTimingEvents,
+            List<CwDecodeEvent> capturedDecodeEvents
+    ) {
+        if (toneEvent == null) {
+            return;
+        }
+        CwSignalSnapshot signalSnapshot = signalProcessor.snapshot();
+        CwTimingSnapshot timingSnapshot = timingModel.rawSnapshot();
+        long referenceDotEstimateMs = resolveReferenceDotEstimateMs(
+                signalSnapshot,
+                timingSnapshot,
+                nowTimestampMs,
+                wpmGuard
+        );
+        if (referenceDotEstimateMs > 0L
+                && toneEventStabilizer.shouldSuppressShortTone(
+                toneEvent,
+                signalSnapshot,
+                inputHealthSnapshot,
+                referenceDotEstimateMs
+        )) {
+            return;
+        }
+
+        CwSignalSnapshot currentSignalSnapshot = signalProcessor.snapshot();
+        CwTimingSnapshot currentTimingSnapshot = timingModel.rawSnapshot();
+        boolean allowTimingLearning = shouldAllowTimingLearningForEvent(
+                toneEvent,
+                currentSignalSnapshot,
+                currentTimingSnapshot,
+                nowTimestampMs,
+                wpmGuard
+        );
+        capturedToneEvents.add(toneEvent);
+        List<CwTimingEvent> timingEvents = timingModel.process(toneEvent, allowTimingLearning);
+        currentSignalSnapshot = signalProcessor.snapshot();
+        currentTimingSnapshot = timingModel.rawSnapshot();
+        for (CwTimingEvent timingEvent : timingEvents) {
+            CwTimingEvent adaptedTimingEvent = wpmGuard.adaptTimingEvent(
+                    timingEvent,
+                    currentSignalSnapshot,
+                    currentTimingSnapshot,
+                    nowTimestampMs
+            );
+            processLiveLikeTimingEvent(
+                    adaptedTimingEvent,
+                    signalProcessor,
+                    timingModel,
+                    decoder,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    capturedTimingEvents,
+                    capturedDecodeEvents
+            );
+        }
+    }
+
+    private static void processLiveLikeTimingEvent(
+            CwTimingEvent timingEvent,
+            CwSignalProcessor signalProcessor,
+            CwHybridTimingModel timingModel,
+            CwDecoder decoder,
+            CwInterpreter interpreter,
+            QsoStateMachine qsoStateMachine,
+            LiveRxWpmGuard wpmGuard,
+            List<CwTimingEvent> capturedTimingEvents,
+            List<CwDecodeEvent> capturedDecodeEvents
+    ) {
+        if (timingEvent == null) {
+            return;
+        }
+        capturedTimingEvents.add(timingEvent);
+        List<CwDecodeEvent> decodeEvents = decoder.process(timingEvent);
+        for (CwDecodeEvent decodeEvent : decodeEvents) {
+            processLiveLikeDecodeEvent(
+                    decodeEvent,
+                    signalProcessor,
+                    timingModel,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    capturedDecodeEvents
+            );
+        }
+    }
+
+    private static void processLiveLikeDecodeEvent(
+            CwDecodeEvent decodeEvent,
+            CwSignalProcessor signalProcessor,
+            CwHybridTimingModel timingModel,
+            CwInterpreter interpreter,
+            QsoStateMachine qsoStateMachine,
+            LiveRxWpmGuard wpmGuard,
+            List<CwDecodeEvent> capturedDecodeEvents
+    ) {
+        if (decodeEvent == null) {
+            return;
+        }
+        if (shouldTreatAsStableDecode(
+                decodeEvent,
+                signalProcessor.snapshot(),
+                timingModel.rawSnapshot(),
+                wpmGuard
+        )) {
+            timingModel.notifyStableDecode(decodeEvent.timestampMs());
+        }
+        if (decodeEvent.type() == CwDecodeEvent.Type.CHARACTER_DECODED) {
+            wpmGuard.noteDecodedCharacter(
+                    decodeEvent.unknownCharacter(),
+                    signalProcessor.snapshot(),
+                    timingModel.rawSnapshot(),
+                    decodeEvent.timestampMs()
+            );
+        }
+        interpreter.process(decodeEvent);
+        qsoStateMachine.process(interpreter.snapshot(), decodeEvent.timestampMs());
+        capturedDecodeEvents.add(decodeEvent);
+    }
+
+    private static void maybeFlushPendingCharacterDuringSilence(
+            AudioFrame frame,
+            AudioInputHealthSnapshot inputHealthSnapshot,
+            CwSignalProcessor signalProcessor,
+            CwHybridTimingModel timingModel,
+            CwDecoder decoder,
+            CwInterpreter interpreter,
+            QsoStateMachine qsoStateMachine,
+            LiveRxWpmGuard wpmGuard,
+            List<CwDecodeEvent> capturedDecodeEvents
+    ) {
+        if (frame == null || !decoder.hasPendingCharacter()) {
+            return;
+        }
+        CwSignalSnapshot signalSnapshot = signalProcessor.snapshot();
+        if (signalSnapshot.toneActive()) {
+            return;
+        }
+        CwToneEvent lastSignalEvent = signalSnapshot.lastEvent();
+        if (lastSignalEvent == null || lastSignalEvent.type() != CwToneEvent.Type.TONE_OFF) {
+            return;
+        }
+
+        long flushTimestampMs = estimateFrameEndTimestampMs(frame);
+        long silentGapMs = Math.max(0L, flushTimestampMs - lastSignalEvent.timestampMs());
+        long minFlushGapMs = minimumLiveCharacterFlushGapMs(
+                signalSnapshot,
+                timingModel.rawSnapshot(),
+                flushTimestampMs,
+                wpmGuard
+        );
+        if (silentGapMs < minFlushGapMs) {
+            return;
+        }
+
+        List<CwDecodeEvent> trailingDecodeEvents = decoder.flushPendingCharacter(flushTimestampMs);
+        for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
+            processLiveLikeDecodeEvent(
+                    decodeEvent,
+                    signalProcessor,
+                    timingModel,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    capturedDecodeEvents
+            );
+        }
+    }
+
+    private static void flushPendingDecode(
+            long timestampMs,
+            CwSignalProcessor signalProcessor,
+            CwHybridTimingModel timingModel,
+            CwDecoder decoder,
+            CwInterpreter interpreter,
+            QsoStateMachine qsoStateMachine,
+            LiveRxWpmGuard wpmGuard,
+            List<CwTimingEvent> capturedTimingEvents,
+            List<CwDecodeEvent> capturedDecodeEvents
+    ) {
+        CwSignalSnapshot currentSignalSnapshot = signalProcessor.snapshot();
+        CwTimingSnapshot currentTimingSnapshot = timingModel.rawSnapshot();
+        boolean allowTimingLearning = shouldAllowTimingLearning(
+                currentSignalSnapshot,
+                currentTimingSnapshot,
+                timestampMs,
+                wpmGuard
+        );
+        List<CwTimingEvent> timingEvents = timingModel.flushPendingGap(timestampMs, allowTimingLearning);
+        currentSignalSnapshot = signalProcessor.snapshot();
+        currentTimingSnapshot = timingModel.rawSnapshot();
+        for (CwTimingEvent timingEvent : timingEvents) {
+            CwTimingEvent adaptedTimingEvent = wpmGuard.adaptTimingEvent(
+                timingEvent,
+                    currentSignalSnapshot,
+                    currentTimingSnapshot,
+                    timestampMs
+            );
+            processLiveLikeTimingEvent(
+                    adaptedTimingEvent,
+                    signalProcessor,
+                    timingModel,
+                    decoder,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    capturedTimingEvents,
+                    capturedDecodeEvents
+            );
+        }
+        List<CwDecodeEvent> trailingDecodeEvents = decoder.flushPendingCharacter(timestampMs);
+        for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
+            processLiveLikeDecodeEvent(
+                    decodeEvent,
+                    signalProcessor,
+                    timingModel,
+                    interpreter,
+                    qsoStateMachine,
+                    wpmGuard,
+                    capturedDecodeEvents
+            );
+        }
+    }
+
+    private static boolean shouldTreatAsStableDecode(
+            CwDecodeEvent decodeEvent,
+            CwSignalSnapshot signalSnapshot,
+            CwTimingSnapshot timingSnapshot,
+            LiveRxWpmGuard wpmGuard
+    ) {
+        if (decodeEvent == null
+                || decodeEvent.type() != CwDecodeEvent.Type.CHARACTER_DECODED
+                || decodeEvent.unknownCharacter()
+                || signalSnapshot == null
+                || timingSnapshot == null
+                || timingSnapshot.estimatedWpm() <= 0
+                || timingSnapshot.dotEstimateMs() <= 0L) {
+            return false;
+        }
+        if (wpmGuard != null
+                && !wpmGuard.shouldAcceptTimingAnchorUpdate(
+                signalSnapshot,
+                timingSnapshot,
+                decodeEvent.timestampMs()
+        )) {
+            return false;
+        }
+        return signalSnapshot.targetToneLocked()
+                && signalSnapshot.recentLockedFrameRatio() >= STABLE_DECODE_LOCKED_RATIO_MIN
+                && signalSnapshot.recentNearTargetLockedFrameRatio() >= STABLE_DECODE_NEAR_TARGET_RATIO_MIN
+                && signalSnapshot.recentActiveUnlockedFrameRatio() <= STABLE_DECODE_ACTIVE_UNLOCKED_RATIO_MAX
+                && signalSnapshot.toneDominanceRatio() >= STABLE_DECODE_TONE_DOMINANCE_MIN
+                && signalSnapshot.narrowbandIsolationRatio() >= STABLE_DECODE_ISOLATION_MIN;
+    }
+
+    private static long resolveReferenceDotEstimateMs(
+            CwSignalSnapshot signalSnapshot,
+            CwTimingSnapshot timingSnapshot,
+            long nowTimestampMs,
+            LiveRxWpmGuard wpmGuard
+    ) {
+        long referenceDotEstimateMs = wpmGuard.resolveReferenceDotEstimateMs(timingSnapshot);
+        if (referenceDotEstimateMs > 0L) {
+            return referenceDotEstimateMs;
+        }
+        return wpmGuard.resolveEffectiveDotEstimateMs(signalSnapshot, timingSnapshot, nowTimestampMs);
+    }
+
+    private static long minimumLiveCharacterFlushGapMs(
+            CwSignalSnapshot signalSnapshot,
+            CwTimingSnapshot timingSnapshot,
+            long nowTimestampMs,
+            LiveRxWpmGuard wpmGuard
+    ) {
+        long dotEstimateMs = Math.max(
+                1L,
+                wpmGuard.resolveEffectiveDotEstimateMs(signalSnapshot, timingSnapshot, nowTimestampMs)
+        );
+        return Math.max(1L, Math.round(dotEstimateMs * LIVE_CHARACTER_FLUSH_GAP_RATIO));
+    }
+
+    private static boolean shouldAllowTimingLearning(
+            CwSignalSnapshot signalSnapshot,
+            CwTimingSnapshot timingSnapshot,
+            long nowTimestampMs,
+            LiveRxWpmGuard wpmGuard
+    ) {
+        if (wpmGuard == null) {
+            return true;
+        }
+        return wpmGuard.shouldAllowTimingLearning(signalSnapshot, timingSnapshot, nowTimestampMs);
+    }
+
+    private static boolean shouldAllowTimingLearningForEvent(
+            CwToneEvent toneEvent,
+            CwSignalSnapshot signalSnapshot,
+            CwTimingSnapshot timingSnapshot,
+            long nowTimestampMs,
+            LiveRxWpmGuard wpmGuard
+    ) {
+        if (wpmGuard == null) {
+            return true;
+        }
+        return wpmGuard.shouldAllowTimingLearningForEvent(
+                toneEvent,
+                signalSnapshot,
+                timingSnapshot,
+                nowTimestampMs
+        );
+    }
+
+    private static long estimateFrameEndTimestampMs(AudioFrame frame) {
+        if (frame == null) {
+            return 0L;
+        }
+        long frameDurationMs = Math.max(
+                1L,
+                Math.round(frame.sampleCount() * 1000.0d / Math.max(1, frame.sampleRateHz()))
+        );
+        return frame.capturedAtMs() + frameDurationMs;
     }
 
     static TrailingWindowRedecodeResult redecodeTrailingWords(
@@ -432,6 +1019,7 @@ final class LocalAudioDecodeTestSupport {
         private final String timingStrategySummary;
         private final CwDecoderSnapshot decoderSnapshot;
         private final CwInterpreterSnapshot interpreterSnapshot;
+        private final QsoDraftSnapshot qsoDraftSnapshot;
 
         private OfflineProbeResult(
                 String sourceLabel,
@@ -443,6 +1031,30 @@ final class LocalAudioDecodeTestSupport {
                 CwDecoderSnapshot decoderSnapshot,
                 CwInterpreterSnapshot interpreterSnapshot
         ) {
+            this(
+                    sourceLabel,
+                    decodedText,
+                    signalSnapshot,
+                    signalProcessorLeaderSummary,
+                    timingSnapshot,
+                    timingStrategySummary,
+                    decoderSnapshot,
+                    interpreterSnapshot,
+                    null
+            );
+        }
+
+        private OfflineProbeResult(
+                String sourceLabel,
+                String decodedText,
+                CwSignalSnapshot signalSnapshot,
+                String signalProcessorLeaderSummary,
+                CwTimingSnapshot timingSnapshot,
+                String timingStrategySummary,
+                CwDecoderSnapshot decoderSnapshot,
+                CwInterpreterSnapshot interpreterSnapshot,
+                QsoDraftSnapshot qsoDraftSnapshot
+        ) {
             this.sourceLabel = sourceLabel;
             this.decodedText = decodedText;
             this.signalSnapshot = signalSnapshot;
@@ -451,6 +1063,7 @@ final class LocalAudioDecodeTestSupport {
             this.timingStrategySummary = timingStrategySummary;
             this.decoderSnapshot = decoderSnapshot;
             this.interpreterSnapshot = interpreterSnapshot;
+            this.qsoDraftSnapshot = qsoDraftSnapshot;
         }
 
         String sourceLabel() {
@@ -483,6 +1096,10 @@ final class LocalAudioDecodeTestSupport {
 
         CwInterpreterSnapshot interpreterSnapshot() {
             return interpreterSnapshot;
+        }
+
+        QsoDraftSnapshot qsoDraftSnapshot() {
+            return qsoDraftSnapshot;
         }
     }
 

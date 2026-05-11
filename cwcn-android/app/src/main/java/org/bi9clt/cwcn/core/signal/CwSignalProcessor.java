@@ -23,8 +23,11 @@ public final class CwSignalProcessor {
             ((MAX_TRACKED_TONE_FREQUENCY_HZ - MIN_TRACKED_TONE_FREQUENCY_HZ) / TONE_SCAN_STEP_HZ) + 1;
     private static final int RETUNE_INTERVAL_FRAMES = 4;
     private static final int PREFERRED_TONE_SCAN_WINDOW_HZ = 160;
-    private static final int UNLOCKED_ACQUISITION_SCAN_WINDOW_HZ = 280;
+    private static final int UNLOCKED_ACQUISITION_SCAN_WINDOW_HZ = 160;
     private static final int LOCK_RETUNE_WINDOW_HZ = 50;
+    private static final int FIXED_TONE_PREFERRED_SCAN_WINDOW_HZ = 50;
+    private static final int FIXED_TONE_UNLOCKED_SCAN_WINDOW_HZ = 70;
+    private static final int FIXED_TONE_LOCK_RETUNE_WINDOW_HZ = 30;
     private static final int PREFERRED_WEIGHT_FULL_BIAS_WINDOW_HZ = 35;
     private static final int PREFERRED_ACQUISITION_SOFT_BIAS_WINDOW_HZ = 90;
     private static final int CONTINUITY_WEIGHT_FULL_BIAS_WINDOW_HZ = 20;
@@ -58,13 +61,18 @@ public final class CwSignalProcessor {
     private static final double NOISE_FLOOR_RISE_SMOOTHING = 0.025d;
     private static final double NOISE_FLOOR_DROP_SMOOTHING = 0.14d;
     private static final double SIGNAL_FLOOR_SMOOTHING = 0.18d;
+    private static final double SIGNAL_FLOOR_IDLE_DECAY_SMOOTHING = 0.62d;
     private static final int LOCKED_BRANCH_REFERENCE_MIN_STREAK_FRAMES = 4;
     private static final double LOCKED_BRANCH_REFERENCE_RISE_SMOOTHING = 0.24d;
     private static final double LOCKED_BRANCH_REFERENCE_DECAY_SMOOTHING = 0.03d;
     private static final double LOCKED_BRANCH_WEAK_RATIO = 0.46d;
     private static final double LOCKED_BRANCH_REFERENCE_MIN_THRESHOLD_MULTIPLIER = 1.75d;
     private static final long TONE_OFF_HANG_MS = 4L;
+    private static final long AUTO_TRACK_TONE_OFF_HANG_MS = 14L;
+    private static final int AUTO_TRACK_WEAK_VALLEY_BRIDGE_FRAMES = 2;
     private static final long TRACKED_TONE_IDLE_HANG_MS = 240L;
+    private static final long TRACKED_TONE_IDLE_HANG_MIN_MS = 240L;
+    private static final double TRACKED_TONE_IDLE_HANG_DOT_RATIO = 7.2d;
     private static final long FRAME_GAP_RESET_MIN_MS = 40L;
     private static final double FRAME_GAP_RESET_MULTIPLIER = 4.0d;
     private static final int REPRESENTATIVE_LOCKED_TONE_CLUSTER_WINDOW_HZ = 35;
@@ -100,10 +108,28 @@ public final class CwSignalProcessor {
     private static final int LOCKED_RETUNE_GUARD_MIN_STABLE_LOCK_FRAMES = 8;
     private static final int LOCKED_RETUNE_GUARD_REQUIRED_SCANS = 2;
     private static final int LOCKED_RETUNE_GUARD_FAR_REQUIRED_SCANS = 3;
+    private static final int LOCKED_RETUNE_GUARD_WEAK_REFERENCE_EXTRA_SCANS = 2;
     private static final double LOCKED_RETUNE_GUARD_STRONG_SCORE_RATIO = 1.38d;
     private static final double LOCKED_RETUNE_GUARD_STRONG_TONE_RATIO = 1.45d;
     private static final double LOCKED_RETUNE_GUARD_FAR_STRONG_SCORE_RATIO = 1.55d;
     private static final double LOCKED_RETUNE_GUARD_FAR_STRONG_TONE_RATIO = 1.70d;
+    private static final double LOCKED_RETUNE_GUARD_WEAK_REFERENCE_TONE_RATIO = 0.72d;
+    private static final int TONE_ACTIVE_FAR_SEARCH_PREVIOUS_PLAUSIBLE_EXTRA_SCANS = 1;
+    private static final double TONE_ACTIVE_LOCKED_SEARCH_REPLACE_SCORE_RATIO = 1.26d;
+    private static final double TONE_ACTIVE_LOCKED_SEARCH_REPLACE_TONE_RATIO = 1.12d;
+    private static final double TONE_ACTIVE_FAR_SEARCH_RELEASE_SCORE_RATIO = 1.18d;
+    private static final double TONE_ACTIVE_FAR_SEARCH_RELEASE_TONE_RATIO = 1.24d;
+    private static final double TONE_ACTIVE_FAR_SEARCH_IMMEDIATE_SCORE_RATIO = 1.70d;
+    private static final double TONE_ACTIVE_FAR_SEARCH_IMMEDIATE_TONE_RATIO = 1.85d;
+    private static final double TONE_ACTIVE_PREVIOUS_TARGET_MIN_REFERENCE_TONE_RATIO = 0.12d;
+    private static final double TONE_ACTIVE_PREVIOUS_TARGET_MIN_TONE_MULTIPLIER = 1.50d;
+    private static final double TONE_ACTIVE_PREVIOUS_TARGET_MIN_DOMINANCE_RATIO = 0.05d;
+    private static final double CONTINUITY_FAR_CANDIDATE_RELEASE_TONE_RATIO = 0.72d;
+    private static final double POST_RELEASE_ONSET_GUARD_MIN_FRAME_RMS_GROWTH_RATIO = 1.12d;
+    private static final double POST_RELEASE_ONSET_GUARD_MIN_TONE_RMS_GROWTH_RATIO = 1.10d;
+    private static final int FAR_ATTACK_CONFIRM_DRIFT_HZ = 60;
+    private static final int FAR_ATTACK_CONFIRM_REQUIRED_FRAMES = 2;
+    private static final double FAR_ATTACK_CONFIRM_REFERENCE_TONE_RATIO = 1.45d;
     private static final int LOW_EDGE_BAND_MIN_HZ = 450;
     private static final int LOW_EDGE_BAND_MAX_HZ = 470;
     private static final int TARGETISH_BAND_MIN_HZ = 650;
@@ -122,6 +148,11 @@ public final class CwSignalProcessor {
         LOCKED_RETUNE,
         HYPOTHESIS_GUARD,
         SEARCH_FALLBACK
+    }
+
+    public enum RxToneMode {
+        FIXED_TONE,
+        AUTO_TRACK
     }
 
     private boolean initialized;
@@ -157,6 +188,10 @@ public final class CwSignalProcessor {
     private int processedFrameCount;
     private int pendingRetuneCandidateStableScans;
     private int pendingLockedRetuneStableScans;
+    private int pendingFarAttackCandidateFrequencyHz;
+    private int pendingFarAttackCandidateStableFrames;
+    private int autoTrackWeakValleyBridgeFramesRemaining;
+    private boolean autoTrackWeakValleyBridgeActive;
     private int lockedRetuneGuardCandidateFrequencyHz;
     private int lockedRetuneGuardDriftHz;
     private int lockedRetuneGuardObservedScans;
@@ -261,6 +296,7 @@ public final class CwSignalProcessor {
     private boolean hypothesisGuardAppliedThisFrame;
     private boolean hypothesisGuardOverrideAppliedThisFrame;
     private boolean lockedRetuneGuardHoldingThisFrame;
+    private RxToneMode rxToneMode = RxToneMode.AUTO_TRACK;
     private CwToneEvent lastEvent;
     private ToneFrequencyEstimate hypothesisGuardOverrideRunnerUpEstimate;
     private double hypothesisGuardOverrideConfidence;
@@ -271,8 +307,18 @@ public final class CwSignalProcessor {
         long timestampMs = frame.capturedAtMs();
         handleFrameGapReset(frame, timestampMs, events);
         double frameRms = frame.rmsAmplitude();
+        double previousFrameRmsAmplitude = lastRmsAmplitude;
+        double previousToneRmsAmplitude = lastToneRmsAmplitude;
+        boolean hadToneHistoryBeforeFrame = totalToneOnEvents > 0 || totalToneOffEvents > 0;
+        boolean hadTrackedToneMemoryBeforeFrame = hadToneHistoryBeforeFrame
+                && isTrackedToneMemoryActive(timestampMs);
+        int attackAnchorFrequencyHzBeforeFrame = hadToneHistoryBeforeFrame
+                ? continuityAnchorFrequencyHz()
+                : preferredToneFrequencyHz;
+        double attackReferenceToneRmsBeforeFrame = lockedBranchReferenceToneRmsAmplitude;
         ToneFrequencyEstimate toneEstimate = analyzeToneFrequency(frame);
         double detectionLevel = effectiveDetectionLevel(frameRms, toneEstimate);
+        double backgroundObservationLevel = backgroundObservationLevel(frameRms, toneEstimate);
         boolean attackQualified = isNarrowbandQualified(toneEstimate);
         int attackThreshold = currentThreshold();
         int releaseThreshold = currentReleaseThreshold();
@@ -283,15 +329,25 @@ public final class CwSignalProcessor {
         // let it steer attack/release decisions until it can be scoped safely.
 
         if (!initialized) {
-            noiseFloorEstimate = detectionLevel;
-            signalFloorEstimate = detectionLevel;
+            noiseFloorEstimate = backgroundObservationLevel;
+            signalFloorEstimate = Math.max(backgroundObservationLevel, detectionLevel);
             attackThreshold = currentThreshold();
             releaseThreshold = currentReleaseThreshold();
             initialized = true;
         }
 
+        boolean weakLockedResidueHoldingSignalFloor = isAutoTrackWeakValleyCandidate(toneEstimate, attackThreshold);
         if (!toneActive) {
-            noiseFloorEstimate = smoothNoiseFloor(noiseFloorEstimate, detectionLevel);
+            noiseFloorEstimate = smoothNoiseFloor(noiseFloorEstimate, backgroundObservationLevel);
+            signalFloorEstimate = relaxSignalFloorDuringSilence(
+                    signalFloorEstimate,
+                    Math.max(noiseFloorEstimate, detectionLevel)
+            );
+        } else if (weakLockedResidueHoldingSignalFloor) {
+            // Keep the tone-active floor anchored while we decide whether this is
+            // only a short weak valley. Otherwise a same-tone weak residue can drag
+            // releaseThreshold down underneath itself and prolong toneActive forever.
+            signalFloorEstimate = Math.max(signalFloorEstimate, detectionLevel);
         } else {
             signalFloorEstimate = smoothSignalFloor(signalFloorEstimate, detectionLevel);
         }
@@ -302,15 +358,45 @@ public final class CwSignalProcessor {
         attackThreshold = currentThreshold();
         releaseThreshold = currentReleaseThreshold();
 
+        if (toneActive || !attackQualified || detectionLevel < attackThreshold) {
+            clearPendingFarAttackCandidate();
+        }
+
         if (!toneActive && attackQualified && detectionLevel >= attackThreshold) {
-            long toneOnTimestampMs = estimateCrossingTimestamp(timestampMs, attackThreshold, detectionLevel, true);
+            if (shouldDelayFarAttackToneOn(
+                    toneEstimate,
+                    hadToneHistoryBeforeFrame,
+                    hadTrackedToneMemoryBeforeFrame,
+                    attackAnchorFrequencyHzBeforeFrame,
+                    attackReferenceToneRmsBeforeFrame
+            )) {
+                rememberFrameLeaderObservability(false);
+                rememberToneActivityWindow();
+                rememberFrame(timestampMs, detectionLevel);
+                return events;
+            }
             long frameLocalToneOnTimestampMs = estimateFrameLocalTransitionTimestamp(frame, true);
+            if (shouldSuppressPostReleaseSteadyCarrierToneOn(
+                    toneEstimate,
+                    frameRms,
+                    previousFrameRmsAmplitude,
+                    previousToneRmsAmplitude,
+                    frameLocalToneOnTimestampMs
+            )) {
+                rememberFrameLeaderObservability(false);
+                rememberToneActivityWindow();
+                rememberFrame(timestampMs, detectionLevel);
+                return events;
+            }
+            long toneOnTimestampMs = estimateCrossingTimestamp(timestampMs, attackThreshold, detectionLevel, true);
             if (frameLocalToneOnTimestampMs >= 0L) {
                 toneOnTimestampMs = frameLocalToneOnTimestampMs;
             }
             toneActive = true;
             toneStartedAtMs = toneOnTimestampMs;
             silenceStartedAtMs = -1L;
+            autoTrackWeakValleyBridgeFramesRemaining = 0;
+            autoTrackWeakValleyBridgeActive = false;
             signalFloorEstimate = detectionLevel;
             CwToneEvent event = new CwToneEvent(
                     CwToneEvent.Type.TONE_ON,
@@ -330,6 +416,13 @@ public final class CwSignalProcessor {
 
         if (toneActive) {
             if (detectionLevel < releaseThreshold) {
+                if (shouldBridgeAutoTrackWeakValley(toneEstimate, attackThreshold)) {
+                    silenceStartedAtMs = -1L;
+                    rememberFrameLeaderObservability(true);
+                    rememberToneActivityWindow();
+                    rememberFrame(timestampMs, detectionLevel);
+                    return events;
+                }
                 if (silenceStartedAtMs < 0L) {
                     long frameLocalToneOffTimestampMs = estimateFrameLocalTransitionTimestamp(frame, false);
                     if (frameLocalToneOffTimestampMs >= 0L) {
@@ -339,7 +432,7 @@ public final class CwSignalProcessor {
                     }
                 }
                 long frameEndTimestampMs = timestampMs + estimateFrameDurationMs(frame);
-                if (frameEndTimestampMs - silenceStartedAtMs >= TONE_OFF_HANG_MS) {
+                if (frameEndTimestampMs - silenceStartedAtMs >= currentToneOffHangMs()) {
                     toneActive = false;
                     long toneEndedAtMs = Math.max(toneStartedAtMs, silenceStartedAtMs);
                     long durationMs = Math.max(0L, toneEndedAtMs - toneStartedAtMs);
@@ -355,11 +448,18 @@ public final class CwSignalProcessor {
                     events.add(event);
                     toneStartedAtMs = -1L;
                     silenceStartedAtMs = -1L;
-                    noiseFloorEstimate = smoothNoiseFloor(noiseFloorEstimate, detectionLevel);
-                    signalFloorEstimate = smoothSignalFloor(signalFloorEstimate, Math.max(detectionLevel, noiseFloorEstimate));
+                    autoTrackWeakValleyBridgeFramesRemaining = 0;
+                    autoTrackWeakValleyBridgeActive = false;
+                    noiseFloorEstimate = smoothNoiseFloor(noiseFloorEstimate, backgroundObservationLevel);
+                    signalFloorEstimate = relaxSignalFloorDuringSilence(
+                            signalFloorEstimate,
+                            Math.max(detectionLevel, noiseFloorEstimate)
+                    );
                 }
             } else {
                 silenceStartedAtMs = -1L;
+                autoTrackWeakValleyBridgeFramesRemaining = 0;
+                autoTrackWeakValleyBridgeActive = false;
             }
         }
 
@@ -369,6 +469,31 @@ public final class CwSignalProcessor {
         return events;
     }
 
+    private boolean shouldSuppressPostReleaseSteadyCarrierToneOn(
+            ToneFrequencyEstimate toneEstimate,
+            double frameRms,
+            double previousFrameRmsAmplitude,
+            double previousToneRmsAmplitude,
+            long frameLocalToneOnTimestampMs
+    ) {
+        if (toneEstimate == null || toneEstimate.frequencyHz <= 0) {
+            return false;
+        }
+        if (lastEvent == null || lastEvent.type() != CwToneEvent.Type.TONE_OFF) {
+            return false;
+        }
+        if (totalToneOnEvents <= 0 || totalToneOnEvents != totalToneOffEvents) {
+            return false;
+        }
+        if (frameLocalToneOnTimestampMs >= 0L) {
+            return false;
+        }
+        double frameRmsGrowthRatio = frameRms / Math.max(1.0d, previousFrameRmsAmplitude);
+        double toneRmsGrowthRatio = toneEstimate.toneRmsAmplitude / Math.max(1.0d, previousToneRmsAmplitude);
+        return frameRmsGrowthRatio < POST_RELEASE_ONSET_GUARD_MIN_FRAME_RMS_GROWTH_RATIO
+                && toneRmsGrowthRatio < POST_RELEASE_ONSET_GUARD_MIN_TONE_RMS_GROWTH_RATIO;
+    }
+
     // Test-support path only: replay the same audio while forcing the detector
     // to look at an externally supplied tone frequency for this frame.
     public synchronized List<CwToneEvent> processForcedToneForTesting(AudioFrame frame, int forcedToneFrequencyHz) {
@@ -376,6 +501,15 @@ public final class CwSignalProcessor {
         long timestampMs = frame.capturedAtMs();
         handleFrameGapReset(frame, timestampMs, events);
         double frameRms = frame.rmsAmplitude();
+        double previousFrameRmsAmplitude = lastRmsAmplitude;
+        double previousToneRmsAmplitude = lastToneRmsAmplitude;
+        boolean hadToneHistoryBeforeFrame = totalToneOnEvents > 0 || totalToneOffEvents > 0;
+        boolean hadTrackedToneMemoryBeforeFrame = hadToneHistoryBeforeFrame
+                && isTrackedToneMemoryActive(timestampMs);
+        int attackAnchorFrequencyHzBeforeFrame = hadToneHistoryBeforeFrame
+                ? continuityAnchorFrequencyHz()
+                : preferredToneFrequencyHz;
+        double attackReferenceToneRmsBeforeFrame = lockedBranchReferenceToneRmsAmplitude;
         short[] samples = frame.samples();
         ToneFrequencyEstimate toneEstimate;
         if (samples == null || samples.length == 0 || frame.sampleRateHz() <= 0) {
@@ -399,20 +533,30 @@ public final class CwSignalProcessor {
             );
         }
         double detectionLevel = effectiveDetectionLevel(frameRms, toneEstimate);
+        double backgroundObservationLevel = backgroundObservationLevel(frameRms, toneEstimate);
         boolean attackQualified = isNarrowbandQualified(toneEstimate);
         int attackThreshold = currentThreshold();
         int releaseThreshold = currentReleaseThreshold();
 
         if (!initialized) {
-            noiseFloorEstimate = detectionLevel;
-            signalFloorEstimate = detectionLevel;
+            noiseFloorEstimate = backgroundObservationLevel;
+            signalFloorEstimate = Math.max(backgroundObservationLevel, detectionLevel);
             attackThreshold = currentThreshold();
             releaseThreshold = currentReleaseThreshold();
             initialized = true;
         }
 
+        boolean weakLockedResidueHoldingSignalFloor = isAutoTrackWeakValleyCandidate(toneEstimate, attackThreshold);
         if (!toneActive) {
-            noiseFloorEstimate = smoothNoiseFloor(noiseFloorEstimate, detectionLevel);
+            noiseFloorEstimate = smoothNoiseFloor(noiseFloorEstimate, backgroundObservationLevel);
+            signalFloorEstimate = relaxSignalFloorDuringSilence(
+                    signalFloorEstimate,
+                    Math.max(noiseFloorEstimate, detectionLevel)
+            );
+        } else if (weakLockedResidueHoldingSignalFloor) {
+            // Mirror the live path exactly for test replays: weak same-tone residue
+            // must not collapse the tone-active floor and self-rescue the release.
+            signalFloorEstimate = Math.max(signalFloorEstimate, detectionLevel);
         } else {
             signalFloorEstimate = smoothSignalFloor(signalFloorEstimate, detectionLevel);
         }
@@ -425,15 +569,41 @@ public final class CwSignalProcessor {
         attackThreshold = currentThreshold();
         releaseThreshold = currentReleaseThreshold();
 
+        if (toneActive || !attackQualified || detectionLevel < attackThreshold) {
+            clearPendingFarAttackCandidate();
+        }
+
         if (!toneActive && attackQualified && detectionLevel >= attackThreshold) {
+            if (shouldDelayFarAttackToneOn(
+                    toneEstimate,
+                    hadToneHistoryBeforeFrame,
+                    hadTrackedToneMemoryBeforeFrame,
+                    attackAnchorFrequencyHzBeforeFrame,
+                    attackReferenceToneRmsBeforeFrame
+            )) {
+                rememberFrame(timestampMs, detectionLevel);
+                return events;
+            }
             long toneOnTimestampMs = estimateCrossingTimestamp(timestampMs, attackThreshold, detectionLevel, true);
             long frameLocalToneOnTimestampMs = estimateFrameLocalTransitionTimestamp(frame, true);
+            if (shouldSuppressPostReleaseSteadyCarrierToneOn(
+                    toneEstimate,
+                    frameRms,
+                    previousFrameRmsAmplitude,
+                    previousToneRmsAmplitude,
+                    frameLocalToneOnTimestampMs
+            )) {
+                rememberFrame(timestampMs, detectionLevel);
+                return events;
+            }
             if (frameLocalToneOnTimestampMs >= 0L) {
                 toneOnTimestampMs = frameLocalToneOnTimestampMs;
             }
             toneActive = true;
             toneStartedAtMs = toneOnTimestampMs;
             silenceStartedAtMs = -1L;
+            autoTrackWeakValleyBridgeFramesRemaining = 0;
+            autoTrackWeakValleyBridgeActive = false;
             signalFloorEstimate = detectionLevel;
             CwToneEvent event = new CwToneEvent(
                     CwToneEvent.Type.TONE_ON,
@@ -460,7 +630,7 @@ public final class CwSignalProcessor {
                     }
                 }
                 long frameEndTimestampMs = timestampMs + estimateFrameDurationMs(frame);
-                if (frameEndTimestampMs - silenceStartedAtMs >= TONE_OFF_HANG_MS) {
+                if (frameEndTimestampMs - silenceStartedAtMs >= currentToneOffHangMs()) {
                     toneActive = false;
                     long toneEndedAtMs = Math.max(toneStartedAtMs, silenceStartedAtMs);
                     long durationMs = Math.max(0L, toneEndedAtMs - toneStartedAtMs);
@@ -476,11 +646,18 @@ public final class CwSignalProcessor {
                     events.add(event);
                     toneStartedAtMs = -1L;
                     silenceStartedAtMs = -1L;
-                    noiseFloorEstimate = smoothNoiseFloor(noiseFloorEstimate, detectionLevel);
-                    signalFloorEstimate = smoothSignalFloor(signalFloorEstimate, Math.max(detectionLevel, noiseFloorEstimate));
+                    autoTrackWeakValleyBridgeFramesRemaining = 0;
+                    autoTrackWeakValleyBridgeActive = false;
+                    noiseFloorEstimate = smoothNoiseFloor(noiseFloorEstimate, backgroundObservationLevel);
+                    signalFloorEstimate = relaxSignalFloorDuringSilence(
+                            signalFloorEstimate,
+                            Math.max(detectionLevel, noiseFloorEstimate)
+                    );
                 }
             } else {
                 silenceStartedAtMs = -1L;
+                autoTrackWeakValleyBridgeFramesRemaining = 0;
+                autoTrackWeakValleyBridgeActive = false;
             }
         }
 
@@ -537,8 +714,12 @@ public final class CwSignalProcessor {
         targetToneFrequencyHz = preferredToneFrequencyHz;
         pendingRetuneCandidateFrequencyHz = preferredToneFrequencyHz;
         pendingRetuneCandidateStableScans = 0;
+        pendingFarAttackCandidateFrequencyHz = 0;
+        pendingFarAttackCandidateStableFrames = 0;
         pendingLockedRetuneFrequencyHz = preferredToneFrequencyHz;
         pendingLockedRetuneStableScans = 0;
+        autoTrackWeakValleyBridgeFramesRemaining = 0;
+        autoTrackWeakValleyBridgeActive = false;
         lockLossFrames = 0;
         frameGapResetCount = 0;
         lastPreferredWindowWinnerFrequencyHz = preferredToneFrequencyHz;
@@ -636,10 +817,16 @@ public final class CwSignalProcessor {
                 ? pendingRetuneCandidateFrequencyHz
                 : targetToneFrequencyHz;
         this.pendingRetuneCandidateStableScans = 0;
+        this.pendingFarAttackCandidateFrequencyHz = 0;
+        this.pendingFarAttackCandidateStableFrames = 0;
     }
 
     public synchronized void setSqlPercent(int sqlPercent) {
         this.sqlPercent = Math.max(0, Math.min(100, sqlPercent));
+    }
+
+    public synchronized void setRxToneMode(RxToneMode mode) {
+        rxToneMode = mode == null ? RxToneMode.AUTO_TRACK : mode;
     }
 
     public synchronized void setExperimentalHypothesisGuardEnabled(boolean enabled) {
@@ -936,6 +1123,14 @@ public final class CwSignalProcessor {
             return frameRms;
         }
         return currentSignal + ((frameRms - currentSignal) * SIGNAL_FLOOR_SMOOTHING);
+    }
+
+    private double relaxSignalFloorDuringSilence(double currentSignal, double targetFloor) {
+        double safeTargetFloor = Math.max(0.0d, targetFloor);
+        if (currentSignal <= safeTargetFloor) {
+            return safeTargetFloor;
+        }
+        return currentSignal + ((safeTargetFloor - currentSignal) * SIGNAL_FLOOR_IDLE_DECAY_SMOOTHING);
     }
 
     private void handleFrameGapReset(
@@ -1335,6 +1530,13 @@ public final class CwSignalProcessor {
                 previousTargetToneFrequencyHz,
                 0.0d
         );
+        previousTargetEstimate = withSelectionScore(
+                previousTargetEstimate,
+                previousTargetToneFrequencyHz,
+                previousTargetToneFrequencyHz,
+                lockRetentionMode,
+                false
+        );
         ToneFrequencyEstimate lockedConsensusEstimate = maybeBuildExperimentalLockedConsensusEstimate(
                 samples,
                 frame.sampleRateHz(),
@@ -1457,17 +1659,31 @@ public final class CwSignalProcessor {
     ) {
         clearLockedRetuneGuardFrameState();
         if (trackingState == TrackingState.LOCKED) {
-            ToneFrequencyEstimate retained = chooseLockedEstimate(lockedWindowEstimate, searchEstimate);
-            retained = applyLockedRetuneGuard(retained, previousTargetEstimate);
-            if (retained != null && isLockedRetentionQualified(retained)) {
+            ToneFrequencyEstimate retained = chooseLockedEstimate(
+                    lockedWindowEstimate,
+                    searchEstimate,
+                    previousTargetEstimate
+            );
+            retained = maybeApplyToneActivePlausiblePreviousTargetGuard(retained, previousTargetEstimate);
+            if (!hasLockedRetuneGuardFrameState()) {
+                retained = applyLockedRetuneGuard(retained, previousTargetEstimate);
+            }
+            boolean continuityHeldRetained = isToneActiveContinuityHeldRetainedEstimate(retained, previousTargetEstimate);
+            if (retained != null && (isLockedRetentionQualified(retained) || continuityHeldRetained)) {
                 retained = maybeApplyExperimentalLockedConsensusGuard(retained, lockedConsensusEstimate);
                 targetToneFrequencyHz = retained.frequencyHz;
-                targetToneLocked = true;
-                trackingState = TrackingState.LOCKED;
+                targetToneLocked = isLockedRetentionQualified(retained);
+                trackingState = targetToneLocked ? TrackingState.LOCKED : TrackingState.CANDIDATE;
                 pendingRetuneCandidateFrequencyHz = retained.frequencyHz;
-                pendingRetuneCandidateStableScans = CANDIDATE_STABILITY_ACCEPT_SCANS;
-                lockLossFrames = 0;
-                lastTrackedToneTimestampMs = timestampMs;
+                pendingRetuneCandidateStableScans = targetToneLocked
+                        ? CANDIDATE_STABILITY_ACCEPT_SCANS
+                        : Math.max(1, pendingRetuneCandidateStableScans);
+                if (targetToneLocked) {
+                    lockLossFrames = 0;
+                    lastTrackedToneTimestampMs = timestampMs;
+                } else {
+                    lockLossFrames = Math.min(lockLossFrames + 1, LOCK_LOSS_GRACE_FRAMES);
+                }
                 rememberFinalAdoptedEstimate(
                         retained,
                         hypothesisGuardAppliedThisFrame && !hypothesisGuardOverrideAppliedThisFrame
@@ -1475,15 +1691,47 @@ public final class CwSignalProcessor {
                                 : AcquisitionWinnerSource.LOCKED_RETUNE,
                         hypothesisGuardAppliedThisFrame && !hypothesisGuardOverrideAppliedThisFrame
                                 ? "stable locked consensus corrected a drifting live target before lock retention"
+                                : continuityHeldRetained
+                                ? "tone-active continuity held the prior target through a weak valley while a far retune candidate was still being validated"
                                 : "locked-retune winner stayed qualified and remained the live target"
                 );
                 return;
             }
             lockLossFrames += 1;
             targetToneLocked = false;
+            if (shouldHoldFarIdleContinuityCandidate(searchEstimate, continuityMode)) {
+                trackingState = TrackingState.CANDIDATE;
+                rememberFinalAdoptedEstimate(
+                        null,
+                        AcquisitionWinnerSource.SEARCH_FALLBACK,
+                        "continuity held the last tracked target through a short idle gap instead of jumping to a far off-target carrier"
+                );
+                return;
+            }
+            if (shouldDelayFarContinuityCandidateAdoption(searchEstimate, continuityMode)) {
+                trackingState = TrackingState.CANDIDATE;
+                targetToneLocked = false;
+                rememberFinalAdoptedEstimate(
+                        null,
+                        AcquisitionWinnerSource.SEARCH_FALLBACK,
+                        "continuity held the prior target because a far off-target candidate was still much weaker than the last locked branch reference"
+                );
+                return;
+            }
+            if (shouldHoldToneActiveFarSearchCandidate(searchEstimate, previousTargetEstimate, continuityMode)) {
+                trackingState = TrackingState.CANDIDATE;
+                targetToneLocked = false;
+                rememberFinalAdoptedEstimate(
+                        null,
+                        AcquisitionWinnerSource.SEARCH_FALLBACK,
+                        "tone-active continuity held the prior target until a far retune candidate proved it was not only a weak valley hijack"
+                );
+                return;
+            }
             if (searchEstimate != null && isAcquisitionCandidate(searchEstimate)) {
                 adoptCandidate(searchEstimate);
-                trackingState = pendingRetuneCandidateStableScans >= CANDIDATE_STABILITY_ACCEPT_SCANS
+                trackingState = canPromoteAcquisitionCandidateToLocked()
+                        && pendingRetuneCandidateStableScans >= CANDIDATE_STABILITY_ACCEPT_SCANS
                         ? TrackingState.LOCKED
                         : TrackingState.CANDIDATE;
                 targetToneLocked = trackingState == TrackingState.LOCKED;
@@ -1528,9 +1776,40 @@ public final class CwSignalProcessor {
             return;
         }
 
+        if (shouldHoldFarIdleContinuityCandidate(searchEstimate, continuityMode)) {
+            trackingState = TrackingState.CANDIDATE;
+            targetToneLocked = false;
+            rememberFinalAdoptedEstimate(
+                    null,
+                    AcquisitionWinnerSource.SEARCH_FALLBACK,
+                    "continuity held the last tracked target through a short idle gap instead of jumping to a far off-target carrier"
+            );
+            return;
+        }
+        if (shouldDelayFarContinuityCandidateAdoption(searchEstimate, continuityMode)) {
+            trackingState = TrackingState.CANDIDATE;
+            targetToneLocked = false;
+            rememberFinalAdoptedEstimate(
+                    null,
+                    AcquisitionWinnerSource.SEARCH_FALLBACK,
+                    "continuity held the prior target because a far off-target candidate was still much weaker than the last locked branch reference"
+            );
+            return;
+        }
+        if (shouldHoldToneActiveFarSearchCandidate(searchEstimate, previousTargetEstimate, continuityMode)) {
+            trackingState = TrackingState.CANDIDATE;
+            targetToneLocked = false;
+            rememberFinalAdoptedEstimate(
+                    null,
+                    AcquisitionWinnerSource.SEARCH_FALLBACK,
+                    "tone-active continuity held the prior target until a far retune candidate proved it was not only a weak valley hijack"
+            );
+            return;
+        }
         if (searchEstimate != null && isAcquisitionCandidate(searchEstimate)) {
             adoptCandidate(searchEstimate);
-            trackingState = pendingRetuneCandidateStableScans >= CANDIDATE_STABILITY_ACCEPT_SCANS
+            trackingState = canPromoteAcquisitionCandidateToLocked()
+                    && pendingRetuneCandidateStableScans >= CANDIDATE_STABILITY_ACCEPT_SCANS
                     ? TrackingState.LOCKED
                     : TrackingState.CANDIDATE;
             targetToneLocked = trackingState == TrackingState.LOCKED;
@@ -1602,12 +1881,74 @@ public final class CwSignalProcessor {
         resetPendingLockedRetuneCandidate(estimate.frequencyHz);
     }
 
+    private boolean canPromoteAcquisitionCandidateToLocked() {
+        return toneActive
+                || totalToneOnEvents > 0
+                || totalToneOffEvents > 0;
+    }
+
+    private boolean shouldHoldFarIdleContinuityCandidate(
+            ToneFrequencyEstimate searchEstimate,
+            boolean continuityMode
+    ) {
+        if (!continuityMode || toneActive || searchEstimate == null || !isAcquisitionCandidate(searchEstimate)) {
+            return false;
+        }
+        int continuityAnchorFrequencyHz = continuityAnchorFrequencyHz();
+        if (continuityAnchorFrequencyHz <= 0) {
+            return false;
+        }
+        if (Math.abs(searchEstimate.frequencyHz - continuityAnchorFrequencyHz) < LOCKED_RETUNE_GUARD_MIN_DRIFT_HZ) {
+            return false;
+        }
+        int searchDistanceHz = Math.abs(searchEstimate.frequencyHz - preferredToneFrequencyHz);
+        int anchorDistanceHz = Math.abs(continuityAnchorFrequencyHz - preferredToneFrequencyHz);
+        return searchDistanceHz > (anchorDistanceHz + 20);
+    }
+
+    private boolean shouldDelayFarContinuityCandidateAdoption(
+            ToneFrequencyEstimate searchEstimate,
+            boolean continuityMode
+    ) {
+        if (!continuityMode || searchEstimate == null || !isAcquisitionCandidate(searchEstimate)) {
+            return false;
+        }
+        int continuityAnchorFrequencyHz = continuityAnchorFrequencyHz();
+        if (continuityAnchorFrequencyHz <= 0) {
+            return false;
+        }
+        if (Math.abs(searchEstimate.frequencyHz - continuityAnchorFrequencyHz) < LOCKED_RETUNE_GUARD_MIN_DRIFT_HZ) {
+            return false;
+        }
+        int searchDistanceHz = Math.abs(searchEstimate.frequencyHz - preferredToneFrequencyHz);
+        int anchorDistanceHz = Math.abs(continuityAnchorFrequencyHz - preferredToneFrequencyHz);
+        if (searchDistanceHz <= (anchorDistanceHz + 20)) {
+            return false;
+        }
+        return lockedBranchReferenceToneRmsAmplitude > 0.0d
+                && searchEstimate.toneRmsAmplitude
+                < (lockedBranchReferenceToneRmsAmplitude * CONTINUITY_FAR_CANDIDATE_RELEASE_TONE_RATIO);
+    }
+
+    private int continuityAnchorFrequencyHz() {
+        if (representativeLockedToneFrameCount > 0) {
+            return representativeLockedToneFrequencyHz;
+        }
+        if (hasActiveToneHypothesis()) {
+            return toneHypothesisFrequencyHz;
+        }
+        return targetToneFrequencyHz;
+    }
+
     private boolean shouldUseSoftSearchTarget(
             ToneFrequencyEstimate searchEstimate,
             ToneFrequencyEstimate previousTargetEstimate,
             boolean continuityMode
     ) {
         if (searchEstimate == null || isAcquisitionCandidate(searchEstimate)) {
+            return false;
+        }
+        if (continuityMode && isFarFromContinuityAnchor(searchEstimate.frequencyHz)) {
             return false;
         }
         if (lastAcquisitionWinnerSource == AcquisitionWinnerSource.NONE) {
@@ -1703,6 +2044,80 @@ public final class CwSignalProcessor {
             pendingRetuneCandidateStableScans = 1;
         }
         resetPendingLockedRetuneCandidate(estimate.frequencyHz);
+    }
+
+    private boolean shouldDelayFarAttackToneOn(
+            ToneFrequencyEstimate toneEstimate,
+            boolean hadToneHistoryBeforeFrame,
+            boolean hadTrackedToneMemoryBeforeFrame,
+            int attackAnchorFrequencyHzBeforeFrame,
+            double attackReferenceToneRmsBeforeFrame
+    ) {
+        if (toneEstimate == null || toneEstimate.frequencyHz <= 0) {
+            clearPendingFarAttackCandidate();
+            return false;
+        }
+        if (!isFarAttackCandidate(
+                toneEstimate,
+                hadToneHistoryBeforeFrame,
+                hadTrackedToneMemoryBeforeFrame,
+                attackAnchorFrequencyHzBeforeFrame,
+                attackReferenceToneRmsBeforeFrame
+        )) {
+            clearPendingFarAttackCandidate();
+            return false;
+        }
+        if (toneEstimate.frequencyHz == pendingFarAttackCandidateFrequencyHz) {
+            pendingFarAttackCandidateStableFrames += 1;
+        } else {
+            pendingFarAttackCandidateFrequencyHz = toneEstimate.frequencyHz;
+            pendingFarAttackCandidateStableFrames = 1;
+        }
+        if (pendingFarAttackCandidateStableFrames >= FAR_ATTACK_CONFIRM_REQUIRED_FRAMES) {
+            clearPendingFarAttackCandidate();
+            return false;
+        }
+        return true;
+    }
+
+    private boolean isFarAttackCandidate(
+            ToneFrequencyEstimate toneEstimate,
+            boolean hadToneHistoryBeforeFrame,
+            boolean hadTrackedToneMemoryBeforeFrame,
+            int attackAnchorFrequencyHzBeforeFrame,
+            double attackReferenceToneRmsBeforeFrame
+    ) {
+        if (toneEstimate == null || toneEstimate.frequencyHz <= 0) {
+            return false;
+        }
+        if (hadToneHistoryBeforeFrame && hadTrackedToneMemoryBeforeFrame) {
+            return false;
+        }
+        int anchorFrequencyHz = hadToneHistoryBeforeFrame
+                ? attackAnchorFrequencyHzBeforeFrame
+                : preferredToneFrequencyHz;
+        if (anchorFrequencyHz <= 0) {
+            anchorFrequencyHz = preferredToneFrequencyHz;
+        }
+        if (Math.abs(toneEstimate.frequencyHz - anchorFrequencyHz) < FAR_ATTACK_CONFIRM_DRIFT_HZ) {
+            return false;
+        }
+        if (attackReferenceToneRmsBeforeFrame <= 0.0d) {
+            return true;
+        }
+        return toneEstimate.toneRmsAmplitude
+                < (attackReferenceToneRmsBeforeFrame * FAR_ATTACK_CONFIRM_REFERENCE_TONE_RATIO);
+    }
+
+    private boolean isFarFromContinuityAnchor(int candidateFrequencyHz) {
+        int anchorFrequencyHz = continuityAnchorFrequencyHz();
+        return anchorFrequencyHz > 0
+                && Math.abs(candidateFrequencyHz - anchorFrequencyHz) >= FAR_ATTACK_CONFIRM_DRIFT_HZ;
+    }
+
+    private void clearPendingFarAttackCandidate() {
+        pendingFarAttackCandidateFrequencyHz = 0;
+        pendingFarAttackCandidateStableFrames = 0;
     }
 
     private void clearTrackingTarget() {
@@ -1801,14 +2216,37 @@ public final class CwSignalProcessor {
         lastPreviousTargetToneRms = previousTargetEstimate == null ? 0.0d : previousTargetEstimate.toneRmsAmplitude;
         lastPreviousTargetSelectionScore = previousTargetEstimate == null
                 ? 0.0d
-                : scoreToneCandidate(
-                previousTargetToneFrequencyHz,
-                previousTargetToneFrequencyHz,
-                previousTargetLocked,
-                previousTargetEstimate,
-                false
-        );
+                : previousTargetEstimate.selectionScore;
         lastPreviousTargetLocked = previousTargetLocked;
+    }
+
+    private ToneFrequencyEstimate withSelectionScore(
+            ToneFrequencyEstimate estimate,
+            int candidateFrequencyHz,
+            int previousTargetToneFrequencyHz,
+            boolean wasLocked,
+            boolean acquisitionMode
+    ) {
+        if (estimate == null) {
+            return null;
+        }
+        double weightedScore = scoreToneCandidate(
+                candidateFrequencyHz,
+                previousTargetToneFrequencyHz,
+                wasLocked,
+                estimate,
+                acquisitionMode
+        ) * estimate.toneRmsAmplitude;
+        return new ToneFrequencyEstimate(
+                estimate.frequencyHz,
+                estimate.toneRmsAmplitude,
+                estimate.widebandResidualRmsAmplitude,
+                estimate.dominanceRatio,
+                estimate.isolationRatio,
+                estimate.localContrastRatio,
+                estimate.locked,
+                weightedScore
+        );
     }
 
     private ToneFrequencyEstimate maybeApplyPendingHypothesisGuardOverride(
@@ -1933,12 +2371,13 @@ public final class CwSignalProcessor {
             int previousTargetToneFrequencyHz
     ) {
         int centerFrequencyHz = clampPreferredToneFrequency(previousTargetToneFrequencyHz);
+        int retuneWindowHz = currentLockRetuneWindowHz();
         return scanToneWindow(
                 samples,
                 sampleRateHz,
                 frameRms,
-                Math.max(MIN_TRACKED_TONE_FREQUENCY_HZ, centerFrequencyHz - LOCK_RETUNE_WINDOW_HZ),
-                Math.min(MAX_TRACKED_TONE_FREQUENCY_HZ, centerFrequencyHz + LOCK_RETUNE_WINDOW_HZ),
+                Math.max(MIN_TRACKED_TONE_FREQUENCY_HZ, centerFrequencyHz - retuneWindowHz),
+                Math.min(MAX_TRACKED_TONE_FREQUENCY_HZ, centerFrequencyHz + retuneWindowHz),
                 previousTargetToneFrequencyHz,
                 true,
                 false,
@@ -1948,7 +2387,8 @@ public final class CwSignalProcessor {
 
     private ToneFrequencyEstimate chooseLockedEstimate(
             ToneFrequencyEstimate lockedWindowEstimate,
-            ToneFrequencyEstimate searchEstimate
+            ToneFrequencyEstimate searchEstimate,
+            ToneFrequencyEstimate previousTargetEstimate
     ) {
         if (lockedWindowEstimate == null) {
             return searchEstimate;
@@ -1959,8 +2399,19 @@ public final class CwSignalProcessor {
         if (!searchEstimate.locked) {
             return lockedWindowEstimate;
         }
+        if (!isLockedRetentionQualified(lockedWindowEstimate)) {
+            return searchEstimate;
+        }
         int lockedDistanceHz = Math.abs(lockedWindowEstimate.frequencyHz - targetToneFrequencyHz);
         int searchDistanceHz = Math.abs(searchEstimate.frequencyHz - targetToneFrequencyHz);
+        if (shouldPreferLockedWindowDuringToneActive(
+                lockedWindowEstimate,
+                searchEstimate,
+                previousTargetEstimate,
+                searchDistanceHz
+        )) {
+            return lockedWindowEstimate;
+        }
         if (searchDistanceHz <= lockedDistanceHz
                 && searchEstimate.selectionScore > lockedWindowEstimate.selectionScore * 1.18d) {
             return searchEstimate;
@@ -1976,14 +2427,53 @@ public final class CwSignalProcessor {
             resetPendingLockedRetuneCandidate(retainedEstimate == null ? targetToneFrequencyHz : retainedEstimate.frequencyHz);
             return retainedEstimate;
         }
-        if (previousTargetEstimate == null || !isLockedRetentionQualified(previousTargetEstimate)) {
+        if (previousTargetEstimate == null) {
             resetPendingLockedRetuneCandidate(retainedEstimate.frequencyHz);
             return retainedEstimate;
         }
         int driftHz = Math.abs(retainedEstimate.frequencyHz - targetToneFrequencyHz);
+        boolean weakReferenceCandidate = shouldHoldWeakFarLockedRetune(retainedEstimate);
+        boolean previousTargetPlausible = isToneActiveStableContinuityAnchor(previousTargetEstimate);
+        if (!isLockedRetentionQualified(previousTargetEstimate)) {
+            if (previousTargetPlausible) {
+                int stableScans = noteLockedRetuneCandidate(retainedEstimate.frequencyHz);
+                int requiredScans = lockedRetuneGuardRequiredScans(driftHz, weakReferenceCandidate)
+                        + TONE_ACTIVE_FAR_SEARCH_PREVIOUS_PLAUSIBLE_EXTRA_SCANS;
+                boolean confirmed = stableScans >= requiredScans;
+                noteLockedRetuneGuardFrameState(
+                        retainedEstimate.frequencyHz,
+                        driftHz,
+                        stableScans,
+                        requiredScans,
+                        !confirmed
+                );
+                if (!confirmed) {
+                    return previousTargetEstimate;
+                }
+                resetPendingLockedRetuneCandidate(retainedEstimate.frequencyHz);
+                return retainedEstimate;
+            }
+            if (weakReferenceCandidate) {
+                int requiredScans = lockedRetuneGuardRequiredScans(driftHz, true);
+                noteLockedRetuneGuardFrameState(
+                        retainedEstimate.frequencyHz,
+                        driftHz,
+                        0,
+                        requiredScans,
+                        true
+                );
+                return previousTargetEstimate;
+            }
+            resetPendingLockedRetuneCandidate(retainedEstimate.frequencyHz);
+            return retainedEstimate;
+        }
         int stableScans = noteLockedRetuneCandidate(retainedEstimate.frequencyHz);
-        int requiredScans = lockedRetuneGuardRequiredScans(driftHz);
-        boolean immediateOverride = isImmediateLockedRetuneOverride(retainedEstimate, previousTargetEstimate, driftHz);
+        int requiredScans = lockedRetuneGuardRequiredScans(driftHz, weakReferenceCandidate);
+        if (previousTargetPlausible) {
+            requiredScans += TONE_ACTIVE_FAR_SEARCH_PREVIOUS_PLAUSIBLE_EXTRA_SCANS;
+        }
+        boolean immediateOverride = !previousTargetPlausible
+                && isImmediateLockedRetuneOverride(retainedEstimate, previousTargetEstimate, driftHz);
         boolean confirmed = stableScans >= requiredScans;
         noteLockedRetuneGuardFrameState(
                 retainedEstimate.frequencyHz,
@@ -1997,6 +2487,200 @@ public final class CwSignalProcessor {
             return retainedEstimate;
         }
         return previousTargetEstimate;
+    }
+
+    private boolean shouldHoldWeakFarLockedRetune(ToneFrequencyEstimate retainedEstimate) {
+        if (retainedEstimate == null || lockedBranchReferenceToneRmsAmplitude <= 0.0d) {
+            return false;
+        }
+        return retainedEstimate.toneRmsAmplitude
+                < (lockedBranchReferenceToneRmsAmplitude * LOCKED_RETUNE_GUARD_WEAK_REFERENCE_TONE_RATIO);
+    }
+
+    private ToneFrequencyEstimate maybeApplyToneActivePlausiblePreviousTargetGuard(
+            ToneFrequencyEstimate retainedEstimate,
+            ToneFrequencyEstimate previousTargetEstimate
+    ) {
+        if (retainedEstimate == null
+                || previousTargetEstimate == null
+                || !toneActive
+                || consecutiveLockedFrames < LOCKED_RETUNE_GUARD_MIN_STABLE_LOCK_FRAMES
+                || Math.abs(previousTargetEstimate.frequencyHz - targetToneFrequencyHz) > TONE_SCAN_STEP_HZ
+                || !isToneActiveStableContinuityAnchor(previousTargetEstimate)) {
+            return retainedEstimate;
+        }
+        int driftHz = Math.abs(retainedEstimate.frequencyHz - targetToneFrequencyHz);
+        if (driftHz < LOCKED_RETUNE_GUARD_MIN_DRIFT_HZ) {
+            return retainedEstimate;
+        }
+        boolean weakReferenceCandidate = shouldHoldWeakFarLockedRetune(retainedEstimate);
+        int stableScans = noteLockedRetuneCandidate(retainedEstimate.frequencyHz);
+        int requiredScans = lockedRetuneGuardRequiredScans(driftHz, weakReferenceCandidate)
+                + TONE_ACTIVE_FAR_SEARCH_PREVIOUS_PLAUSIBLE_EXTRA_SCANS;
+        boolean confirmed = stableScans >= requiredScans;
+        boolean collapsedReferenceOverride = !isLockedRetentionQualified(previousTargetEstimate)
+                && stableScans >= CANDIDATE_STABILITY_ACCEPT_SCANS
+                && isImmediateLockedRetuneOverride(retainedEstimate, previousTargetEstimate, driftHz);
+        boolean strongEnoughToRelease = retainedEstimate.selectionScore
+                >= (previousTargetEstimate.selectionScore * TONE_ACTIVE_FAR_SEARCH_RELEASE_SCORE_RATIO)
+                || retainedEstimate.toneRmsAmplitude
+                >= (previousTargetEstimate.toneRmsAmplitude * TONE_ACTIVE_FAR_SEARCH_RELEASE_TONE_RATIO);
+        boolean holding = (!confirmed && !collapsedReferenceOverride) || !strongEnoughToRelease;
+        noteLockedRetuneGuardFrameState(
+                retainedEstimate.frequencyHz,
+                driftHz,
+                stableScans,
+                requiredScans,
+                holding
+        );
+        if (holding) {
+            return previousTargetEstimate;
+        }
+        resetPendingLockedRetuneCandidate(retainedEstimate.frequencyHz);
+        return retainedEstimate;
+    }
+
+    private boolean hasLockedRetuneGuardFrameState() {
+        return lockedRetuneGuardHoldingThisFrame
+                || lockedRetuneGuardCandidateFrequencyHz > 0
+                || lockedRetuneGuardObservedScans > 0
+                || lockedRetuneGuardRequiredScans > 0;
+    }
+
+    private boolean isToneActiveContinuityHeldRetainedEstimate(
+            ToneFrequencyEstimate retainedEstimate,
+            ToneFrequencyEstimate previousTargetEstimate
+    ) {
+        if (retainedEstimate == null
+                || previousTargetEstimate == null
+                || !hasLockedRetuneGuardFrameState()
+                || !toneActive) {
+            return false;
+        }
+        if (isLockedRetentionQualified(retainedEstimate)) {
+            return false;
+        }
+        return Math.abs(retainedEstimate.frequencyHz - previousTargetEstimate.frequencyHz) <= TONE_SCAN_STEP_HZ
+                && isToneActivePreviousTargetAnchorPresent(retainedEstimate);
+    }
+
+    private boolean shouldPreferLockedWindowDuringToneActive(
+            ToneFrequencyEstimate lockedWindowEstimate,
+            ToneFrequencyEstimate searchEstimate,
+            ToneFrequencyEstimate previousTargetEstimate,
+            int searchDistanceHz
+    ) {
+        if (!toneActive
+                || lockedWindowEstimate == null
+                || searchEstimate == null
+                || searchDistanceHz < LOCKED_RETUNE_GUARD_MIN_DRIFT_HZ) {
+            return false;
+        }
+        if (!isToneActiveStableContinuityAnchor(previousTargetEstimate)) {
+            return false;
+        }
+        return searchEstimate.selectionScore
+                < (lockedWindowEstimate.selectionScore * TONE_ACTIVE_LOCKED_SEARCH_REPLACE_SCORE_RATIO)
+                || searchEstimate.toneRmsAmplitude
+                < (lockedWindowEstimate.toneRmsAmplitude * TONE_ACTIVE_LOCKED_SEARCH_REPLACE_TONE_RATIO);
+    }
+
+    private boolean shouldHoldToneActiveFarSearchCandidate(
+            ToneFrequencyEstimate searchEstimate,
+            ToneFrequencyEstimate previousTargetEstimate,
+            boolean continuityMode
+    ) {
+        if (!toneActive
+                || !continuityMode
+                || searchEstimate == null
+                || previousTargetEstimate == null
+                || !isAcquisitionCandidate(searchEstimate)) {
+            return false;
+        }
+        int driftHz = Math.abs(searchEstimate.frequencyHz - targetToneFrequencyHz);
+        if (driftHz < LOCKED_RETUNE_GUARD_MIN_DRIFT_HZ) {
+            return false;
+        }
+        if (isImmediateToneActiveFarSearchOverride(searchEstimate, previousTargetEstimate)) {
+            return false;
+        }
+        int stableScans = noteLockedRetuneCandidate(searchEstimate.frequencyHz);
+        boolean previousTargetStableAnchor = isToneActiveStableContinuityAnchor(previousTargetEstimate);
+        boolean previousTargetPlausible = previousTargetStableAnchor
+                || isToneActiveContinuityTargetPlausible(previousTargetEstimate);
+        boolean weakReferenceCandidate = shouldHoldWeakFarLockedRetune(searchEstimate);
+        int requiredScans = lockedRetuneGuardRequiredScans(driftHz, weakReferenceCandidate);
+        if (previousTargetStableAnchor) {
+            requiredScans += TONE_ACTIVE_FAR_SEARCH_PREVIOUS_PLAUSIBLE_EXTRA_SCANS;
+        }
+        boolean hold = stableScans < requiredScans;
+        if (!hold && previousTargetPlausible) {
+            double previousSelectionScore = Math.max(1.0d, previousTargetEstimate.selectionScore);
+            hold = searchEstimate.selectionScore
+                    < (previousSelectionScore * TONE_ACTIVE_FAR_SEARCH_RELEASE_SCORE_RATIO)
+                    && searchEstimate.toneRmsAmplitude
+                    < (previousTargetEstimate.toneRmsAmplitude * TONE_ACTIVE_FAR_SEARCH_RELEASE_TONE_RATIO);
+        }
+        noteLockedRetuneGuardFrameState(
+                searchEstimate.frequencyHz,
+                driftHz,
+                stableScans,
+                requiredScans,
+                hold
+        );
+        return hold;
+    }
+
+    private boolean isImmediateToneActiveFarSearchOverride(
+            ToneFrequencyEstimate searchEstimate,
+            ToneFrequencyEstimate previousTargetEstimate
+    ) {
+        if (searchEstimate == null || previousTargetEstimate == null) {
+            return false;
+        }
+        double previousSelectionScore = Math.max(1.0d, previousTargetEstimate.selectionScore);
+        double previousToneRms = Math.max(1.0d, previousTargetEstimate.toneRmsAmplitude);
+        return searchEstimate.selectionScore
+                >= (previousSelectionScore * TONE_ACTIVE_FAR_SEARCH_IMMEDIATE_SCORE_RATIO)
+                && searchEstimate.toneRmsAmplitude
+                >= (previousToneRms * TONE_ACTIVE_FAR_SEARCH_IMMEDIATE_TONE_RATIO);
+    }
+
+    private boolean isToneActiveContinuityTargetPlausible(ToneFrequencyEstimate previousTargetEstimate) {
+        if (previousTargetEstimate == null) {
+            return false;
+        }
+        if (isLockedRetentionQualified(previousTargetEstimate)) {
+            return true;
+        }
+        return previousTargetEstimate.toneRmsAmplitude >= (MIN_TRACKED_TONE_RMS * 0.90d)
+                && previousTargetEstimate.dominanceRatio >= (MIN_NARROWBAND_DOMINANCE_RATIO * 0.90d)
+                && (previousTargetEstimate.isolationRatio >= (MIN_NARROWBAND_ISOLATION_RATIO * 0.82d)
+                || previousTargetEstimate.localContrastRatio >= (MIN_NARROWBAND_LOCAL_CONTRAST_RATIO * 0.84d));
+    }
+
+    private boolean isToneActiveStableContinuityAnchor(ToneFrequencyEstimate previousTargetEstimate) {
+        return previousTargetEstimate != null
+                && toneActive
+                && consecutiveLockedFrames >= LOCKED_RETUNE_GUARD_MIN_STABLE_LOCK_FRAMES
+                && Math.abs(previousTargetEstimate.frequencyHz - targetToneFrequencyHz) <= TONE_SCAN_STEP_HZ
+                && isToneActivePreviousTargetAnchorPresent(previousTargetEstimate);
+    }
+
+    private boolean isToneActivePreviousTargetAnchorPresent(ToneFrequencyEstimate previousTargetEstimate) {
+        if (previousTargetEstimate == null) {
+            return false;
+        }
+        if (previousTargetEstimate.toneRmsAmplitude
+                < (MIN_TRACKED_TONE_RMS * TONE_ACTIVE_PREVIOUS_TARGET_MIN_TONE_MULTIPLIER)) {
+            return false;
+        }
+        if (previousTargetEstimate.dominanceRatio < TONE_ACTIVE_PREVIOUS_TARGET_MIN_DOMINANCE_RATIO) {
+            return false;
+        }
+        return lockedBranchReferenceToneRmsAmplitude <= 0.0d
+                || previousTargetEstimate.toneRmsAmplitude
+                >= (lockedBranchReferenceToneRmsAmplitude * TONE_ACTIVE_PREVIOUS_TARGET_MIN_REFERENCE_TONE_RATIO);
     }
 
     private ToneFrequencyEstimate maybeApplyExperimentalLockedConsensusGuard(
@@ -2035,10 +2719,14 @@ public final class CwSignalProcessor {
         return Math.abs(retainedEstimate.frequencyHz - targetToneFrequencyHz) >= LOCKED_RETUNE_GUARD_MIN_DRIFT_HZ;
     }
 
-    private int lockedRetuneGuardRequiredScans(int driftHz) {
-        return driftHz >= LOCKED_RETUNE_GUARD_FAR_DRIFT_HZ
+    private int lockedRetuneGuardRequiredScans(int driftHz, boolean weakReferenceCandidate) {
+        int requiredScans = driftHz >= LOCKED_RETUNE_GUARD_FAR_DRIFT_HZ
                 ? LOCKED_RETUNE_GUARD_FAR_REQUIRED_SCANS
                 : LOCKED_RETUNE_GUARD_REQUIRED_SCANS;
+        if (weakReferenceCandidate) {
+            requiredScans += LOCKED_RETUNE_GUARD_WEAK_REFERENCE_EXTRA_SCANS;
+        }
+        return requiredScans;
     }
 
     private boolean isImmediateLockedRetuneOverride(
@@ -2154,7 +2842,9 @@ public final class CwSignalProcessor {
             int previousTargetToneFrequencyHz,
             boolean wasLocked
     ) {
-        int scanWindowHz = wasLocked ? PREFERRED_TONE_SCAN_WINDOW_HZ : UNLOCKED_ACQUISITION_SCAN_WINDOW_HZ;
+        int scanWindowHz = wasLocked
+                ? currentPreferredToneScanWindowHz()
+                : currentUnlockedAcquisitionScanWindowHz();
         int searchMin = Math.max(MIN_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz - scanWindowHz);
         int searchMax = Math.min(MAX_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz + scanWindowHz);
         // This scan is intentionally centered on preferred tone, but it is still only
@@ -2182,6 +2872,9 @@ public final class CwSignalProcessor {
             double frameRms,
             int previousTargetToneFrequencyHz
     ) {
+        if (rxToneMode == RxToneMode.FIXED_TONE) {
+            return ToneScanResult.empty();
+        }
         // Wide acquisition is the counterweight that prevents preferred tone from
         // becoming a de facto hard anchor when the true CW peak sits elsewhere.
         return scanToneWindow(
@@ -2285,6 +2978,15 @@ public final class CwSignalProcessor {
             );
             bestEstimate = rebalanced.winner;
             runnerUpEstimate = rebalanced.runnerUp;
+            if ("preferred".equals(scanLabel)) {
+                ToneScanResult preferredEdgeRebalanced = rebalancePreferredWindowEdgeWinner(
+                        bestEstimate,
+                        runnerUpEstimate,
+                        topCandidates
+                );
+                bestEstimate = preferredEdgeRebalanced.winner;
+                runnerUpEstimate = preferredEdgeRebalanced.runnerUp;
+            }
         }
         rememberTopCandidatesSummary(scanLabel, topCandidates);
         return new ToneScanResult(
@@ -2372,7 +3074,7 @@ public final class CwSignalProcessor {
 
     private boolean isPreferredWindowAcquisitionSufficient(ToneFrequencyEstimate estimate) {
         return estimate.locked
-                && Math.abs(estimate.frequencyHz - preferredToneFrequencyHz) <= PREFERRED_TONE_SCAN_WINDOW_HZ
+                && Math.abs(estimate.frequencyHz - preferredToneFrequencyHz) <= currentUnlockedAcquisitionScanWindowHz()
                 && (estimate.isolationRatio >= MIN_LOCK_ISOLATION_RATIO
                 || estimate.localContrastRatio >= MIN_LOCK_LOCAL_CONTRAST_RATIO);
     }
@@ -2498,8 +3200,9 @@ public final class CwSignalProcessor {
         if (estimate == null) {
             return false;
         }
-        int searchMin = Math.max(MIN_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz - PREFERRED_TONE_SCAN_WINDOW_HZ);
-        int searchMax = Math.min(MAX_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz + PREFERRED_TONE_SCAN_WINDOW_HZ);
+        int edgeWindowHz = currentPreferredRegionWindowHz();
+        int searchMin = Math.max(MIN_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz - edgeWindowHz);
+        int searchMax = Math.min(MAX_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz + edgeWindowHz);
         return estimate.frequencyHz <= searchMin + TONE_SCAN_STEP_HZ
                 || estimate.frequencyHz >= searchMax - TONE_SCAN_STEP_HZ;
     }
@@ -2556,10 +3259,143 @@ public final class CwSignalProcessor {
         return new ToneScanResult(runnerUp, winner, scanWinnerConfidence(runnerUp, winner));
     }
 
+    private ToneScanResult rebalancePreferredWindowEdgeWinner(
+            ToneFrequencyEstimate winner,
+            ToneFrequencyEstimate runnerUp,
+            List<ToneFrequencyEstimate> topCandidates
+    ) {
+        if (winner == null || runnerUp == null) {
+            return new ToneScanResult(winner, runnerUp, scanWinnerConfidence(winner, runnerUp));
+        }
+        if (!isPreferredWindowEdgeEstimate(winner) || !isPreferredWindowEdgeEstimate(runnerUp)) {
+            return new ToneScanResult(winner, runnerUp, scanWinnerConfidence(winner, runnerUp));
+        }
+        ToneFrequencyEstimate interiorCandidate = strongestPreferredWindowInteriorCandidate(topCandidates, winner, runnerUp);
+        if (interiorCandidate == null) {
+            return new ToneScanResult(winner, runnerUp, scanWinnerConfidence(winner, runnerUp));
+        }
+        int winnerDistanceHz = Math.abs(winner.frequencyHz - preferredToneFrequencyHz);
+        int interiorDistanceHz = Math.abs(interiorCandidate.frequencyHz - preferredToneFrequencyHz);
+        if (interiorDistanceHz + 60 >= winnerDistanceHz) {
+            return new ToneScanResult(winner, runnerUp, scanWinnerConfidence(winner, runnerUp));
+        }
+
+        double winnerConfidence = scanWinnerConfidence(winner, runnerUp);
+        double winnerEvidenceScore = acquisitionEvidenceScore(winner);
+        double interiorEvidenceScore = acquisitionEvidenceScore(interiorCandidate);
+        boolean interiorCandidateCloseEnough = interiorCandidate.selectionScore >= (winner.selectionScore * 0.72d)
+                && interiorCandidate.toneRmsAmplitude >= (winner.toneRmsAmplitude * 0.78d)
+                && interiorEvidenceScore >= (winnerEvidenceScore * 0.76d);
+        if (!interiorCandidateCloseEnough) {
+            return new ToneScanResult(winner, runnerUp, winnerConfidence);
+        }
+        boolean edgeClusterClearlyStrongerThanInterior = winnerConfidence >= 0.78d
+                && winner.selectionScore > (interiorCandidate.selectionScore * 1.26d)
+                && winner.toneRmsAmplitude > (interiorCandidate.toneRmsAmplitude * 1.22d)
+                && runnerUp.selectionScore > (interiorCandidate.selectionScore * 1.14d)
+                && runnerUp.toneRmsAmplitude > (interiorCandidate.toneRmsAmplitude * 1.08d);
+        if (edgeClusterClearlyStrongerThanInterior) {
+            return new ToneScanResult(winner, runnerUp, winnerConfidence);
+        }
+        return new ToneScanResult(interiorCandidate, winner, scanWinnerConfidence(interiorCandidate, winner));
+    }
+
+    private ToneFrequencyEstimate strongestPreferredWindowInteriorCandidate(
+            List<ToneFrequencyEstimate> topCandidates,
+            ToneFrequencyEstimate winner,
+            ToneFrequencyEstimate runnerUp
+    ) {
+        if (topCandidates == null || topCandidates.isEmpty()) {
+            return null;
+        }
+        for (ToneFrequencyEstimate candidate : topCandidates) {
+            if (candidate == null) {
+                continue;
+            }
+            if (winner != null && candidate.frequencyHz == winner.frequencyHz) {
+                continue;
+            }
+            if (runnerUp != null && candidate.frequencyHz == runnerUp.frequencyHz) {
+                continue;
+            }
+            if (!isPreferredWindowEdgeEstimate(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
     private boolean isWithinPreferredWindow(int candidateFrequencyHz) {
-        int searchMin = Math.max(MIN_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz - PREFERRED_TONE_SCAN_WINDOW_HZ);
-        int searchMax = Math.min(MAX_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz + PREFERRED_TONE_SCAN_WINDOW_HZ);
+        int windowHz = currentPreferredRegionWindowHz();
+        int searchMin = Math.max(MIN_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz - windowHz);
+        int searchMax = Math.min(MAX_TRACKED_TONE_FREQUENCY_HZ, preferredToneFrequencyHz + windowHz);
         return candidateFrequencyHz >= searchMin && candidateFrequencyHz <= searchMax;
+    }
+
+    private int currentPreferredRegionWindowHz() {
+        return trackingState == TrackingState.LOCKED
+                ? currentPreferredToneScanWindowHz()
+                : currentUnlockedAcquisitionScanWindowHz();
+    }
+
+    private int currentPreferredToneScanWindowHz() {
+        return rxToneMode == RxToneMode.FIXED_TONE
+                ? FIXED_TONE_PREFERRED_SCAN_WINDOW_HZ
+                : PREFERRED_TONE_SCAN_WINDOW_HZ;
+    }
+
+    private int currentUnlockedAcquisitionScanWindowHz() {
+        return rxToneMode == RxToneMode.FIXED_TONE
+                ? FIXED_TONE_UNLOCKED_SCAN_WINDOW_HZ
+                : UNLOCKED_ACQUISITION_SCAN_WINDOW_HZ;
+    }
+
+    private int currentLockRetuneWindowHz() {
+        return rxToneMode == RxToneMode.FIXED_TONE
+                ? FIXED_TONE_LOCK_RETUNE_WINDOW_HZ
+                : LOCK_RETUNE_WINDOW_HZ;
+    }
+
+    private long currentToneOffHangMs() {
+        return rxToneMode == RxToneMode.FIXED_TONE
+                ? TONE_OFF_HANG_MS
+                : AUTO_TRACK_TONE_OFF_HANG_MS;
+    }
+
+    private boolean shouldBridgeAutoTrackWeakValley(
+            ToneFrequencyEstimate toneEstimate,
+            int attackThreshold
+    ) {
+        if (!isAutoTrackWeakValleyCandidate(toneEstimate, attackThreshold)) {
+            autoTrackWeakValleyBridgeFramesRemaining = 0;
+            autoTrackWeakValleyBridgeActive = false;
+            return false;
+        }
+        if (!autoTrackWeakValleyBridgeActive) {
+            autoTrackWeakValleyBridgeFramesRemaining = AUTO_TRACK_WEAK_VALLEY_BRIDGE_FRAMES;
+            autoTrackWeakValleyBridgeActive = true;
+        }
+        if (autoTrackWeakValleyBridgeFramesRemaining <= 0) {
+            return false;
+        }
+        autoTrackWeakValleyBridgeFramesRemaining -= 1;
+        return true;
+    }
+
+    private boolean isAutoTrackWeakValleyCandidate(
+            ToneFrequencyEstimate toneEstimate,
+            int attackThreshold
+    ) {
+        if (rxToneMode != RxToneMode.AUTO_TRACK || !toneActive || !targetToneLocked) {
+            return false;
+        }
+        if (toneEstimate == null || toneEstimate.frequencyHz <= 0) {
+            return false;
+        }
+        if (Math.abs(toneEstimate.frequencyHz - targetToneFrequencyHz) > TONE_SCAN_STEP_HZ) {
+            return false;
+        }
+        return shouldSuppressWeakLockedBranchTone(toneEstimate, attackThreshold);
     }
 
     private double preferredFrequencyWeight(int candidateFrequencyHz, boolean acquisitionMode) {
@@ -2803,6 +3639,16 @@ public final class CwSignalProcessor {
             );
         }
         return toneEstimate.toneRmsAmplitude;
+    }
+
+    private double backgroundObservationLevel(double frameRms, ToneFrequencyEstimate toneEstimate) {
+        if (toneEstimate == null) {
+            return Math.max(0.0d, frameRms);
+        }
+        if (toneEstimate.widebandResidualRmsAmplitude > 0.0d) {
+            return toneEstimate.widebandResidualRmsAmplitude;
+        }
+        return Math.max(0.0d, frameRms);
     }
 
     private boolean isNarrowbandQualified(ToneFrequencyEstimate toneEstimate) {
@@ -3499,7 +4345,20 @@ public final class CwSignalProcessor {
     private boolean isTrackedToneMemoryActive(long timestampMs) {
         return lastTrackedToneTimestampMs >= 0L
                 && timestampMs >= lastTrackedToneTimestampMs
-                && (timestampMs - lastTrackedToneTimestampMs) <= TRACKED_TONE_IDLE_HANG_MS;
+                && (timestampMs - lastTrackedToneTimestampMs) <= currentTrackedToneIdleHangMs();
+    }
+
+    private long currentTrackedToneIdleHangMs() {
+        long dynamicHangMs = TRACKED_TONE_IDLE_HANG_MS;
+        if (lastEvent != null
+                && lastEvent.type() == CwToneEvent.Type.TONE_OFF
+                && lastEvent.toneDurationMs() > 0L) {
+            dynamicHangMs = Math.max(
+                    TRACKED_TONE_IDLE_HANG_MIN_MS,
+                    Math.round(lastEvent.toneDurationMs() * TRACKED_TONE_IDLE_HANG_DOT_RATIO / 3.0d)
+            );
+        }
+        return Math.max(TRACKED_TONE_IDLE_HANG_MIN_MS, dynamicHangMs);
     }
 
     private int recordHistogramHit(int[] histogram, int frequencyHz) {
