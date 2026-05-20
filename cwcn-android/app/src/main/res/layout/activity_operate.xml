@@ -303,7 +303,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="发送"
+                        android:text="发射输入"
                         android:textColor="@color/cwcn_subtitle"
                         android:textSize="8sp"
                         android:textStyle="bold" />
@@ -336,7 +336,7 @@
                         android:background="@drawable/bootstrap_field_background"
                         android:fontFamily="monospace"
                         android:gravity="top|start"
-                        android:hint="输入要发送的 CW 文本"
+                        android:hint="输入或套用模板后发射"
                         android:inputType="textCapCharacters|textMultiLine"
                         android:maxLines="2"
                         android:minLines="2"

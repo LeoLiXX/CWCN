@@ -838,26 +838,28 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void updateComposerUi() {
-        String draftText = safeValue(binding.txComposeEditText.getText() == null
+        String composeText = safeValue(binding.txComposeEditText.getText() == null
                 ? null
                 : binding.txComposeEditText.getText().toString());
-        boolean hasDraft = !"-".equals(draftText);
-        binding.txPlaybackControlsRow.setVisibility(txSendInProgress ? View.VISIBLE : View.GONE);
+        boolean hasComposeText = !"-".equals(composeText);
+        boolean showPlaybackControls = txSendInProgress || hasRepeatableTxText();
+        binding.txPlaybackControlsRow.setVisibility(showPlaybackControls ? View.VISIBLE : View.GONE);
         binding.templatePreviewText.setText(renderTemplatePreview());
-        binding.selectedTemplateChip.setText(selectedTemplate);
+        binding.selectedTemplateChip.setText(renderTxSourceChip(hasComposeText));
+        setVisibleWhenHasText(binding.selectedTemplateChip);
         binding.txRouteChip.setText(renderTxRouteChip());
-        binding.txStageChip.setText(renderTxStageChip(hasDraft, draftText));
+        binding.txStageChip.setText(renderTxContentChip(hasComposeText, composeText));
         binding.sqlQuickChip.setText(renderSqlQuickChipText());
         binding.sendTxButton.setEnabled(!txSendInProgress);
         binding.sendTxButton.setAlpha(txSendInProgress ? 0.55f : 1.0f);
-        binding.clearComposeButton.setVisibility(hasDraft ? View.VISIBLE : View.GONE);
-        binding.clearComposeButton.setEnabled(hasDraft && !txSendInProgress);
+        binding.clearComposeButton.setVisibility(hasComposeText ? View.VISIBLE : View.GONE);
+        binding.clearComposeButton.setEnabled(hasComposeText && !txSendInProgress);
         binding.pauseTxButton.setEnabled(txSendInProgress && activeTxStopSupported);
         binding.pauseTxButton.setAlpha(txSendInProgress && activeTxStopSupported ? 1.0f : 0.45f);
         binding.repeatTxButton.setVisibility(txSendInProgress ? View.GONE : View.VISIBLE);
         binding.repeatTxButton.setEnabled(!txSendInProgress && hasRepeatableTxText());
         binding.repeatTxButton.setAlpha(!txSendInProgress && hasRepeatableTxText() ? 1.0f : 0.45f);
-        binding.txStatusText.setText(renderTxStatus(hasDraft));
+        binding.txStatusText.setText(renderTxStatus(hasComposeText));
         setVisibleWhenHasText(binding.txStatusText);
         renderComposerPlaybackHighlight();
     }
@@ -1196,7 +1198,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return "";
     }
 
-    private String renderTxStatus(boolean hasDraft) {
+    private String renderTxStatus(boolean hasComposeText) {
         if (txSendInProgress) {
             if (txStopRequested) {
                 return activeTxStopSupported ? "正在停止发射" : "已请求停止，等待适配器响应";
@@ -1204,7 +1206,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             if (activeTxPlaybackSnapshot != null && hasMeaningfulText(activeTxPlaybackSnapshot.statusMessage())) {
                 return renderPlaybackSnapshotStatus(activeTxPlaybackSnapshot);
             }
-            return hasDraft ? "正在发送文本" : "正在发送模板";
+            return hasComposeText ? "正在发射输入文本" : "正在发射模板文本";
         }
         if (txDeliveryStatus != null && !txDeliveryStatus.trim().isEmpty()) {
             return txDeliveryStatus;
@@ -1228,15 +1230,26 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return wpm + "WPM | " + route;
     }
 
-    private String renderTxStageChip(boolean hasDraft, String draftText) {
+    private String renderTxSourceChip(boolean hasComposeText) {
+        if (txSendInProgress) {
+            return hasMeaningfulText(activeTxText) ? "发送中" : "模板发送";
+        }
+        if (hasComposeText) {
+            return "输入文本";
+        }
+        return "模板 " + selectedTemplate;
+    }
+
+    private String renderTxContentChip(boolean hasComposeText, String composeText) {
         if (txSendInProgress && activeTxPlaybackSnapshot != null) {
-            return renderPlaybackProgressChip(activeTxPlaybackSnapshot);
+            return renderPlaybackProgressSummary(activeTxPlaybackSnapshot);
         }
-        if (!hasDraft) {
-            return "模板 " + selectedTemplate;
+        if (!hasComposeText) {
+            String templateText = buildTemplateText(selectedTemplate);
+            return "模板 " + templateText.length() + "字";
         }
-        int length = draftText == null || "-".equals(draftText) ? 0 : draftText.length();
-        return "文本 " + length + "字";
+        int length = composeText == null || "-".equals(composeText) ? 0 : composeText.length();
+        return "输入 " + length + "字";
     }
 
     private boolean usePhoneFallbackRoute(@Nullable RigProfile profile) {
@@ -1605,9 +1618,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private String renderTemplatePreview() {
         String templateText = rawTemplateText(selectedTemplate);
         if (templateText.length() <= 20) {
-            return templateText;
+            return "模板预览: " + templateText;
         }
-        return templateText.substring(0, 17) + "...";
+        return "模板预览: " + templateText.substring(0, 17) + "...";
     }
 
     private String renderCallsignHint(@Nullable RxSessionSnapshot snapshot) {
@@ -3408,6 +3421,21 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     private boolean hasRepeatableTxText() {
         return hasMeaningfulText(activeTxText) || hasMeaningfulText(resolveImmediateTxText());
+    }
+
+    private String renderPlaybackProgressSummary(@Nullable CwTxPlaybackSnapshot snapshot) {
+        if (snapshot == null) {
+            return "发射";
+        }
+        String state = renderPlaybackProgressChip(snapshot);
+        String normalizedText = safeValue(snapshot.normalizedText());
+        int length = "-".equals(normalizedText) ? 0 : normalizedText.length();
+        int currentIndex = snapshot.currentTextIndex();
+        if (length <= 0 || currentIndex < 0) {
+            return state;
+        }
+        int progressed = Math.min(length, currentIndex + 1);
+        return state + " " + progressed + "/" + length;
     }
 
     private String resolveVisibleActiveTxText(String fallbackDraftText) {
