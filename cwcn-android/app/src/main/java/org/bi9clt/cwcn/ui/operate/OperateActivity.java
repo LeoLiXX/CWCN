@@ -191,29 +191,35 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     private static final class StreamEntry {
         private final String label;
+        private final String headline;
         private final String meta;
         private final CharSequence body;
         private final int cardBackgroundRes;
         private final int labelColorRes;
         private final boolean outgoing;
         private final boolean compact;
+        private final boolean active;
 
         private StreamEntry(
                 String label,
+                String headline,
                 String meta,
                 CharSequence body,
                 int cardBackgroundRes,
                 int labelColorRes,
                 boolean outgoing,
-                boolean compact
+                boolean compact,
+                boolean active
         ) {
             this.label = label;
+            this.headline = headline;
             this.meta = meta;
             this.body = body;
             this.cardBackgroundRes = cardBackgroundRes;
             this.labelColorRes = labelColorRes;
             this.outgoing = outgoing;
             this.compact = compact;
+            this.active = active;
         }
     }
 
@@ -1046,8 +1052,11 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         );
+        int bottomGap = entry.active ? px(entry.compact ? 8 : 10) : px(entry.compact ? 4 : 6);
         if (withBottomGap) {
-            cardParams.bottomMargin = px(entry.compact ? 4 : 6);
+            cardParams.bottomMargin = bottomGap;
+        } else if (entry.active) {
+            cardParams.bottomMargin = px(4);
         }
         if (entry.outgoing) {
             cardParams.leftMargin = px(20);
@@ -1057,25 +1066,77 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         } else {
             cardParams.rightMargin = px(12);
         }
+        if (entry.active) {
+            cardParams.topMargin = px(2);
+        }
         card.setLayoutParams(cardParams);
+        card.setAlpha(entry.active ? 1.0f : 0.94f);
+
+        if (entry.active) {
+            View accentLine = new View(this);
+            LinearLayout.LayoutParams accentParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    px(3)
+            );
+            accentParams.bottomMargin = px(7);
+            accentLine.setLayoutParams(accentParams);
+            accentLine.setBackgroundColor(ContextCompat.getColor(this, entry.labelColorRes));
+            accentLine.setAlpha(entry.outgoing ? 0.82f : 0.72f);
+            card.addView(accentLine);
+        }
+
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        card.addView(topRow);
 
         TextView labelView = new TextView(this);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        labelView.setLayoutParams(labelParams);
         labelView.setText(entry.label);
-        labelView.setTextSize(entry.compact ? 9f : 11f);
+        labelView.setTextSize(entry.compact ? 8.5f : 10f);
         labelView.setTypeface(labelView.getTypeface(), android.graphics.Typeface.BOLD);
         labelView.setTextColor(ContextCompat.getColor(this, entry.labelColorRes));
-        card.addView(labelView);
+        labelView.setBackgroundResource(entry.active
+                ? R.drawable.operate_chip_active_background
+                : R.drawable.operate_chip_background);
+        labelView.setPadding(px(6), px(2), px(6), px(2));
+        topRow.addView(labelView);
+
+        TextView headlineView = new TextView(this);
+        LinearLayout.LayoutParams headlineParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        headlineParams.leftMargin = px(8);
+        headlineView.setLayoutParams(headlineParams);
+        headlineView.setText(entry.headline);
+        headlineView.setTextSize(entry.compact ? 8.5f : 9.5f);
+        headlineView.setTextColor(ContextCompat.getColor(
+                this,
+                entry.active ? entry.labelColorRes : R.color.cwcn_title
+        ));
+        headlineView.setTypeface(headlineView.getTypeface(),
+                entry.active ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        topRow.addView(headlineView);
 
         TextView metaView = new TextView(this);
         LinearLayout.LayoutParams metaParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        metaParams.topMargin = px(entry.compact ? 1 : 2);
+        metaParams.topMargin = px(entry.compact ? 3 : 4);
         metaView.setLayoutParams(metaParams);
         metaView.setText(entry.meta);
-        metaView.setTextSize(entry.compact ? 8f : 9f);
-        metaView.setTextColor(ContextCompat.getColor(this, R.color.cwcn_subtitle));
+        metaView.setTextSize(entry.compact ? 7.5f : 8.5f);
+        metaView.setTextColor(ContextCompat.getColor(
+                this,
+                entry.active ? entry.labelColorRes : R.color.cwcn_subtitle
+        ));
+        metaView.setAlpha(entry.active ? 0.94f : 0.88f);
         card.addView(metaView);
 
         TextView bodyView = new TextView(this);
@@ -1091,6 +1152,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         bodyView.setLineSpacing(0f, 1.12f);
         bodyView.setTypeface(android.graphics.Typeface.MONOSPACE);
         bodyView.setMaxLines(entry.compact ? 3 : Integer.MAX_VALUE);
+        bodyView.setAlpha(entry.active ? 1.0f : 0.96f);
         card.addView(bodyView);
 
         return card;
@@ -1705,7 +1767,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private String renderReceiveMeta(RxSessionSnapshot snapshot) {
         StringBuilder builder = new StringBuilder();
         if (isOperateRxRawOnlyMode()) {
-            builder.append("RAW");
+            builder.append(snapshot.captureActive() ? "Turn live" : "Turn done")
+                    .append("  |  RAW");
         } else {
             builder.append(safeValue(snapshot.phaseDisplayName()))
                     .append("  |  RAW");
@@ -3911,36 +3974,72 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (timestampEpochMs <= 0L) {
             return "-";
         }
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
-        if (transcriptUseUtc) {
-            formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
-            return formatter.format(new Date(timestampEpochMs)) + " UTC";
-        }
-        formatter.setTimeZone(TimeZone.getDefault());
-        return formatter.format(new Date(timestampEpochMs)) + " Local";
+        TimeZone timeZone = transcriptUseUtc
+                ? TimeZone.getTimeZone("UTC")
+                : TimeZone.getDefault();
+        boolean sameDay = isSameTranscriptDay(timestampEpochMs, System.currentTimeMillis(), timeZone);
+        SimpleDateFormat formatter = new SimpleDateFormat(
+                sameDay ? "HH:mm:ss" : "MM-dd HH:mm:ss",
+                Locale.US
+        );
+        formatter.setTimeZone(timeZone);
+        return formatter.format(new Date(timestampEpochMs));
+    }
+
+    private boolean isSameTranscriptDay(long firstEpochMs, long secondEpochMs, TimeZone timeZone) {
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMdd", Locale.US);
+        formatter.setTimeZone(timeZone);
+        return formatter.format(new Date(firstEpochMs)).equals(
+                formatter.format(new Date(secondEpochMs))
+        );
     }
 
     private StreamEntry toStreamEntry(TranscriptEntry transcriptEntry) {
         boolean outgoing = transcriptEntry.type == TranscriptEntryType.TX;
         String label = outgoing ? "TX" : "RX";
-        String meta = renderTranscriptTimestamp(transcriptEntry.startedAtEpochMs)
-                + "  |  "
-                + safeValue(transcriptEntry.stateLabel);
-        if (hasMeaningfulText(transcriptEntry.sourceOrRouteLabel)) {
-            meta += "  |  " + transcriptEntry.sourceOrRouteLabel.trim();
-        }
+        String headline = renderTranscriptTimestamp(transcriptEntry.startedAtEpochMs);
+        String meta = renderTranscriptMeta(transcriptEntry);
         CharSequence body = outgoing
                 ? renderTranscriptTxBody(transcriptEntry)
                 : safeValue(transcriptEntry.bodyText);
         return new StreamEntry(
                 label,
+                headline,
                 meta,
                 body,
                 outgoing ? R.drawable.operate_stream_card_tx : R.drawable.operate_stream_card_rx,
                 outgoing ? R.color.cwcn_tx_line : R.color.cwcn_rx_line,
                 outgoing,
-                false
+                false,
+                transcriptEntry.active
         );
+    }
+
+    private String renderTranscriptMeta(TranscriptEntry transcriptEntry) {
+        ArrayList<String> parts = new ArrayList<>();
+        if (hasMeaningfulText(transcriptEntry.stateLabel)) {
+            parts.add(transcriptEntry.stateLabel.trim());
+        }
+        if (hasMeaningfulText(transcriptEntry.sourceOrRouteLabel)) {
+            parts.add(transcriptEntry.sourceOrRouteLabel.trim());
+        }
+        if (transcriptEntry.type == TranscriptEntryType.TX
+                && transcriptEntry.active
+                && hasMeaningfulText(transcriptEntry.bodyText)
+                && transcriptEntry.progressIndex >= 0) {
+            parts.add(renderTranscriptProgressMeta(transcriptEntry));
+        }
+        return parts.isEmpty() ? "-" : String.join("  |  ", parts);
+    }
+
+    private String renderTranscriptProgressMeta(TranscriptEntry transcriptEntry) {
+        String visibleText = safeTranscriptText(transcriptEntry.bodyText);
+        if (visibleText.isEmpty()) {
+            return "0%";
+        }
+        int clampedIndex = Math.max(0, Math.min(transcriptEntry.progressIndex, visibleText.length() - 1));
+        int percent = Math.round(((clampedIndex + 1) * 100f) / visibleText.length());
+        return percent + "%";
     }
 
     private CharSequence renderTranscriptTxBody(TranscriptEntry transcriptEntry) {
@@ -4002,10 +4101,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             }
             entries.add(new StreamEntry(
                     "RX",
-                    transcriptUseUtc ? "UTC transcript" : "Local transcript",
-                    "当前 transcript 为空",
+                    "Transcript",
+                    "当前还没有已保留的 RX/TX 条目",
+                    "新的收发 turn 会按时间顺序继续堆叠在这里",
                     R.drawable.operate_stream_card_rx,
                     R.color.cwcn_rx_line,
+                    false,
                     false,
                     false
             ));
@@ -4016,6 +4117,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (snapshot == null) {
             entries.add(new StreamEntry(
                     "RX",
+                    "等待接收",
                     shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission()
                             ? "手机麦克风 | 需要授权"
                             : usePhoneFallbackRoute(profile)
@@ -4029,20 +4131,21 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     R.drawable.operate_stream_card_rx,
                     R.color.cwcn_rx_line,
                     false,
+                    false,
                     false
             ));
         } else {
             String rawText = normalizedTextOrNull(snapshot.rawText());
             entries.add(new StreamEntry(
                     "RX",
-                    renderTranscriptTimestamp(snapshot.updatedAtEpochMs())
-                            + "  |  "
-                            + renderReceiveMeta(snapshot),
+                    renderTranscriptTimestamp(snapshot.updatedAtEpochMs()),
+                    renderReceiveMeta(snapshot),
                     safeValue(rawText),
                     R.drawable.operate_stream_card_rx,
                     R.color.cwcn_rx_line,
                     false,
-                    false
+                    false,
+                    snapshot.captureActive()
             ));
         }
 
@@ -4051,8 +4154,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     "RX",
                     "-",
                     "-",
+                    "-",
                     R.drawable.operate_stream_card_rx,
                     R.color.cwcn_rx_line,
+                    false,
                     false,
                     false
             ));
