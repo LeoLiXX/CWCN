@@ -8,3 +8,7 @@
 /cwcn-android/app/build/
 /cwcn-android/app/cwcn-android/
 /cwcn-android/local.properties
+
+# Local RX/developer probe artifacts produced in cwcn-android root.
+/cwcn-android/*.log
+/cwcn-android/*.txt
