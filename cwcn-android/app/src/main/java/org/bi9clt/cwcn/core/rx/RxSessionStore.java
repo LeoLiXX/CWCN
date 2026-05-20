@@ -36,10 +36,7 @@ public final class RxSessionStore {
             object.put("fallbackSuggestedText", snapshot.fallbackSuggestedText());
             object.put("fallbackNotesText", snapshot.fallbackNotesText());
             object.put("normalizedText", snapshot.normalizedText());
-            object.put("phaseDisplayName", snapshot.phaseDisplayName());
-            object.put("remoteCallsign", snapshot.remoteCallsign());
-            object.put("readyForDraftConfirmation", snapshot.readyForDraftConfirmation());
-            object.put("needManualReview", snapshot.needManualReview());
+            object.put("primaryCallsignCandidate", snapshot.primaryCallsignCandidate());
             object.put("inputHealthLabel", snapshot.inputHealthLabel());
             object.put("inputHealthHint", snapshot.inputHealthHint());
             object.put("inputLevelHot", snapshot.inputLevelHot());
@@ -72,10 +69,7 @@ public final class RxSessionStore {
                     object.optString("fallbackSuggestedText", ""),
                     object.optString("fallbackNotesText", ""),
                     object.optString("normalizedText", ""),
-                    object.optString("phaseDisplayName", ""),
-                    object.optString("remoteCallsign", ""),
-                    object.optBoolean("readyForDraftConfirmation", false),
-                    object.optBoolean("needManualReview", false),
+                    object.optString("primaryCallsignCandidate", ""),
                     object.optString("inputHealthLabel", ""),
                     object.optString("inputHealthHint", ""),
                     object.optBoolean("inputLevelHot", false),

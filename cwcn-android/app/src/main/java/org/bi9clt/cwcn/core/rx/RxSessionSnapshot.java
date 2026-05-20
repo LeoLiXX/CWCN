@@ -14,10 +14,7 @@ public final class RxSessionSnapshot {
     private final String fallbackSuggestedText;
     private final String fallbackNotesText;
     private final String normalizedText;
-    private final String phaseDisplayName;
-    private final String remoteCallsign;
-    private final boolean readyForDraftConfirmation;
-    private final boolean needManualReview;
+    private final String primaryCallsignCandidate;
     private final String inputHealthLabel;
     private final String inputHealthHint;
     private final boolean inputLevelHot;
@@ -38,10 +35,7 @@ public final class RxSessionSnapshot {
             String fallbackSuggestedText,
             String fallbackNotesText,
             String normalizedText,
-            String phaseDisplayName,
-            String remoteCallsign,
-            boolean readyForDraftConfirmation,
-            boolean needManualReview,
+            String primaryCallsignCandidate,
             String inputHealthLabel,
             String inputHealthHint,
             boolean inputLevelHot,
@@ -61,10 +55,7 @@ public final class RxSessionSnapshot {
         this.fallbackSuggestedText = safeText(fallbackSuggestedText);
         this.fallbackNotesText = safeText(fallbackNotesText);
         this.normalizedText = safeText(normalizedText);
-        this.phaseDisplayName = safeText(phaseDisplayName);
-        this.remoteCallsign = safeText(remoteCallsign);
-        this.readyForDraftConfirmation = readyForDraftConfirmation;
-        this.needManualReview = needManualReview;
+        this.primaryCallsignCandidate = safeText(primaryCallsignCandidate);
         this.inputHealthLabel = safeText(inputHealthLabel);
         this.inputHealthHint = safeText(inputHealthHint);
         this.inputLevelHot = inputLevelHot;
@@ -150,20 +141,8 @@ public final class RxSessionSnapshot {
                 && !normalizedText.trim().equals(rawText.trim());
     }
 
-    public String phaseDisplayName() {
-        return phaseDisplayName;
-    }
-
-    public String remoteCallsign() {
-        return remoteCallsign;
-    }
-
-    public boolean readyForDraftConfirmation() {
-        return readyForDraftConfirmation;
-    }
-
-    public boolean needManualReview() {
-        return needManualReview;
+    public String primaryCallsignCandidate() {
+        return primaryCallsignCandidate;
     }
 
     public String inputHealthLabel() {

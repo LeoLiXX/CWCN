@@ -3604,6 +3604,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         AudioInputHealthSnapshot inputHealthSnapshot = audioInputHealthTracker == null
                 ? null
                 : audioInputHealthTracker.snapshot();
+        String primaryCallsignCandidate = interpreterSnapshot == null
+                ? ""
+                : safeText(interpreterSnapshot.primaryCallsignCandidate());
         rxSessionStore.save(new RxSessionSnapshot(
                 System.currentTimeMillis(),
                 selectedOption == null ? "" : selectedOption.toString(),
@@ -3617,11 +3620,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 interpreterSnapshot == null ? "" : interpreterSnapshot.rawText(),
                 "",
                 "",
-                qsoSnapshot == null ? "" : qsoSnapshot.normalizedText(),
-                qsoSnapshot == null || qsoSnapshot.phase() == null ? "" : qsoSnapshot.phase().displayName(),
-                qsoSnapshot == null ? "" : qsoSnapshot.remoteCallsignCandidate(),
-                qsoSnapshot != null && qsoSnapshot.readyForDraftConfirmation(),
-                qsoSnapshot != null && qsoSnapshot.needManualReview(),
+                interpreterSnapshot == null ? "" : interpreterSnapshot.normalizedText(),
+                primaryCallsignCandidate,
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.summaryLabel(inputHealthSnapshot),
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.coachHint(inputHealthSnapshot),
                 inputHealthSnapshot != null && inputHealthSnapshot.recentHotFrameRatio() >= 0.50d,

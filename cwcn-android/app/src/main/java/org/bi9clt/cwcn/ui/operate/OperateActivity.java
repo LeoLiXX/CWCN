@@ -54,7 +54,6 @@ import org.bi9clt.cwcn.core.interpreter.CwInterpreter;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreterSnapshot;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
-import org.bi9clt.cwcn.core.qso.QsoDraftFactory;
 import org.bi9clt.cwcn.core.qso.QsoPhase;
 import org.bi9clt.cwcn.core.qso.QsoStateEvent;
 import org.bi9clt.cwcn.core.rx.LiveRxTraceRecorder;
@@ -285,9 +284,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private RxToneTimingRunner operateToneTimingRunner;
     private CwDecoder operateDecoder;
     private CwInterpreter operateRawInterpreter;
-    private CwInterpreter operateSemanticInterpreter;
     private RxUnknownFallbackTracker operateUnknownFallbackTracker;
-    private org.bi9clt.cwcn.core.qso.QsoStateMachine operateQsoStateMachine;
     private AudioSpectrumAnalyzer operateAudioSpectrumAnalyzer;
     private LiveRxTraceRecorder operateLiveRxTraceRecorder;
     private AudioSpectrumSnapshot lastOperateSpectrumSnapshot;
@@ -967,9 +964,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
         int tone = resolveBestTone(snapshot);
         String capture = snapshot.captureActive() ? "接收中" : "保持中";
-        String tailLabel = isOperateRxRawOnlyMode()
-                ? "RAW"
-                : safeValue(snapshot.remoteCallsign());
+        String tailLabel = "RAW";
         return capture
                 + " | "
                 + positiveOrDash(resolveDisplayWpm(snapshot)) + "WPM"
@@ -1000,9 +995,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     ? rigSummary + " | 手机接收待命"
                     : rigSummary + " | 已选发射路径，接收尚未接入电台音频";
         }
-        String rxModeLabel = isOperateRxRawOnlyMode()
-                ? "RAW RX"
-                : safeValue(snapshot.phaseDisplayName());
+        String rxModeLabel = snapshot.captureActive() ? "RAW 接收中" : "RAW 保持中";
         return rxModeLabel
                 + " | "
                 + rigSummary
@@ -1313,17 +1306,11 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         operateDecoder = operateRxCore.decoder();
         operateRawInterpreter = operateRxCore.rawInterpreter();
         operateUnknownFallbackTracker = new RxUnknownFallbackTracker();
-        operateSemanticInterpreter = isOperateRxRawOnlyMode()
-                ? null
-                : new CwInterpreter(CwInterpreter.RecoveryMode.SEMANTIC_RECOVERY);
-        operateQsoStateMachine = isOperateRxRawOnlyMode()
-                ? null
-                : new org.bi9clt.cwcn.core.qso.QsoStateMachine();
         operateCommittedOutputController = new RxCommittedOutputController(
                 operateRawInterpreter,
                 operateUnknownFallbackTracker,
-                operateSemanticInterpreter,
-                operateQsoStateMachine,
+                null,
+                null,
                 operateRawCommitGate
         );
         operateTurnSessionFinalizer = new RxTurnSessionFinalizer(
@@ -1342,10 +1329,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 null
         );
         operateAudioSpectrumAnalyzer = new AudioSpectrumAnalyzer();
-        QsoDraftSnapshot persistedDraft = localLogRepository == null ? null : localLogRepository.loadDraft();
-        if (!isOperateRxRawOnlyMode() && persistedDraft != null && operateQsoStateMachine != null) {
-            operateQsoStateMachine.restoreDraft(persistedDraft);
-        }
         syncOperatePreferredTone();
         syncOperateFixedToneLearningWindow();
         syncOperateRxToneMode();
@@ -1640,19 +1623,33 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     @Nullable
     private String resolvePrimaryCallsignHint(@Nullable RxSessionSnapshot snapshot) {
-        if (snapshot == null) {
-            return null;
-        }
-        if (hasMeaningfulText(snapshot.remoteCallsign())) {
-            return snapshot.remoteCallsign().trim();
-        }
         CwInterpreterSnapshot rawSnapshot = operateCommittedOutputController == null
                 ? null
                 : operateCommittedOutputController.rawSnapshot();
-        if (rawSnapshot == null || rawSnapshot.callsignCandidates() == null) {
+        String rawCandidate = firstUiFriendlyRawCallsignCandidate(rawSnapshot);
+        if (hasMeaningfulText(rawCandidate)) {
+            return rawCandidate;
+        }
+        if (snapshot == null) {
             return null;
         }
-        for (String candidate : rawSnapshot.callsignCandidates()) {
+        return hasMeaningfulText(snapshot.primaryCallsignCandidate())
+                ? snapshot.primaryCallsignCandidate().trim()
+                : null;
+    }
+
+    @Nullable
+    private String firstUiFriendlyRawCallsignCandidate(@Nullable CwInterpreterSnapshot snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+        if (isUiFriendlyCallsignCandidate(snapshot.primaryCallsignCandidate())) {
+            return snapshot.primaryCallsignCandidate().trim();
+        }
+        if (snapshot.callsignCandidates() == null) {
+            return null;
+        }
+        for (String candidate : snapshot.callsignCandidates()) {
             if (isUiFriendlyCallsignCandidate(candidate)) {
                 return candidate.trim();
             }
@@ -1778,19 +1775,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private String renderReceiveMeta(RxSessionSnapshot snapshot) {
-        StringBuilder builder = new StringBuilder();
-        if (isOperateRxRawOnlyMode()) {
-            builder.append(snapshot.captureActive() ? "Turn live" : "Turn done")
-                    .append("  |  RAW");
-        } else {
-            builder.append(safeValue(snapshot.phaseDisplayName()))
-                    .append("  |  RAW");
-        }
-        builder.append("  |  ").append(renderAge(snapshot.updatedAtEpochMs()));
-        if (!isOperateRxRawOnlyMode() && snapshot.needManualReview()) {
-            builder.append("  |  待复核");
-        }
-        return builder.toString();
+        return (snapshot.captureActive() ? "Turn live" : "Turn done")
+                + "  |  RAW"
+                + "  |  "
+                + renderAge(snapshot.updatedAtEpochMs());
     }
 
     private boolean isOperateRxRawOnlyMode() {
@@ -2073,9 +2061,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (snapshot == null) {
             return "当前没有活动接收会话。\n\n启用接收后，这里会显示当前接收快照。";
         }
+        String callsignHint = resolvePrimaryCallsignHint(snapshot);
         return "状态: " + safeValue(snapshot.captureState())
                 + "\n来源: " + safeValue(snapshot.sourceLabel())
-                + "\n阶段: " + safeValue(snapshot.phaseDisplayName())
+                + "\nRAW: " + (snapshot.captureActive() ? "接收中" : "保持中")
                 + "\n速度: " + positiveOrDash(resolveDisplayWpm(snapshot)) + " WPM"
                 + "\n音调 偏好/跟踪/有效: "
                 + positiveOrDash(snapshot.preferredToneFrequencyHz())
@@ -2084,7 +2073,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 + " / "
                 + positiveOrDash(snapshot.effectiveToneFrequencyHz())
                 + " Hz"
-                + "\n对方呼号: " + safeValue(snapshot.remoteCallsign())
+                + "\n呼号提示: " + safeValue(callsignHint)
                 + "\n输入: " + safeValue(snapshot.inputHealthLabel())
                 + "\n更新时间: " + renderAge(snapshot.updatedAtEpochMs());
     }
@@ -2115,7 +2104,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 .append("\n接收速度: ").append(positiveOrDash(resolveDisplayWpm(snapshot))).append(" WPM")
                 .append("  |  音调: ").append(positiveOrDash(resolveBestTone(snapshot))).append(" Hz")
                 .append("\n输入状态: ").append(safeValue(snapshot.inputHealthLabel()))
-                .append("\n待复核: ").append(yesNoZh(snapshot.needManualReview()))
+                .append("\n呼号提示: ").append(safeValue(resolvePrimaryCallsignHint(snapshot)))
                 .append("\n更新时间: ").append(renderAge(snapshot.updatedAtEpochMs()));
         if (shouldShowDeveloperFrontEndSummary(snapshot)) {
             builder.append("\n前端门控: ").append(snapshot.developerFrontEndSummary());
@@ -2921,9 +2910,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         RxUnknownFallbackSuggestion fallbackSuggestion = operateCommittedOutputController == null
                 ? RxUnknownFallbackSuggestion.none(rawSnapshot == null ? "" : rawSnapshot.rawText())
                 : operateCommittedOutputController.fallbackSuggestion();
-        QsoDraftSnapshot qsoSnapshot = operateCommittedOutputController == null
-                ? null
-                : operateCommittedOutputController.qsoSnapshot();
         AudioInputHealthSnapshot inputHealthSnapshot = operateAudioInputHealthTracker == null
                 ? null
                 : operateAudioInputHealthTracker.snapshot();
@@ -2934,6 +2920,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 timingSnapshot,
                 nowElapsedMs
         );
+        String rawPrimaryCallsign = firstUiFriendlyRawCallsignCandidate(rawSnapshot);
         RxSessionSnapshot sessionSnapshot = new RxSessionSnapshot(
                 System.currentTimeMillis(),
                 activeOperateRxAudioSource == null ? "RX Input" : activeOperateRxAudioSource.displayName(),
@@ -2947,11 +2934,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 rawSnapshot == null ? "" : rawSnapshot.rawText(),
                 fallbackSuggestion == null ? "" : fallbackSuggestion.suggestedText(),
                 fallbackSuggestion == null ? "" : fallbackSuggestion.notesText(),
-                qsoSnapshot == null ? "" : qsoSnapshot.normalizedText(),
-                qsoSnapshot == null || qsoSnapshot.phase() == null ? "" : qsoSnapshot.phase().displayName(),
-                qsoSnapshot == null ? "" : qsoSnapshot.remoteCallsignCandidate(),
-                qsoSnapshot != null && qsoSnapshot.readyForDraftConfirmation(),
-                qsoSnapshot != null && qsoSnapshot.needManualReview(),
+                rawSnapshot == null ? "" : rawSnapshot.normalizedText(),
+                rawPrimaryCallsign == null ? "" : rawPrimaryCallsign,
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.summaryLabel(inputHealthSnapshot),
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.coachHint(inputHealthSnapshot),
                 inputHealthSnapshot != null && inputHealthSnapshot.recentHotFrameRatio() >= 0.50d,
@@ -2959,9 +2943,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 renderDeveloperFrontEndSummary(signalSnapshot, timingSnapshot, nowElapsedMs)
         );
         rxSessionStore.save(sessionSnapshot);
-        if (localLogRepository != null && qsoSnapshot != null && !isOperateRxRawOnlyMode()) {
-            localLogRepository.saveDraft(qsoSnapshot);
-        }
         lastOperateRxPublishAtElapsedMs = nowElapsedMs;
         lastRxSessionSnapshot = sessionSnapshot;
         if (!isRxTranscriptSuppressed()) {

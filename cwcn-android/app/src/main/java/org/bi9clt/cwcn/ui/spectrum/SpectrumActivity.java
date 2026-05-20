@@ -15,9 +15,6 @@ import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.core.app.DeveloperModeStore;
 import org.bi9clt.cwcn.core.app.RxInputSettingsStore;
 import org.bi9clt.cwcn.core.app.SqlLevelStore;
-import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
-import org.bi9clt.cwcn.core.log.LocalLogRepository;
-import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.rx.RxSessionSnapshot;
 import org.bi9clt.cwcn.core.rx.RxSessionStore;
 import org.bi9clt.cwcn.core.rig.RigProfile;
@@ -45,7 +42,6 @@ public final class SpectrumActivity extends AppCompatActivity {
     private static final int FOCUS_FREQUENCY_STEP_HZ = 5;
     private ActivitySpectrumBinding binding;
     private RxSessionStore rxSessionStore;
-    private LocalLogRepository localLogRepository;
     private RigSelectionStore rigSelectionStore;
     private DeveloperModeStore developerModeStore;
     private RxInputSettingsStore rxInputSettingsStore;
@@ -70,7 +66,6 @@ public final class SpectrumActivity extends AppCompatActivity {
         binding = ActivitySpectrumBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         rxSessionStore = new RxSessionStore(this);
-        localLogRepository = new LocalLogRepository(this);
         rigSelectionStore = new RigSelectionStore(this);
         developerModeStore = new DeveloperModeStore(this);
         rxInputSettingsStore = new RxInputSettingsStore(this);
@@ -140,7 +135,6 @@ public final class SpectrumActivity extends AppCompatActivity {
 
     private void refreshUi() {
         RxSessionSnapshot snapshot = rxSessionStore.load();
-        AppOverviewSnapshot overview = localLogRepository.loadOverview();
         RigProfile profile = rigSelectionStore.selectedProfile();
         List<SpectrumSnapshotData> spectrumHistory = loadSpectrumHistory(snapshot);
         SpectrumSnapshotData latestSpectrum = latestSpectrum(spectrumHistory);
@@ -157,7 +151,8 @@ public final class SpectrumActivity extends AppCompatActivity {
         String summaryText = renderSummary(snapshot, latestSpectrum);
         binding.spectrumSummaryText.setText(summaryText);
         binding.spectrumSummaryText.setVisibility(hasMeaningfulText(summaryText) ? View.VISIBLE : View.GONE);
-        binding.spectrumDraftText.setText(renderDraftText(overview));
+        binding.spectrumDraftText.setText("");
+        binding.spectrumDraftText.setVisibility(View.GONE);
         binding.emptySpectrumStateText.setText(latestSpectrum == null ? "Waiting for live spectrum" : "");
         binding.emptySpectrumStateText.setVisibility(latestSpectrum == null ? View.VISIBLE : View.GONE);
         if (binding.spectrumSqlSeekBar.getProgress() != sqlLevel) {
@@ -435,7 +430,11 @@ public final class SpectrumActivity extends AppCompatActivity {
         if (snapshot == null) {
             return source;
         }
-        return safeValue(snapshot.phaseDisplayName()) + "  |  " + source + "  |  " + renderAge(snapshot.updatedAtEpochMs());
+        return (snapshot.captureActive() ? "RAW 接收中" : "RAW 保持中")
+                + "  |  "
+                + source
+                + "  |  "
+                + renderAge(snapshot.updatedAtEpochMs());
     }
 
     private String renderSummary(@Nullable RxSessionSnapshot snapshot, @Nullable SpectrumSnapshotData latestSpectrum) {
@@ -466,17 +465,6 @@ public final class SpectrumActivity extends AppCompatActivity {
             return "";
         }
         return snapshot.developerFrontEndSummary();
-    }
-
-    private String renderDraftText(@Nullable AppOverviewSnapshot overview) {
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft == null) {
-            return "";
-        }
-        return "DRAFT  " + safeValue(draft.remoteCallsignCandidate())
-                + "  |  "
-                + safeValue(draft.phase().displayName())
-                + "  |  RST " + safeValue(draft.rstSentCandidate()) + "/" + safeValue(draft.rstRcvdCandidate());
     }
 
     private List<SpectrumSnapshotData> loadSpectrumHistory(@Nullable RxSessionSnapshot snapshot) {

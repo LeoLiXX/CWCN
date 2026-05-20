@@ -383,39 +383,13 @@
                         android:id="@+id/pauseTxButton"
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:layout_marginStart="0dp"
+                        android:layout_marginStart="6dp"
                         android:background="@drawable/operate_chip_background"
                         android:contentDescription="停止发送"
                         android:padding="4dp"
                         android:scaleType="centerInside"
                         android:src="@drawable/ic_ui_clear"
                         android:tint="@color/cwcn_warning" />
-
-                    <ImageButton
-                        android:id="@+id/resumeTxButton"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:layout_marginStart="6dp"
-                        android:background="@drawable/operate_chip_background"
-                        android:contentDescription="继续发送"
-                        android:padding="4dp"
-                        android:scaleType="centerInside"
-                        android:src="@drawable/ic_ui_play"
-                        android:tint="@color/cwcn_body"
-                        android:visibility="gone" />
-
-                    <ImageButton
-                        android:id="@+id/rewindTxButton"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:layout_marginStart="6dp"
-                        android:background="@drawable/operate_chip_background"
-                        android:contentDescription="回退发送"
-                        android:padding="4dp"
-                        android:scaleType="centerInside"
-                        android:src="@drawable/ic_ui_rewind"
-                        android:tint="@color/cwcn_body"
-                        android:visibility="gone" />
                 </LinearLayout>
 
                 <TextView
