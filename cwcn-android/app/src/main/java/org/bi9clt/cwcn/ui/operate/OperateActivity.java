@@ -115,9 +115,13 @@ import org.bi9clt.cwcn.ui.settings.SettingsActivity;
 import org.bi9clt.cwcn.ui.spectrum.SpectrumActivity;
 
 import java.lang.ref.WeakReference;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.TimeZone;
 
 public final class OperateActivity extends AppCompatActivity implements RxAudioSource.Callback {
     private static final String ACTION_USB_KEYER_PERMISSION =
@@ -141,6 +145,20 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private static final String PREF_SIDE_RAIL_X = "side_rail_x";
     private static final String PREF_SIDE_RAIL_Y = "side_rail_y";
     private static final String PREF_MIC_PERMISSION_ASKED = "mic_permission_asked";
+    private static final String PREF_TRANSCRIPT_USE_UTC = "transcript_use_utc";
+    private static final String STATE_TRANSCRIPT_TIMELINE_ACTIVE = "transcript_timeline_active";
+    private static final String STATE_TRANSCRIPT_NEXT_ID = "transcript_next_id";
+    private static final String STATE_TRANSCRIPT_USE_UTC = "transcript_use_utc_state";
+    private static final String STATE_TRANSCRIPT_ENTRIES = "transcript_entries";
+    private static final String STATE_TRANSCRIPT_ENTRY_ID = "id";
+    private static final String STATE_TRANSCRIPT_ENTRY_TYPE = "type";
+    private static final String STATE_TRANSCRIPT_ENTRY_STARTED_AT = "started_at";
+    private static final String STATE_TRANSCRIPT_ENTRY_UPDATED_AT = "updated_at";
+    private static final String STATE_TRANSCRIPT_ENTRY_SOURCE = "source";
+    private static final String STATE_TRANSCRIPT_ENTRY_STATE = "state";
+    private static final String STATE_TRANSCRIPT_ENTRY_BODY = "body";
+    private static final String STATE_TRANSCRIPT_ENTRY_PROGRESS = "progress";
+    private static final String STATE_TRANSCRIPT_ENTRY_ACTIVE = "active";
     private static final String TEMPLATE_CQ = "CQ";
     private static final String TEMPLATE_REPLY = "应答";
     private static final String TEMPLATE_QRZ = "QRZ";
@@ -161,6 +179,11 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         SQL,
         TEMPLATE,
         DRAFT
+    }
+
+    private enum TranscriptEntryType {
+        RX,
+        TX
     }
 
     private static final class StreamEntry {
@@ -188,6 +211,34 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             this.labelColorRes = labelColorRes;
             this.outgoing = outgoing;
             this.compact = compact;
+        }
+    }
+
+    private static final class TranscriptEntry {
+        private final long id;
+        private final TranscriptEntryType type;
+        private final long startedAtEpochMs;
+        private long updatedAtEpochMs;
+        private String sourceOrRouteLabel;
+        private String stateLabel;
+        private String bodyText;
+        private int progressIndex;
+        private boolean active;
+
+        private TranscriptEntry(
+                long id,
+                TranscriptEntryType type,
+                long startedAtEpochMs
+        ) {
+            this.id = id;
+            this.type = type;
+            this.startedAtEpochMs = startedAtEpochMs;
+            this.updatedAtEpochMs = startedAtEpochMs;
+            this.sourceOrRouteLabel = "";
+            this.stateLabel = "";
+            this.bodyText = "";
+            this.progressIndex = -1;
+            this.active = true;
         }
     }
 
@@ -283,6 +334,16 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private RxInputSettingsStore.RxInputMode activeRxInputMode;
     private BroadcastReceiver usbPermissionReceiver;
     private String operateUsbStatusMessage = "";
+    private final ArrayList<TranscriptEntry> operateTranscriptEntries = new ArrayList<>();
+    private long nextTranscriptEntryId = 1L;
+    private long activeRxTranscriptEntryId = -1L;
+    private long activeRxTranscriptStartedAtEpochMs;
+    private String activeRxTranscriptBaselineText = "";
+    private long activeTxTranscriptEntryId = -1L;
+    private boolean transcriptUseUtc = true;
+    private boolean transcriptTimelineActive;
+    private boolean conversationAutoScrollPending = true;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -313,10 +374,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         sharedActiveInstance = new WeakReference<>(this);
         initializeOperateRxPipeline();
         operateUiPreferences = getSharedPreferences(PREFS_OPERATE_UI, MODE_PRIVATE);
+        transcriptUseUtc = operateUiPreferences.getBoolean(PREF_TRANSCRIPT_USE_UTC, true);
         sqlLevel = sqlLevelStore.load();
         syncOperateSql();
         consumeLaunchIntent(getIntent());
         setupActions();
+        restoreOperateUiState(savedInstanceState);
         binding.sideRail.post(this::restoreSideRailPosition);
         refreshUi();
         openPendingLaunchOverlayIfAny();
@@ -379,6 +442,15 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         super.onDestroy();
     }
 
+    @Override
+    protected void onSaveInstanceState(@androidx.annotation.NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putBoolean(STATE_TRANSCRIPT_TIMELINE_ACTIVE, transcriptTimelineActive);
+        outState.putLong(STATE_TRANSCRIPT_NEXT_ID, nextTranscriptEntryId);
+        outState.putBoolean(STATE_TRANSCRIPT_USE_UTC, transcriptUseUtc);
+        outState.putParcelableArrayList(STATE_TRANSCRIPT_ENTRIES, saveTranscriptEntries());
+    }
+
     private void setupActions() {
         binding.openRigSetupButton.setOnClickListener(view ->
                 startActivity(new Intent(this, RigSetupActivity.class)));
@@ -411,6 +483,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         binding.sideSqlButton.setOnClickListener(view -> toggleOverlay(OverlayMode.SQL));
         binding.sideTemplateButton.setOnClickListener(view -> toggleOverlay(OverlayMode.TEMPLATE));
         binding.sqlQuickChip.setOnClickListener(view -> toggleOverlay(OverlayMode.SQL));
+        binding.transcriptTimeModeChip.setOnClickListener(view -> toggleTranscriptTimeMode());
+        binding.clearTranscriptChip.setOnClickListener(view -> clearTranscriptDisplay());
         binding.overlayScrim.setOnClickListener(view -> hideOverlay());
         binding.closeOverlayButton.setOnClickListener(view -> hideOverlay());
         binding.rxFootnoteText.setOnClickListener(view -> {
@@ -729,6 +803,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 (shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission())
                         || shouldUseUsbExternalRx()
         );
+        binding.transcriptTimeModeChip.setText(transcriptUseUtc ? "UTC" : "Local");
         FormalBottomNavStyler.apply(binding.bottomNavView, FormalBottomNavStyler.Page.OPERATE);
         refreshConversationOnly();
         updateComposerUi();
@@ -942,6 +1017,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         for (int index = 0; index < entries.size(); index++) {
             StreamEntry entry = entries.get(index);
             binding.conversationList.addView(buildConversationCard(entry, index < entries.size() - 1));
+        }
+        if (conversationAutoScrollPending) {
+            binding.conversationScrollView.post(() -> {
+                binding.conversationScrollView.fullScroll(View.FOCUS_DOWN);
+                conversationAutoScrollPending = false;
+            });
         }
     }
 
@@ -1399,6 +1480,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 nowElapsedMs,
                 "stop"
         );
+        finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
         if (publishFinalSnapshot) {
             publishOperateSessionSnapshot(false, true);
         }
@@ -1476,6 +1558,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         lastOperateStableDecodeAtElapsedMs = -1L;
         lastOperateTimingResetAtElapsedMs = -1L;
         lastRxSessionSnapshot = null;
+        activeRxTranscriptEntryId = -1L;
+        activeRxTranscriptStartedAtEpochMs = 0L;
+        activeRxTranscriptBaselineText = "";
     }
 
     private String resolveOperateRouteSummary(@Nullable RigProfile profile) {
@@ -1553,6 +1638,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         for (CwDecodeEvent admittedEvent : admittedEvents) {
             traceOperateDecodeEvent(admittedEvent);
             operateTurnSessionFinalizer.processCommittedDecodeEvent(admittedEvent);
+            updateActiveRxTranscriptEntryFromDecodeEvent(admittedEvent, System.currentTimeMillis());
         }
     }
 
@@ -2555,6 +2641,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         );
         if (observation.startedNewTurn()) {
             syncOperateRxToneMode(nowElapsedMs);
+            beginActiveRxTranscriptTurn(System.currentTimeMillis());
             traceOperateMarker("turn-start", observation.reason(), nowElapsedMs);
         } else if (observation.endedTurn()) {
             traceOperateTurnFinalization(
@@ -2562,6 +2649,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     nowElapsedMs,
                     "turn-end"
             );
+            finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
             traceOperateMarker("turn-end", observation.reason(), nowElapsedMs);
             if (observation.frontEndResetApplied()) {
                 syncOperatePreferredTone();
@@ -2781,6 +2869,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
         lastOperateRxPublishAtElapsedMs = nowElapsedMs;
         lastRxSessionSnapshot = sessionSnapshot;
+        refreshActiveRxTranscriptEntryFromSnapshot(sessionSnapshot);
     }
 
     private String renderDeveloperFrontEndSummary(
@@ -2956,6 +3045,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         activeTxPlan = txPlan;
         activeTxPlaybackSnapshot = initialPlaybackSnapshot(txPlan);
         activeTxStopSupported = adapterSupportsStop(adapter);
+        beginActiveTxTranscriptEntry(System.currentTimeMillis());
         mainHandler.removeCallbacks(txProgressRefreshRunnable);
         mainHandler.post(txProgressRefreshRunnable);
         updateComposerUi();
@@ -2978,6 +3068,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 activeTxAdapter = null;
                 activeTxPlaybackSnapshot = finalizePlaybackSnapshot(activeTxPlaybackSnapshot, sent, status);
                 activeTxStopSupported = false;
+                finalizeActiveTxTranscriptEntry(status);
                 updateComposerUi();
                 refreshConversationOnly();
             });
@@ -3044,6 +3135,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (snapshot != null) {
             activeTxPlaybackSnapshot = snapshot;
         }
+        refreshActiveTxTranscriptEntry();
     }
 
     @Nullable
@@ -3439,16 +3531,454 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return String.format(Locale.CHINA, "%d小时前", ageHours);
     }
 
+    private void toggleTranscriptTimeMode() {
+        transcriptUseUtc = !transcriptUseUtc;
+        if (operateUiPreferences != null) {
+            operateUiPreferences.edit().putBoolean(PREF_TRANSCRIPT_USE_UTC, transcriptUseUtc).apply();
+        }
+        binding.transcriptTimeModeChip.setText(transcriptUseUtc ? "UTC" : "Local");
+        refreshConversationOnly();
+    }
+
+    private void clearTranscriptDisplay() {
+        operateTranscriptEntries.clear();
+        transcriptTimelineActive = true;
+        activeTxTranscriptEntryId = -1L;
+        activeRxTranscriptEntryId = -1L;
+        activeRxTranscriptStartedAtEpochMs = 0L;
+        activeRxTranscriptBaselineText = "";
+        conversationAutoScrollPending = true;
+        markConversationDirty();
+        refreshConversationOnly();
+    }
+
+    private void beginActiveRxTranscriptTurn(long startedAtEpochMs) {
+        if (activeRxTranscriptEntryId != -1L) {
+            finalizeActiveRxTranscriptEntryFromCurrentSnapshot(startedAtEpochMs);
+        }
+        transcriptTimelineActive = true;
+        CwInterpreterSnapshot rawSnapshot = operateCommittedOutputController == null
+                ? null
+                : operateCommittedOutputController.rawSnapshot();
+        activeRxTranscriptBaselineText = rawSnapshot == null ? "" : safeTranscriptText(rawSnapshot.rawText());
+        activeRxTranscriptStartedAtEpochMs = startedAtEpochMs <= 0L
+                ? System.currentTimeMillis()
+                : startedAtEpochMs;
+        activeRxTranscriptEntryId = appendTranscriptEntry(
+                TranscriptEntryType.RX,
+                activeRxTranscriptStartedAtEpochMs
+        ).id;
+        refreshActiveRxTranscriptEntryFromSnapshot(lastRxSessionSnapshot);
+    }
+
+    private void reopenActiveRxTranscriptEntry() {
+        activeRxTranscriptEntryId = appendTranscriptEntry(
+                TranscriptEntryType.RX,
+                activeRxTranscriptStartedAtEpochMs > 0L
+                        ? activeRxTranscriptStartedAtEpochMs
+                        : System.currentTimeMillis()
+        ).id;
+        refreshActiveRxTranscriptEntryFromSnapshot(lastRxSessionSnapshot);
+    }
+
+    private void restoreOperateUiState(@Nullable Bundle savedInstanceState) {
+        if (savedInstanceState == null) {
+            return;
+        }
+        transcriptUseUtc = savedInstanceState.getBoolean(STATE_TRANSCRIPT_USE_UTC, transcriptUseUtc);
+        transcriptTimelineActive = savedInstanceState.getBoolean(
+                STATE_TRANSCRIPT_TIMELINE_ACTIVE,
+                transcriptTimelineActive
+        );
+        nextTranscriptEntryId = savedInstanceState.getLong(
+                STATE_TRANSCRIPT_NEXT_ID,
+                nextTranscriptEntryId
+        );
+        operateTranscriptEntries.clear();
+        ArrayList<Bundle> savedEntries = savedInstanceState.getParcelableArrayList(
+                STATE_TRANSCRIPT_ENTRIES
+        );
+        if (savedEntries != null) {
+            for (Bundle savedEntry : savedEntries) {
+                TranscriptEntry restoredEntry = restoreTranscriptEntry(savedEntry);
+                if (restoredEntry != null) {
+                    operateTranscriptEntries.add(restoredEntry);
+                    nextTranscriptEntryId = Math.max(nextTranscriptEntryId, restoredEntry.id + 1L);
+                }
+            }
+        }
+        if (!operateTranscriptEntries.isEmpty()) {
+            transcriptTimelineActive = true;
+        }
+        activeRxTranscriptEntryId = -1L;
+        activeRxTranscriptStartedAtEpochMs = 0L;
+        activeRxTranscriptBaselineText = "";
+        activeTxTranscriptEntryId = -1L;
+        conversationAutoScrollPending = true;
+    }
+
+    @Nullable
+    private Bundle saveTranscriptEntry(TranscriptEntry transcriptEntry) {
+        Bundle bundle = new Bundle();
+        bundle.putLong(STATE_TRANSCRIPT_ENTRY_ID, transcriptEntry.id);
+        bundle.putString(STATE_TRANSCRIPT_ENTRY_TYPE, transcriptEntry.type.name());
+        bundle.putLong(STATE_TRANSCRIPT_ENTRY_STARTED_AT, transcriptEntry.startedAtEpochMs);
+        bundle.putLong(STATE_TRANSCRIPT_ENTRY_UPDATED_AT, transcriptEntry.updatedAtEpochMs);
+        bundle.putString(STATE_TRANSCRIPT_ENTRY_SOURCE, transcriptEntry.sourceOrRouteLabel);
+        bundle.putString(STATE_TRANSCRIPT_ENTRY_STATE, transcriptEntry.stateLabel);
+        bundle.putString(STATE_TRANSCRIPT_ENTRY_BODY, transcriptEntry.bodyText);
+        bundle.putInt(STATE_TRANSCRIPT_ENTRY_PROGRESS, transcriptEntry.progressIndex);
+        bundle.putBoolean(STATE_TRANSCRIPT_ENTRY_ACTIVE, transcriptEntry.active);
+        return bundle;
+    }
+
+    private ArrayList<Bundle> saveTranscriptEntries() {
+        ArrayList<Bundle> savedEntries = new ArrayList<>();
+        for (TranscriptEntry transcriptEntry : operateTranscriptEntries) {
+            savedEntries.add(saveTranscriptEntry(transcriptEntry));
+        }
+        return savedEntries;
+    }
+
+    @Nullable
+    private TranscriptEntry restoreTranscriptEntry(@Nullable Bundle bundle) {
+        if (bundle == null) {
+            return null;
+        }
+        String typeName = bundle.getString(STATE_TRANSCRIPT_ENTRY_TYPE);
+        TranscriptEntryType type;
+        try {
+            type = typeName == null ? null : TranscriptEntryType.valueOf(typeName);
+        } catch (IllegalArgumentException ignored) {
+            type = null;
+        }
+        if (type == null) {
+            return null;
+        }
+        TranscriptEntry entry = new TranscriptEntry(
+                bundle.getLong(STATE_TRANSCRIPT_ENTRY_ID, nextTranscriptEntryId),
+                type,
+                bundle.getLong(STATE_TRANSCRIPT_ENTRY_STARTED_AT, System.currentTimeMillis())
+        );
+        entry.updatedAtEpochMs = bundle.getLong(
+                STATE_TRANSCRIPT_ENTRY_UPDATED_AT,
+                entry.startedAtEpochMs
+        );
+        entry.sourceOrRouteLabel = safeTranscriptText(
+                bundle.getString(STATE_TRANSCRIPT_ENTRY_SOURCE, "")
+        );
+        entry.stateLabel = safeTranscriptText(
+                bundle.getString(STATE_TRANSCRIPT_ENTRY_STATE, "")
+        );
+        entry.bodyText = safeTranscriptText(
+                bundle.getString(STATE_TRANSCRIPT_ENTRY_BODY, "")
+        );
+        entry.progressIndex = bundle.getInt(STATE_TRANSCRIPT_ENTRY_PROGRESS, -1);
+        entry.active = false;
+        return entry;
+    }
+
+    private void updateActiveRxTranscriptEntryFromDecodeEvent(
+            @Nullable CwDecodeEvent decodeEvent,
+            long updatedAtEpochMs
+    ) {
+        if (decodeEvent == null) {
+            return;
+        }
+        if (activeRxTranscriptEntryId == -1L) {
+            beginActiveRxTranscriptTurn(updatedAtEpochMs);
+        }
+        TranscriptEntry entry = findTranscriptEntry(activeRxTranscriptEntryId);
+        if (entry == null) {
+            return;
+        }
+        entry.bodyText = extractTurnTranscriptText(
+                activeRxTranscriptBaselineText,
+                decodeEvent.outputText()
+        );
+        entry.updatedAtEpochMs = updatedAtEpochMs;
+        entry.active = true;
+        entry.stateLabel = "接收中";
+        if (lastRxSessionSnapshot != null) {
+            entry.sourceOrRouteLabel = lastRxSessionSnapshot.sourceLabel();
+        }
+        markConversationDirty();
+    }
+
+    private void refreshActiveRxTranscriptEntryFromSnapshot(@Nullable RxSessionSnapshot snapshot) {
+        if (activeRxTranscriptEntryId == -1L || snapshot == null) {
+            return;
+        }
+        TranscriptEntry entry = findTranscriptEntry(activeRxTranscriptEntryId);
+        if (entry == null) {
+            return;
+        }
+        entry.bodyText = extractTurnTranscriptText(
+                activeRxTranscriptBaselineText,
+                snapshot.rawText()
+        );
+        entry.updatedAtEpochMs = Math.max(
+                entry.updatedAtEpochMs,
+                snapshot.updatedAtEpochMs()
+        );
+        entry.active = snapshot.captureActive();
+        entry.stateLabel = snapshot.captureActive() ? "接收中" : "保持中";
+        entry.sourceOrRouteLabel = snapshot.sourceLabel();
+        if (entry.bodyText.isEmpty()) {
+            return;
+        }
+        markConversationDirty();
+    }
+
+    private void finalizeActiveRxTranscriptEntryFromCurrentSnapshot(long finalizedAtEpochMs) {
+        if (activeRxTranscriptEntryId == -1L) {
+            return;
+        }
+        CwInterpreterSnapshot rawSnapshot = operateCommittedOutputController == null
+                ? null
+                : operateCommittedOutputController.rawSnapshot();
+        TranscriptEntry entry = findTranscriptEntry(activeRxTranscriptEntryId);
+        if (entry == null) {
+            activeRxTranscriptEntryId = -1L;
+            activeRxTranscriptStartedAtEpochMs = 0L;
+            activeRxTranscriptBaselineText = "";
+            return;
+        }
+        if (rawSnapshot != null) {
+            entry.bodyText = extractTurnTranscriptText(
+                    activeRxTranscriptBaselineText,
+                    rawSnapshot.rawText()
+            );
+        }
+        entry.updatedAtEpochMs = finalizedAtEpochMs;
+        entry.active = false;
+        entry.stateLabel = "接收";
+        if (entry.bodyText.trim().isEmpty()) {
+            operateTranscriptEntries.remove(entry);
+        }
+        activeRxTranscriptEntryId = -1L;
+        activeRxTranscriptStartedAtEpochMs = 0L;
+        activeRxTranscriptBaselineText = "";
+        markConversationDirty();
+    }
+
+    private void beginActiveTxTranscriptEntry(long startedAtEpochMs) {
+        transcriptTimelineActive = true;
+        TranscriptEntry entry = appendTranscriptEntry(
+                TranscriptEntryType.TX,
+                startedAtEpochMs <= 0L ? System.currentTimeMillis() : startedAtEpochMs
+        );
+        activeTxTranscriptEntryId = entry.id;
+        refreshActiveTxTranscriptEntry();
+    }
+
+    private void refreshActiveTxTranscriptEntry() {
+        if (activeTxTranscriptEntryId == -1L) {
+            return;
+        }
+        TranscriptEntry entry = findTranscriptEntry(activeTxTranscriptEntryId);
+        if (entry == null) {
+            return;
+        }
+        entry.updatedAtEpochMs = System.currentTimeMillis();
+        entry.sourceOrRouteLabel = hasMeaningfulText(activeTxRouteLabel)
+                ? activeTxRouteLabel
+                : renderTxRouteChip();
+        entry.stateLabel = txSendInProgress
+                ? renderPlaybackProgressChip(activeTxPlaybackSnapshot)
+                : safeValue(txDeliveryStatus);
+        entry.bodyText = resolveVisibleActiveTxText(
+                binding.txComposeEditText.getText() == null
+                        ? ""
+                        : binding.txComposeEditText.getText().toString().trim()
+        );
+        entry.progressIndex = activeTxPlaybackSnapshot == null
+                ? -1
+                : activeTxPlaybackSnapshot.currentTextIndex();
+        entry.active = txSendInProgress;
+        if (!entry.bodyText.trim().isEmpty()) {
+            markConversationDirty();
+        }
+    }
+
+    private void finalizeActiveTxTranscriptEntry(String status) {
+        if (activeTxTranscriptEntryId == -1L) {
+            return;
+        }
+        TranscriptEntry entry = findTranscriptEntry(activeTxTranscriptEntryId);
+        if (entry == null) {
+            activeTxTranscriptEntryId = -1L;
+            return;
+        }
+        entry.updatedAtEpochMs = System.currentTimeMillis();
+        entry.stateLabel = safeValue(status);
+        entry.progressIndex = -1;
+        entry.active = false;
+        activeTxTranscriptEntryId = -1L;
+        markConversationDirty();
+    }
+
+    private TranscriptEntry appendTranscriptEntry(
+            TranscriptEntryType type,
+            long startedAtEpochMs
+    ) {
+        TranscriptEntry entry = new TranscriptEntry(
+                nextTranscriptEntryId++,
+                type,
+                startedAtEpochMs
+        );
+        operateTranscriptEntries.add(entry);
+        markConversationDirty();
+        return entry;
+    }
+
+    @Nullable
+    private TranscriptEntry findTranscriptEntry(long entryId) {
+        for (TranscriptEntry entry : operateTranscriptEntries) {
+            if (entry.id == entryId) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    private void markConversationDirty() {
+        conversationAutoScrollPending = true;
+    }
+
+    private String extractTurnTranscriptText(String baselineText, String fullOutputText) {
+        String safeBaselineText = safeTranscriptText(baselineText);
+        String safeFullOutputText = safeTranscriptText(fullOutputText);
+        if (safeFullOutputText.isEmpty()) {
+            return "";
+        }
+        if (safeBaselineText.isEmpty()) {
+            return safeFullOutputText;
+        }
+        if (safeFullOutputText.startsWith(safeBaselineText)) {
+            return safeTranscriptText(
+                    safeFullOutputText.substring(safeBaselineText.length())
+            );
+        }
+        return safeFullOutputText;
+    }
+
+    private String safeTranscriptText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String renderTranscriptTimestamp(long timestampEpochMs) {
+        if (timestampEpochMs <= 0L) {
+            return "-";
+        }
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+        if (transcriptUseUtc) {
+            formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
+            return formatter.format(new Date(timestampEpochMs)) + " UTC";
+        }
+        formatter.setTimeZone(TimeZone.getDefault());
+        return formatter.format(new Date(timestampEpochMs)) + " Local";
+    }
+
+    private StreamEntry toStreamEntry(TranscriptEntry transcriptEntry) {
+        boolean outgoing = transcriptEntry.type == TranscriptEntryType.TX;
+        String label = outgoing ? "TX" : "RX";
+        String meta = renderTranscriptTimestamp(transcriptEntry.startedAtEpochMs)
+                + "  |  "
+                + safeValue(transcriptEntry.stateLabel);
+        if (hasMeaningfulText(transcriptEntry.sourceOrRouteLabel)) {
+            meta += "  |  " + transcriptEntry.sourceOrRouteLabel.trim();
+        }
+        CharSequence body = outgoing
+                ? renderTranscriptTxBody(transcriptEntry)
+                : safeValue(transcriptEntry.bodyText);
+        return new StreamEntry(
+                label,
+                meta,
+                body,
+                outgoing ? R.drawable.operate_stream_card_tx : R.drawable.operate_stream_card_rx,
+                outgoing ? R.color.cwcn_tx_line : R.color.cwcn_rx_line,
+                outgoing,
+                false
+        );
+    }
+
+    private CharSequence renderTranscriptTxBody(TranscriptEntry transcriptEntry) {
+        String visibleText = safeTranscriptText(transcriptEntry.bodyText);
+        if (visibleText.isEmpty()) {
+            return "-";
+        }
+        if (!transcriptEntry.active
+                || transcriptEntry.progressIndex < 0
+                || transcriptEntry.progressIndex >= visibleText.length()) {
+            return visibleText;
+        }
+        SpannableString styled = new SpannableString(visibleText);
+        int bodyColor = ContextCompat.getColor(this, R.color.cwcn_body);
+        int completedColor = ContextCompat.getColor(this, R.color.cwcn_tx_line);
+        int currentColor = ContextCompat.getColor(this, R.color.cwcn_tx_line);
+        if (transcriptEntry.progressIndex > 0) {
+            styled.setSpan(
+                    new ForegroundColorSpan(completedColor),
+                    0,
+                    transcriptEntry.progressIndex,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            );
+        }
+        styled.setSpan(
+                new ForegroundColorSpan(currentColor),
+                transcriptEntry.progressIndex,
+                transcriptEntry.progressIndex + 1,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        );
+        styled.setSpan(
+                new StyleSpan(android.graphics.Typeface.BOLD),
+                transcriptEntry.progressIndex,
+                transcriptEntry.progressIndex + 1,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        );
+        if (transcriptEntry.progressIndex + 1 < visibleText.length()) {
+            styled.setSpan(
+                    new ForegroundColorSpan(bodyColor),
+                    transcriptEntry.progressIndex + 1,
+                    visibleText.length(),
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            );
+        }
+        return styled;
+    }
+
     private List<StreamEntry> buildOperateStreamEntries(
             @Nullable RxSessionSnapshot snapshot,
             @Nullable AppOverviewSnapshot overview
     ) {
-        java.util.ArrayList<StreamEntry> entries = new java.util.ArrayList<>();
+        ArrayList<StreamEntry> entries = new ArrayList<>();
+        if (transcriptTimelineActive) {
+            for (TranscriptEntry transcriptEntry : operateTranscriptEntries) {
+                if (!hasMeaningfulText(transcriptEntry.bodyText)) {
+                    continue;
+                }
+                entries.add(toStreamEntry(transcriptEntry));
+            }
+            if (!entries.isEmpty()) {
+                return entries;
+            }
+            entries.add(new StreamEntry(
+                    "RX",
+                    transcriptUseUtc ? "UTC transcript" : "Local transcript",
+                    "当前 transcript 为空",
+                    R.drawable.operate_stream_card_rx,
+                    R.color.cwcn_rx_line,
+                    false,
+                    false
+            ));
+            return entries;
+        }
         RigProfile profile = rigSelectionStore.selectedProfile();
 
         if (snapshot == null) {
             entries.add(new StreamEntry(
-                    "接收",
+                    "RX",
                     shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission()
                             ? "手机麦克风 | 需要授权"
                             : usePhoneFallbackRoute(profile)
@@ -3467,76 +3997,21 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         } else {
             String rawText = normalizedTextOrNull(snapshot.rawText());
             entries.add(new StreamEntry(
-                    "接收",
-                    renderReceiveMeta(snapshot),
+                    "RX",
+                    renderTranscriptTimestamp(snapshot.updatedAtEpochMs())
+                            + "  |  "
+                            + renderReceiveMeta(snapshot),
                     safeValue(rawText),
                     R.drawable.operate_stream_card_rx,
                     R.color.cwcn_rx_line,
                     false,
                     false
             ));
-            String fallbackSuggestedText = normalizedTextOrNull(snapshot.fallbackSuggestedText());
-            if (rawText != null
-                    && snapshot.hasDistinctFallbackSuggestedText()
-                    && fallbackSuggestedText != null) {
-                entries.add(new StreamEntry(
-                        "猜测",
-                        "仅兜底 ?  |  未改 RAW",
-                        fallbackSuggestedText,
-                        R.drawable.operate_stream_card_txt,
-                        R.color.cwcn_warning,
-                        false,
-                        true
-                ));
-            }
-            String fallbackNotesText = normalizedTextOrNull(snapshot.fallbackNotesText());
-            if (snapshot.hasFallbackNotesText() && fallbackNotesText != null) {
-                entries.add(new StreamEntry(
-                        "候选",
-                        "Morse 切分提示  |  未改 RAW",
-                        fallbackNotesText,
-                        R.drawable.operate_stream_card_txt,
-                        R.color.cwcn_warning,
-                        false,
-                        true
-                ));
-            }
-            String normalizedText = normalizedTextOrNull(snapshot.normalizedText());
-            if (!isOperateRxRawOnlyMode()
-                    && rawText != null
-                    && normalizedText != null
-                    && snapshot.hasDistinctNormalizedText()) {
-                entries.add(new StreamEntry(
-                        "解释",
-                        safeValue(snapshot.phaseDisplayName()) + "  |  归一化",
-                        normalizedText,
-                        R.drawable.operate_stream_card_txt,
-                        R.color.cwcn_accent,
-                        false,
-                        true
-                ));
-            }
-        }
-
-        String txDraft = binding.txComposeEditText.getText() == null
-                ? ""
-                : binding.txComposeEditText.getText().toString().trim();
-        String visibleTxText = resolveVisibleActiveTxText(txDraft);
-        if (shouldShowTransmitStream(visibleTxText)) {
-            entries.add(new StreamEntry(
-                    "发射",
-                    renderActiveTxStreamMeta(),
-                    renderActiveTxStreamBody(visibleTxText),
-                    R.drawable.operate_stream_card_tx,
-                    R.color.cwcn_tx_line,
-                    true,
-                    false
-            ));
         }
 
         if (entries.isEmpty()) {
             entries.add(new StreamEntry(
-                    "接收",
+                    "RX",
                     "-",
                     "-",
                     R.drawable.operate_stream_card_rx,
