@@ -17,6 +17,7 @@ public final class LiveRxWpmGuard {
     private static final long INITIAL_TRUSTED_CANDIDATE_WINDOW_MS = 2600L;
     private static final double INITIAL_TRUSTED_BOOTSTRAP_MAX_SPREAD_WPM = 3.0d;
     private static final long TRUSTED_IDLE_FORGET_MS = 7000L;
+    private static final long RETAINED_IDLE_FORGET_MS = 30000L;
     private static final long FAST_DOT_THRESHOLD_MS = 55L;
     private static final double TRUSTED_WPM_DOWNWARD_BLEND = 0.18d;
     private static final double STRONG_LOCKED_RATIO_MIN = 0.56d;
@@ -24,11 +25,6 @@ public final class LiveRxWpmGuard {
     private static final double STRONG_ACTIVE_UNLOCKED_RATIO_MAX = 0.28d;
     private static final double STRONG_TONE_DOMINANCE_MIN = 0.40d;
     private static final double STRONG_ISOLATION_MIN = 0.50d;
-    private static final double BOOTSTRAP_LOCKED_RATIO_MIN = 0.42d;
-    private static final double BOOTSTRAP_NEAR_TARGET_RATIO_MIN = 0.55d;
-    private static final double BOOTSTRAP_ACTIVE_UNLOCKED_RATIO_MAX = 0.36d;
-    private static final double BOOTSTRAP_TONE_DOMINANCE_MIN = 0.32d;
-    private static final double BOOTSTRAP_ISOLATION_MIN = 0.42d;
     private static final double TRUSTED_KEEP_UP_RATIO = 1.015d;
     private static final double TRUSTED_KEEP_UP_WPM = 0.35d;
     private static final double TRUSTED_UPDATE_DOWN_RATIO = 0.95d;
@@ -37,31 +33,55 @@ public final class LiveRxWpmGuard {
     private static final double HOLD_UP_WPM = 1.20d;
     private static final double HOLD_DOWN_RATIO = 0.88d;
     private static final double HOLD_DOWN_WPM = 2.00d;
+    private static final double BOOTSTRAP_BOUNDARY_SEED_FLOOR_RATIO = 0.84d;
     private static final double ACTIVE_SIGNAL_LOCKED_RATIO_MIN = 0.08d;
     private static final double ACTIVE_SIGNAL_NEAR_TARGET_RATIO_MIN = 0.12d;
     private static final double ACTIVE_SIGNAL_UNLOCKED_RATIO_MIN = 0.08d;
-    private static final double UNTRUSTED_FAST_SEED_CLAMP_RATIO = 1.12d;
-    private static final double UNTRUSTED_FAST_SEED_CLAMP_WPM = 2.00d;
-    private static final double INITIAL_TIMING_UPDATE_MAX_UP_RATIO = 1.80d;
-    private static final double INITIAL_TIMING_UPDATE_MAX_UP_WPM = 10.0d;
-    private static final double INITIAL_DISPLAY_MAX_UP_RATIO = 1.75d;
-    private static final double INITIAL_DISPLAY_MAX_UP_WPM = 10.0d;
-    private static final double INITIAL_LEARNING_FREEZE_MARGIN_WPM = 0.50d;
     private static final double TRUSTED_EVENT_LEARNING_FLOOR_RATIO = 0.94d;
+    private static final double TRUSTED_EVENT_STRONG_FAST_LEARNING_FLOOR_RATIO = 0.72d;
+    private static final double TRUSTED_TONE_DASH_LIKE_MIN_RATIO = 1.55d;
+    private static final double RETARGET_RAW_DASH_PRESERVE_MIN_RATIO = 1.55d;
+    private static final double RETARGET_RAW_LETTER_GAP_PRESERVE_MIN_RATIO = 1.65d;
+    private static final double TRUSTED_TIMING_LEARNING_FAST_UP_RATIO = 1.18d;
+    private static final double TRUSTED_TIMING_LEARNING_FAST_UP_WPM = 2.50d;
 
     private int seedWpm;
+    private double retainedWpm;
     private double trustedWpm;
     private int confidentDecodedCharacterRun;
     private final double[] pendingInitialTrustedCandidates = new double[INITIAL_TRUSTED_MIN_CONFIDENT_CHARACTERS];
     private int pendingInitialTrustedCandidateCount;
     private long lastPendingInitialTrustedCandidateElapsedMs = -1L;
+    private long lastRetainedUpdateElapsedMs = -1L;
     private long lastTrustedUpdateElapsedMs = -1L;
     private boolean holding;
 
     public void reset() {
+        retainedWpm = 0.0d;
         trustedWpm = 0.0d;
         confidentDecodedCharacterRun = 0;
         clearPendingInitialTrustedCandidates();
+        lastRetainedUpdateElapsedMs = -1L;
+        lastTrustedUpdateElapsedMs = -1L;
+        holding = false;
+    }
+
+    public void softReset() {
+        if (trustedWpm > 0.0d) {
+            rememberRetainedWpm(trustedWpm, lastTrustedUpdateElapsedMs);
+        }
+        confidentDecodedCharacterRun = 0;
+        clearPendingInitialTrustedCandidates();
+        holding = false;
+    }
+
+    public void beginNewTurn(int turnSeedWpm, long nowElapsedMs) {
+        seedWpm = Math.max(0, turnSeedWpm);
+        retainedWpm = 0.0d;
+        trustedWpm = 0.0d;
+        confidentDecodedCharacterRun = 0;
+        clearPendingInitialTrustedCandidates();
+        lastRetainedUpdateElapsedMs = -1L;
         lastTrustedUpdateElapsedMs = -1L;
         holding = false;
     }
@@ -76,11 +96,14 @@ public final class LiveRxWpmGuard {
             @Nullable CwTimingSnapshot timingSnapshot,
             long nowElapsedMs
     ) {
-        maybeForgetTrustedWpm(signalSnapshot, nowElapsedMs);
+        refreshAnchorState(signalSnapshot, nowElapsedMs);
         maybeExpirePendingInitialTrustedCandidates(nowElapsedMs);
-        if (unknownCharacter) {
+        if (unknownCharacter && trustedWpm > 0.0d) {
             confidentDecodedCharacterRun = 0;
             return;
+        }
+        if (unknownCharacter) {
+            confidentDecodedCharacterRun = 0;
         }
         Sample sample = Sample.from(signalSnapshot, timingSnapshot);
         boolean strongConfidence = isStrongConfidence(sample);
@@ -88,12 +111,13 @@ public final class LiveRxWpmGuard {
         if (!strongConfidence) {
             confidentDecodedCharacterRun = 0;
         }
-        double candidateWpm = sample.rawWpm > 0.0d ? sample.rawWpm : fallbackWpm();
+        double candidateWpm = trustedWpm <= 0.0d
+                ? sample.rawWpm
+                : sample.rawWpm > 0.0d
+                ? sample.rawWpm
+                : fallbackWpm();
         if (candidateWpm <= 0.0d) {
             return;
-        }
-        if (trustedWpm <= 0.0d && seedWpm > 0) {
-            candidateWpm = Math.min(candidateWpm, initialDisplayUpperBound());
         }
         if (trustedWpm <= 0.0d) {
             if (!bootstrapConfidence) {
@@ -105,6 +129,7 @@ public final class LiveRxWpmGuard {
                 return;
             }
             trustedWpm = medianPendingInitialTrustedCandidate();
+            rememberRetainedWpm(trustedWpm, nowElapsedMs);
             clearPendingInitialTrustedCandidates();
         } else {
             if (!strongConfidence) {
@@ -119,6 +144,7 @@ public final class LiveRxWpmGuard {
             if (candidateWpm < updateLowerBound) {
                 trustedWpm = (trustedWpm * (1.0d - TRUSTED_WPM_DOWNWARD_BLEND))
                         + (candidateWpm * TRUSTED_WPM_DOWNWARD_BLEND);
+                rememberRetainedWpm(trustedWpm, nowElapsedMs);
             } else if (candidateWpm > keepUpperBound) {
                 holding = candidateWpm > holdUpperBound();
                 lastTrustedUpdateElapsedMs = nowElapsedMs;
@@ -126,6 +152,7 @@ public final class LiveRxWpmGuard {
             }
         }
         lastTrustedUpdateElapsedMs = nowElapsedMs;
+        rememberRetainedWpm(trustedWpm, nowElapsedMs);
         holding = false;
     }
 
@@ -137,6 +164,9 @@ public final class LiveRxWpmGuard {
     ) {
         if (rawTimingEvent == null) {
             return null;
+        }
+        if (trustedWpm <= 0.0d) {
+            return rawTimingEvent;
         }
         double effectiveWpm = resolveEffectiveWpm(signalSnapshot, timingSnapshot, nowElapsedMs);
         if (effectiveWpm <= 0.0d) {
@@ -150,6 +180,11 @@ public final class LiveRxWpmGuard {
         CwTimingEvent.Classification heldClassification = rawTimingEvent.kind() == CwTimingEvent.Kind.TONE
                 ? classifyTone(rawTimingEvent.durationMs(), heldDotEstimateMs)
                 : classifyGap(rawTimingEvent.durationMs(), heldDotEstimateMs, heldIntraGapEstimateMs);
+        if (shouldPreserveRawDashClassification(rawTimingEvent, heldClassification, heldDotEstimateMs)) {
+            heldClassification = CwTimingEvent.Classification.DAH;
+        } else if (shouldPreserveRawLetterGapClassification(rawTimingEvent, heldClassification, heldDotEstimateMs)) {
+            heldClassification = CwTimingEvent.Classification.LETTER_GAP;
+        }
         return new CwTimingEvent(
                 rawTimingEvent.kind(),
                 heldClassification,
@@ -240,7 +275,7 @@ public final class LiveRxWpmGuard {
             @Nullable CwTimingSnapshot timingSnapshot,
             long nowElapsedMs
     ) {
-        maybeForgetTrustedWpm(signalSnapshot, nowElapsedMs);
+        refreshAnchorState(signalSnapshot, nowElapsedMs);
         Sample sample = Sample.from(signalSnapshot, timingSnapshot);
         if (sample.rawWpm <= 0.0d) {
             return false;
@@ -255,14 +290,29 @@ public final class LiveRxWpmGuard {
         if (!isBootstrapConfidence(sample)) {
             return false;
         }
-        if (seedWpm <= 0) {
+        return true;
+    }
+
+    public boolean shouldAcceptBootstrapBoundaryAnchorUpdate(
+            @Nullable CwSignalSnapshot signalSnapshot,
+            @Nullable CwTimingSnapshot timingSnapshot,
+            long nowElapsedMs
+    ) {
+        refreshAnchorState(signalSnapshot, nowElapsedMs);
+        Sample sample = Sample.from(signalSnapshot, timingSnapshot);
+        if (sample.rawWpm <= 0.0d) {
+            return false;
+        }
+        if (trustedWpm > 0.0d) {
+            return shouldAcceptTimingAnchorUpdate(signalSnapshot, timingSnapshot, nowElapsedMs);
+        }
+        if (!signalLooksActive(signalSnapshot)) {
+            return false;
+        }
+        if (seedWpm <= 0 || sample.rawWpm <= 0.0d) {
             return true;
         }
-        double initialUpperBound = Math.min(
-                seedWpm + INITIAL_TIMING_UPDATE_MAX_UP_WPM,
-                seedWpm * INITIAL_TIMING_UPDATE_MAX_UP_RATIO
-        );
-        return sample.rawWpm <= initialUpperBound;
+        return sample.rawWpm >= (seedWpm * BOOTSTRAP_BOUNDARY_SEED_FLOOR_RATIO);
     }
 
     public boolean shouldAllowTimingLearning(
@@ -270,21 +320,18 @@ public final class LiveRxWpmGuard {
             @Nullable CwTimingSnapshot timingSnapshot,
             long nowElapsedMs
     ) {
-        maybeForgetTrustedWpm(signalSnapshot, nowElapsedMs);
+        refreshAnchorState(signalSnapshot, nowElapsedMs);
         if (!signalLooksActive(signalSnapshot)) {
             return false;
         }
         Sample sample = Sample.from(signalSnapshot, timingSnapshot);
         if (trustedWpm <= 0.0d) {
-            if (sample.rawWpm <= 0.0d || seedWpm <= 0) {
-                return sample.rawWpm > 0.0d;
-            }
-            return sample.rawWpm < (initialDisplayUpperBound() - INITIAL_LEARNING_FREEZE_MARGIN_WPM);
+            return sample.rawWpm > 0.0d;
         }
         if (!isStrongConfidence(sample) || sample.rawWpm <= 0.0d) {
             return false;
         }
-        return sample.rawWpm <= trustedKeepUpperBound();
+        return sample.rawWpm <= trustedTimingLearningUpperBound();
     }
 
     public boolean shouldAllowTimingLearningForEvent(
@@ -293,7 +340,8 @@ public final class LiveRxWpmGuard {
             @Nullable CwTimingSnapshot timingSnapshot,
             long nowElapsedMs
     ) {
-        if (!shouldAllowTimingLearning(signalSnapshot, timingSnapshot, nowElapsedMs)) {
+        boolean baseAllow = shouldAllowTimingLearning(signalSnapshot, timingSnapshot, nowElapsedMs);
+        if (!baseAllow && !shouldAllowActiveEventTimingLearning(toneEvent, signalSnapshot, timingSnapshot)) {
             return false;
         }
         if (trustedWpm <= 0.0d || toneEvent == null || timingSnapshot == null) {
@@ -313,7 +361,7 @@ public final class LiveRxWpmGuard {
         }
         long minimumTrustedCandidateMs = Math.max(
                 1L,
-                Math.round(anchorDotEstimateMs * TRUSTED_EVENT_LEARNING_FLOOR_RATIO)
+                Math.round(anchorDotEstimateMs * trustedEventLearningFloorRatio(signalSnapshot, timingSnapshot))
         );
         return candidateDotEstimateMs >= minimumTrustedCandidateMs;
     }
@@ -323,24 +371,20 @@ public final class LiveRxWpmGuard {
             @Nullable CwTimingSnapshot timingSnapshot,
             long nowElapsedMs
     ) {
-        maybeForgetTrustedWpm(signalSnapshot, nowElapsedMs);
+        refreshAnchorState(signalSnapshot, nowElapsedMs);
         Sample sample = Sample.from(signalSnapshot, timingSnapshot);
         double rawWpm = sample.rawWpm;
         double anchorWpm = trustedWpm;
         boolean strongConfidence = isStrongConfidence(sample);
-
-        if (anchorWpm <= 0.0d && !strongConfidence && rawWpm > 0.0d && seedWpm > 0) {
-            double untrustedUpperBound = untrustedSeedClampUpperBound();
-            if (rawWpm > untrustedUpperBound) {
-                return seedWpm;
+        if (anchorWpm <= 0.0d) {
+            holding = false;
+            if (rawWpm > 0.0d) {
+                return rawWpm;
             }
-        }
-
-        if (anchorWpm <= 0.0d && rawWpm > 0.0d && seedWpm > 0) {
-            double initialUpperBound = initialDisplayUpperBound();
-            if (rawWpm > initialUpperBound) {
-                return strongConfidence ? initialUpperBound : seedWpm;
+            if (retainedWpm > 0.0d) {
+                return retainedWpm;
             }
+            return Math.max(0, seedWpm);
         }
 
         if (anchorWpm > 0.0d && rawWpm > 0.0d) {
@@ -381,6 +425,9 @@ public final class LiveRxWpmGuard {
         if (anchorWpm > 0.0d) {
             return anchorWpm;
         }
+        if (retainedWpm > 0.0d) {
+            return retainedWpm;
+        }
         return Math.max(0, seedWpm);
     }
 
@@ -388,11 +435,22 @@ public final class LiveRxWpmGuard {
         if (trustedWpm > 0.0d) {
             return (int) Math.round(trustedWpm);
         }
+        if (retainedWpm > 0.0d) {
+            return (int) Math.round(retainedWpm);
+        }
         return Math.max(0, seedWpm);
     }
 
     private double fallbackWpm() {
         return anchorWpm();
+    }
+
+    private void refreshAnchorState(
+            @Nullable CwSignalSnapshot signalSnapshot,
+            long nowElapsedMs
+    ) {
+        maybeForgetTrustedWpm(signalSnapshot, nowElapsedMs);
+        maybeForgetRetainedWpm(signalSnapshot, nowElapsedMs);
     }
 
     private void maybeForgetTrustedWpm(
@@ -408,11 +466,29 @@ public final class LiveRxWpmGuard {
         if (signalLooksActive(signalSnapshot)) {
             return;
         }
+        rememberRetainedWpm(trustedWpm, nowElapsedMs);
         trustedWpm = 0.0d;
         confidentDecodedCharacterRun = 0;
         clearPendingInitialTrustedCandidates();
         lastTrustedUpdateElapsedMs = -1L;
         holding = false;
+    }
+
+    private void maybeForgetRetainedWpm(
+            @Nullable CwSignalSnapshot signalSnapshot,
+            long nowElapsedMs
+    ) {
+        if (retainedWpm <= 0.0d || lastRetainedUpdateElapsedMs <= 0L) {
+            return;
+        }
+        if ((nowElapsedMs - lastRetainedUpdateElapsedMs) < RETAINED_IDLE_FORGET_MS) {
+            return;
+        }
+        if (signalLooksActive(signalSnapshot)) {
+            return;
+        }
+        retainedWpm = 0.0d;
+        lastRetainedUpdateElapsedMs = -1L;
     }
 
     private void maybeExpirePendingInitialTrustedCandidates(long nowElapsedMs) {
@@ -429,6 +505,9 @@ public final class LiveRxWpmGuard {
         if (trustedWpm > 0.0d) {
             return trustedWpm;
         }
+        if (retainedWpm > 0.0d) {
+            return retainedWpm;
+        }
         return Math.max(0, seedWpm);
     }
 
@@ -442,12 +521,14 @@ public final class LiveRxWpmGuard {
     }
 
     private boolean isBootstrapConfidence(Sample sample) {
-        return sample.targetToneLocked
-                && sample.recentLockedFrameRatio >= BOOTSTRAP_LOCKED_RATIO_MIN
-                && sample.recentNearTargetLockedFrameRatio >= BOOTSTRAP_NEAR_TARGET_RATIO_MIN
-                && sample.recentActiveUnlockedFrameRatio <= BOOTSTRAP_ACTIVE_UNLOCKED_RATIO_MAX
-                && sample.toneDominanceRatio >= BOOTSTRAP_TONE_DOMINANCE_MIN
-                && sample.narrowbandIsolationRatio >= BOOTSTRAP_ISOLATION_MIN;
+        return RxStableDecodeDecider.passesBootstrapDecodeShape(
+                sample.targetToneLocked,
+                sample.recentLockedFrameRatio,
+                sample.recentNearTargetLockedFrameRatio,
+                sample.recentActiveUnlockedFrameRatio,
+                sample.toneDominanceRatio,
+                sample.narrowbandIsolationRatio
+        );
     }
 
     private boolean shouldRetargetTimingEvent(
@@ -505,6 +586,30 @@ public final class LiveRxWpmGuard {
         );
     }
 
+    private double trustedTimingLearningUpperBound() {
+        return Math.min(
+                trustedWpm + TRUSTED_TIMING_LEARNING_FAST_UP_WPM,
+                trustedWpm * TRUSTED_TIMING_LEARNING_FAST_UP_RATIO
+        );
+    }
+
+    private boolean shouldAllowActiveEventTimingLearning(
+            @Nullable CwToneEvent toneEvent,
+            @Nullable CwSignalSnapshot signalSnapshot,
+            @Nullable CwTimingSnapshot timingSnapshot
+    ) {
+        if (trustedWpm <= 0.0d
+                || toneEvent == null
+                || timingSnapshot == null) {
+            return false;
+        }
+        if (!signalLooksActive(signalSnapshot)) {
+            return false;
+        }
+        Sample sample = Sample.from(signalSnapshot, timingSnapshot);
+        return sample.rawWpm > 0.0d && sample.rawWpm <= trustedTimingLearningUpperBound();
+    }
+
     private boolean signalLooksActive(@Nullable CwSignalSnapshot signalSnapshot) {
         if (signalSnapshot == null) {
             return false;
@@ -517,18 +622,14 @@ public final class LiveRxWpmGuard {
                 || signalSnapshot.recentActiveUnlockedFrameRatio() >= ACTIVE_SIGNAL_UNLOCKED_RATIO_MIN;
     }
 
-    private double untrustedSeedClampUpperBound() {
-        return Math.min(
-                seedWpm + UNTRUSTED_FAST_SEED_CLAMP_WPM,
-                seedWpm * UNTRUSTED_FAST_SEED_CLAMP_RATIO
-        );
-    }
-
-    private double initialDisplayUpperBound() {
-        return Math.min(
-                seedWpm + INITIAL_DISPLAY_MAX_UP_WPM,
-                seedWpm * INITIAL_DISPLAY_MAX_UP_RATIO
-        );
+    private void rememberRetainedWpm(double candidateWpm, long nowElapsedMs) {
+        if (candidateWpm <= 0.0d) {
+            return;
+        }
+        retainedWpm = candidateWpm;
+        if (nowElapsedMs > 0L) {
+            lastRetainedUpdateElapsedMs = nowElapsedMs;
+        }
     }
 
     private void appendPendingInitialTrustedCandidate(double candidateWpm, long nowElapsedMs) {
@@ -617,7 +718,7 @@ public final class LiveRxWpmGuard {
                 return 0L;
             }
             double toneRatio = toneDurationMs / (double) Math.max(1L, anchorDotEstimateMs);
-            if (toneRatio >= 1.85d && toneRatio <= 5.2d) {
+            if (toneRatio >= TRUSTED_TONE_DASH_LIKE_MIN_RATIO && toneRatio <= 5.2d) {
                 return Math.max(1L, Math.round(toneDurationMs / 3.0d));
             }
             return toneDurationMs;
@@ -642,6 +743,17 @@ public final class LiveRxWpmGuard {
             return Math.max(1L, Math.round(gapDurationMs / 7.0d));
         }
         return 0L;
+    }
+
+    private double trustedEventLearningFloorRatio(
+            @Nullable CwSignalSnapshot signalSnapshot,
+            @Nullable CwTimingSnapshot timingSnapshot
+    ) {
+        Sample sample = Sample.from(signalSnapshot, timingSnapshot);
+        if (trustedWpm > 0.0d && isStrongConfidence(sample)) {
+            return TRUSTED_EVENT_STRONG_FAST_LEARNING_FLOOR_RATIO;
+        }
+        return TRUSTED_EVENT_LEARNING_FLOOR_RATIO;
     }
 
     private CwTimingEvent.Classification classifyTone(long toneDurationMs, long dotEstimateMs) {
@@ -680,6 +792,44 @@ public final class LiveRxWpmGuard {
             return CwTimingEvent.Classification.WORD_GAP;
         }
         return CwTimingEvent.Classification.UNKNOWN;
+    }
+
+    private boolean shouldPreserveRawDashClassification(
+            CwTimingEvent rawTimingEvent,
+            CwTimingEvent.Classification heldClassification,
+            long heldDotEstimateMs
+    ) {
+        if (rawTimingEvent == null
+                || rawTimingEvent.kind() != CwTimingEvent.Kind.TONE
+                || rawTimingEvent.classification() != CwTimingEvent.Classification.DAH
+                || heldClassification != CwTimingEvent.Classification.DIT) {
+            return false;
+        }
+        long rawDotEstimateMs = Math.max(1L, rawTimingEvent.dotEstimateMs());
+        if (heldDotEstimateMs <= rawDotEstimateMs) {
+            return false;
+        }
+        double ratioToHeldDot = rawTimingEvent.durationMs() / (double) Math.max(1L, heldDotEstimateMs);
+        return ratioToHeldDot >= RETARGET_RAW_DASH_PRESERVE_MIN_RATIO;
+    }
+
+    private boolean shouldPreserveRawLetterGapClassification(
+            CwTimingEvent rawTimingEvent,
+            CwTimingEvent.Classification heldClassification,
+            long heldDotEstimateMs
+    ) {
+        if (rawTimingEvent == null
+                || rawTimingEvent.kind() != CwTimingEvent.Kind.GAP
+                || rawTimingEvent.classification() != CwTimingEvent.Classification.LETTER_GAP
+                || heldClassification != CwTimingEvent.Classification.INTRA_SYMBOL_GAP) {
+            return false;
+        }
+        long rawDotEstimateMs = Math.max(1L, rawTimingEvent.dotEstimateMs());
+        if (heldDotEstimateMs <= rawDotEstimateMs) {
+            return false;
+        }
+        double ratioToHeldDot = rawTimingEvent.durationMs() / (double) Math.max(1L, heldDotEstimateMs);
+        return ratioToHeldDot >= RETARGET_RAW_LETTER_GAP_PRESERVE_MIN_RATIO;
     }
 
     private static final class Sample {

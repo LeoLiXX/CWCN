@@ -26,6 +26,11 @@ public final class CwFixtureFrontEndTraceProbeTest {
         traceScenario("moderate_dual_interferer_directed_report", 670);
     }
 
+    @Test
+    public void traceToneSweepVvvFrontEndFrom450Preferred() {
+        traceScenario("user_tone_sweep_vvv_18wpm", 450);
+    }
+
     private void traceScenario(String scenarioId, int preferredToneHz) {
         CwFixtureScenario scenario = findScenario(scenarioId);
         SyntheticFixtureRxAudioSource source = new SyntheticFixtureRxAudioSource();

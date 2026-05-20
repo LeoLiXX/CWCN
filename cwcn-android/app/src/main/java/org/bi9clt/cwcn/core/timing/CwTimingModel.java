@@ -9,7 +9,9 @@ public final class CwTimingModel {
     private static final long DEFAULT_DOT_MS = 80L;
     private static final long MIN_DOT_MS = 28L;
     private static final long MAX_DOT_MS = 220L;
-    private static final double STARTUP_DASH_RATIO = 1.65d;
+    // Keep startup dash detection permissive enough for fast 30 WPM openers:
+    // the first CQ dah can land around 118 ms and should not inflate the initial dot estimate.
+    private static final double STARTUP_DASH_RATIO = 1.45d;
     private static final double DOT_SMOOTHING = 0.17d;
     private static final double GAP_SMOOTHING = 0.16d;
     private static final double FAST_DOT_SMOOTHING = 0.30d;
@@ -18,17 +20,28 @@ public final class CwTimingModel {
     private static final double GAP_DOT_MAX_SLOWDOWN_STEP_RATIO = 1.18d;
     private static final double GAP_DOT_MAX_SPEEDUP_STEP_RATIO = 0.88d;
     private static final double INTRA_GAP_MAX_RATIO = 1.8d;
-    private static final double LETTER_GAP_MAX_RATIO = 4.35d;
-    private static final double WORD_GAP_MAX_RATIO = 10.0d;
+    private static final double LETTER_GAP_MAX_RATIO = 4.70d;
+    private static final double WORD_GAP_MAX_RATIO = 12.8d;
     private static final double FAST_INTRA_GAP_MAX_RATIO = 1.55d;
     private static final double FAST_LETTER_GAP_MAX_RATIO = 3.95d;
-    private static final double FAST_WORD_GAP_MAX_RATIO = 9.2d;
+    private static final double FAST_WORD_GAP_MAX_RATIO = 11.8d;
     private static final double WORD_GAP_INTRA_RATIO_FALLBACK = 5.0d;
     private static final double WORD_GAP_DOT_RATIO_FALLBACK_MIN = 3.15d;
+    private static final double TONE_REFERENCE_SMOOTHING_RATIO = 0.60d;
+    // Keep only a very small tone-derived cushion here:
+    // borderline gaps should remain decodable as letter gaps,
+    // but clearly intra-like gaps still get a bit of protection from a drifted-fast dot estimate.
+    private static final double INTRA_GAP_TONE_REFERENCE_HYSTERESIS_RATIO = 1.04d;
+    private static final double CLEAR_LETTER_GAP_LEARNING_MIN_RATIO = 2.25d;
+    private static final double LETTER_GAP_INTRA_SMOOTHING_SCALE = 0.55d;
+    private static final double LETTER_GAP_DOT_SMOOTHING_SCALE = 0.35d;
+    private static final double INTRA_GAP_DOT_SMOOTHING_SCALE = 0.75d;
+    private static final double GAP_DOT_TONE_REFERENCE_FLOOR_RATIO = 0.98d;
     private boolean initialized;
     private double dotEstimateMs = DEFAULT_DOT_MS;
     private double dashEstimateMs = DEFAULT_DOT_MS * 3.0d;
     private double intraGapEstimateMs = DEFAULT_DOT_MS;
+    private double toneDotReferenceMs = DEFAULT_DOT_MS;
     private long lastToneOffTimestampMs = -1L;
     private int totalToneEvents;
     private int totalGapEvents;
@@ -121,6 +134,7 @@ public final class CwTimingModel {
         dotEstimateMs = DEFAULT_DOT_MS;
         dashEstimateMs = DEFAULT_DOT_MS * 3.0d;
         intraGapEstimateMs = DEFAULT_DOT_MS;
+        toneDotReferenceMs = DEFAULT_DOT_MS;
         lastToneOffTimestampMs = -1L;
         totalToneEvents = 0;
         totalGapEvents = 0;
@@ -165,6 +179,11 @@ public final class CwTimingModel {
 
         dotEstimateMs = smoothEstimate(dotEstimateMs, normalizedDuration, toneSmoothing(normalizedDuration));
         dotEstimateMs = clampDot(dotEstimateMs);
+        toneDotReferenceMs = clampDot(smoothEstimate(
+                toneDotReferenceMs,
+                normalizedDuration,
+                toneReferenceSmoothing(normalizedDuration)
+        ));
     }
 
     private void bootstrapFromFirstTone(long toneDurationMs) {
@@ -186,6 +205,7 @@ public final class CwTimingModel {
         dotEstimateMs = clampDot(bootstrapDot);
         intraGapEstimateMs = dotEstimateMs;
         dashEstimateMs = Math.max(dashEstimateMs, dotEstimateMs * 3.0d);
+        toneDotReferenceMs = dotEstimateMs;
     }
 
     private void updateGapEstimates(long gapDurationMs, CwTimingEvent.Classification classification) {
@@ -197,7 +217,11 @@ public final class CwTimingModel {
             if (initialized) {
                 dotEstimateMs = clampDot(limitGapDrivenDotShift(
                         dotEstimateMs,
-                        smoothEstimate(dotEstimateMs, gapDurationMs, gapDotSmoothing(gapDurationMs))
+                        smoothEstimate(
+                                dotEstimateMs,
+                                gapDurationMs,
+                                gapDotSmoothing(gapDurationMs) * INTRA_GAP_DOT_SMOOTHING_SCALE
+                        )
                 ));
             }
             return;
@@ -208,13 +232,24 @@ public final class CwTimingModel {
                 return;
             }
             double inferredDot = gapDurationMs / 3.0d;
-            intraGapEstimateMs = smoothEstimate(intraGapEstimateMs, inferredDot, gapSmoothing(inferredDot) * 0.75d);
+            if (!shouldLearnFromLetterGap(gapDurationMs, inferredDot)) {
+                return;
+            }
             if (initialized) {
                 dotEstimateMs = clampDot(limitGapDrivenDotShift(
                         dotEstimateMs,
-                        smoothEstimate(dotEstimateMs, inferredDot, gapDotSmoothing(inferredDot) * 0.8d)
+                        smoothEstimate(
+                                dotEstimateMs,
+                                inferredDot,
+                                gapDotSmoothing(inferredDot) * LETTER_GAP_DOT_SMOOTHING_SCALE
+                        )
                 ));
             }
+            intraGapEstimateMs = smoothEstimate(
+                    intraGapEstimateMs,
+                    inferredDot,
+                    gapSmoothing(inferredDot) * LETTER_GAP_INTRA_SMOOTHING_SCALE
+            );
         }
     }
 
@@ -232,6 +267,7 @@ public final class CwTimingModel {
     private CwTimingEvent.Classification classifyGap(long gapDurationMs) {
         double ratio = gapDurationMs / Math.max(1.0d, dotEstimateMs);
         double intraRatio = gapDurationMs / Math.max(1.0d, intraGapEstimateMs);
+        double intraReferenceRatio = gapDurationMs / intraGapClassificationReferenceDotMs();
         double intraGapMaxRatio = isFastTimingContext()
                 ? FAST_INTRA_GAP_MAX_RATIO
                 : INTRA_GAP_MAX_RATIO;
@@ -241,7 +277,7 @@ public final class CwTimingModel {
         double wordGapMaxRatio = isFastTimingContext()
                 ? FAST_WORD_GAP_MAX_RATIO
                 : WORD_GAP_MAX_RATIO;
-        if (ratio <= intraGapMaxRatio) {
+        if (intraReferenceRatio <= intraGapMaxRatio) {
             return CwTimingEvent.Classification.INTRA_SYMBOL_GAP;
         }
         if (ratio >= WORD_GAP_DOT_RATIO_FALLBACK_MIN
@@ -283,8 +319,23 @@ public final class CwTimingModel {
         return inferredDotMs <= FAST_DOT_THRESHOLD_MS ? FAST_GAP_SMOOTHING * 0.85d : GAP_SMOOTHING * 0.7d;
     }
 
+    private double toneReferenceSmoothing(double observedDurationMs) {
+        return toneSmoothing(observedDurationMs) * TONE_REFERENCE_SMOOTHING_RATIO;
+    }
+
     private double clampDot(double candidate) {
         return Math.max(MIN_DOT_MS, Math.min(MAX_DOT_MS, candidate));
+    }
+
+    private double intraGapClassificationReferenceDotMs() {
+        double referenceDotMs = Math.max(1.0d, dotEstimateMs);
+        if (toneDotReferenceMs > 0.0d) {
+            referenceDotMs = Math.max(
+                    referenceDotMs,
+                    toneDotReferenceMs * INTRA_GAP_TONE_REFERENCE_HYSTERESIS_RATIO
+            );
+        }
+        return referenceDotMs;
     }
 
     private boolean isFastTimingContext() {
@@ -297,12 +348,34 @@ public final class CwTimingModel {
 
     private double limitGapDrivenDotShift(double currentDotMs, double gapDrivenDotMs) {
         if (gapDrivenDotMs < currentDotMs) {
-            return Math.max(gapDrivenDotMs, currentDotMs * GAP_DOT_MAX_SPEEDUP_STEP_RATIO);
+            double minimumDotMs = currentDotMs * GAP_DOT_MAX_SPEEDUP_STEP_RATIO;
+            if (toneDotReferenceMs > 0.0d) {
+                minimumDotMs = Math.max(
+                        minimumDotMs,
+                        toneDotReferenceMs * GAP_DOT_TONE_REFERENCE_FLOOR_RATIO
+                );
+            }
+            return Math.max(gapDrivenDotMs, minimumDotMs);
         }
         if (gapDrivenDotMs <= currentDotMs) {
             return gapDrivenDotMs;
         }
         return Math.min(gapDrivenDotMs, currentDotMs * GAP_DOT_MAX_SLOWDOWN_STEP_RATIO);
+    }
+
+    private boolean shouldLearnFromLetterGap(long gapDurationMs, double inferredDotMs) {
+        if (gapDurationMs <= 0L || inferredDotMs <= 0.0d) {
+            return false;
+        }
+        double learningReferenceDotMs = Math.max(1.0d, dotEstimateMs);
+        double ratioToReference = gapDurationMs / learningReferenceDotMs;
+        if (ratioToReference < CLEAR_LETTER_GAP_LEARNING_MIN_RATIO) {
+            return false;
+        }
+        if (toneDotReferenceMs <= 0.0d) {
+            return true;
+        }
+        return inferredDotMs >= (toneDotReferenceMs * GAP_DOT_TONE_REFERENCE_FLOOR_RATIO);
     }
 
     private long dotEstimateRounded() {

@@ -8,6 +8,7 @@ import org.junit.Test;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public final class LiveRxToneEventStabilizerTest {
@@ -66,6 +67,124 @@ public final class LiveRxToneEventStabilizerTest {
 
         List<CwToneEvent> flushedOff = stabilizer.flush(130L);
         assertTrue(flushedOff.isEmpty());
+    }
+
+    @Test
+    public void confidentShortStandaloneToneSurvivesFlushAfterPlausibleGap() {
+        LiveRxToneEventStabilizer stabilizer = new LiveRxToneEventStabilizer();
+        CwSignalSnapshot strongOnsetSignal = signalSnapshot(
+                true,
+                "LLLLLLLLLLLLLLLLLLLLLLLL",
+                8,
+                0.70d,
+                0.74d
+        );
+        CwSignalSnapshot weakReleaseSignal = signalSnapshot(
+                false,
+                "LLLLLLLLLLLLLL..........",
+                8,
+                0.43d,
+                0.32d
+        );
+
+        List<CwToneEvent> priorToneOff = stabilizer.process(toneOff(80L, 64L), weakReleaseSignal, quietHealth(), 48L);
+        assertEquals(1, priorToneOff.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, priorToneOff.get(0).type());
+
+        List<CwToneEvent> confidentToneOn = stabilizer.process(toneOn(140L), strongOnsetSignal, quietHealth(), 48L);
+        assertEquals(1, confidentToneOn.size());
+        assertEquals(CwToneEvent.Type.TONE_ON, confidentToneOn.get(0).type());
+
+        List<CwToneEvent> delayedShortOff = stabilizer.process(toneOff(161L, 21L), weakReleaseSignal, quietHealth(), 48L);
+        assertTrue(delayedShortOff.isEmpty());
+
+        List<CwToneEvent> flushedShortOff = stabilizer.flush(190L);
+        assertEquals(1, flushedShortOff.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, flushedShortOff.get(0).type());
+        assertEquals(21L, flushedShortOff.get(0).toneDurationMs());
+        assertFalse(stabilizer.shouldSuppressShortTone(
+                flushedShortOff.get(0),
+                weakReleaseSignal,
+                quietHealth(),
+                48L
+        ));
+
+        LiveRxToneEventStabilizerStats stats = stabilizer.stats();
+        assertEquals(1, stats.delayedToneOffCount());
+        assertEquals(0, stats.droppedIsolatedToneOffCount());
+    }
+
+    @Test
+    public void hotButNotClippingInputStillPreservesConfidentShortStandaloneTone() {
+        LiveRxToneEventStabilizer stabilizer = new LiveRxToneEventStabilizer();
+        CwSignalSnapshot strongOnsetSignal = signalSnapshot(
+                true,
+                "LLLLLLLLLLLLLLLLLLLLLLLL",
+                8,
+                0.89d,
+                0.66d
+        );
+        CwSignalSnapshot weakReleaseSignal = signalSnapshot(
+                true,
+                "LLLLLLLLLLLLLL..........",
+                8,
+                0.60d,
+                0.51d
+        );
+
+        List<CwToneEvent> priorToneOff = stabilizer.process(toneOff(2816L, 140L), weakReleaseSignal, hotHealth(), 55L);
+        assertEquals(1, priorToneOff.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, priorToneOff.get(0).type());
+
+        List<CwToneEvent> confidentToneOn = stabilizer.process(toneOn(2868L), strongOnsetSignal, hotHealth(), 55L);
+        assertEquals(1, confidentToneOn.size());
+        assertEquals(CwToneEvent.Type.TONE_ON, confidentToneOn.get(0).type());
+
+        List<CwToneEvent> delayedShortOff = stabilizer.process(toneOff(2902L, 34L), weakReleaseSignal, hotHealth(), 55L);
+        assertTrue(delayedShortOff.isEmpty());
+
+        List<CwToneEvent> releasedShortOff = stabilizer.process(toneOn(3060L), strongOnsetSignal, hotHealth(), 55L);
+        assertEquals(2, releasedShortOff.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, releasedShortOff.get(0).type());
+        assertEquals(2902L, releasedShortOff.get(0).timestampMs());
+        assertEquals(34L, releasedShortOff.get(0).toneDurationMs());
+        assertEquals(CwToneEvent.Type.TONE_ON, releasedShortOff.get(1).type());
+        assertEquals(3060L, releasedShortOff.get(1).timestampMs());
+    }
+
+    @Test
+    public void marginallyLockedButVeryCleanShortStandaloneToneStillSurvives() {
+        LiveRxToneEventStabilizer stabilizer = new LiveRxToneEventStabilizer();
+        CwSignalSnapshot cleanMarginalStartSignal = signalSnapshot(
+                true,
+                "LLLLLLLLLLLL............",
+                8,
+                0.96d,
+                0.78d
+        );
+        CwSignalSnapshot weakReleaseSignal = signalSnapshot(
+                false,
+                "LLLLLLLL........uuuu....",
+                8,
+                0.30d,
+                0.24d
+        );
+
+        List<CwToneEvent> priorToneOff = stabilizer.process(toneOff(80L, 126L), weakReleaseSignal, quietHealth(), 52L);
+        assertEquals(1, priorToneOff.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, priorToneOff.get(0).type());
+
+        List<CwToneEvent> confidentToneOn = stabilizer.process(toneOn(140L), cleanMarginalStartSignal, quietHealth(), 52L);
+        assertEquals(1, confidentToneOn.size());
+        assertEquals(CwToneEvent.Type.TONE_ON, confidentToneOn.get(0).type());
+
+        List<CwToneEvent> delayedShortOff = stabilizer.process(toneOff(166L, 26L), weakReleaseSignal, quietHealth(), 52L);
+        assertTrue(delayedShortOff.isEmpty());
+
+        List<CwToneEvent> flushedShortOff = stabilizer.flush(200L);
+        assertEquals(1, flushedShortOff.size());
+        assertEquals(CwToneEvent.Type.TONE_OFF, flushedShortOff.get(0).type());
+        assertEquals(26L, flushedShortOff.get(0).toneDurationMs());
     }
 
     @Test

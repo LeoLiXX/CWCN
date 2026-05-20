@@ -11,6 +11,8 @@ public final class RxSessionSnapshot {
     private final int estimatedWpm;
     private final int stableEstimatedWpm;
     private final String rawText;
+    private final String fallbackSuggestedText;
+    private final String fallbackNotesText;
     private final String normalizedText;
     private final String phaseDisplayName;
     private final String remoteCallsign;
@@ -33,6 +35,8 @@ public final class RxSessionSnapshot {
             int estimatedWpm,
             int stableEstimatedWpm,
             String rawText,
+            String fallbackSuggestedText,
+            String fallbackNotesText,
             String normalizedText,
             String phaseDisplayName,
             String remoteCallsign,
@@ -54,6 +58,8 @@ public final class RxSessionSnapshot {
         this.estimatedWpm = estimatedWpm;
         this.stableEstimatedWpm = stableEstimatedWpm;
         this.rawText = safeText(rawText);
+        this.fallbackSuggestedText = safeText(fallbackSuggestedText);
+        this.fallbackNotesText = safeText(fallbackNotesText);
         this.normalizedText = safeText(normalizedText);
         this.phaseDisplayName = safeText(phaseDisplayName);
         this.remoteCallsign = safeText(remoteCallsign);
@@ -106,8 +112,42 @@ public final class RxSessionSnapshot {
         return rawText;
     }
 
+    public boolean hasRawText() {
+        return !rawText.trim().isEmpty();
+    }
+
+    public String fallbackSuggestedText() {
+        return fallbackSuggestedText;
+    }
+
+    public boolean hasFallbackSuggestedText() {
+        return !fallbackSuggestedText.isEmpty();
+    }
+
+    public boolean hasDistinctFallbackSuggestedText() {
+        return hasFallbackSuggestedText()
+                && !fallbackSuggestedText.trim().equals(rawText.trim());
+    }
+
+    public String fallbackNotesText() {
+        return fallbackNotesText;
+    }
+
+    public boolean hasFallbackNotesText() {
+        return !fallbackNotesText.isEmpty();
+    }
+
     public String normalizedText() {
         return normalizedText;
+    }
+
+    public boolean hasNormalizedText() {
+        return !normalizedText.trim().isEmpty();
+    }
+
+    public boolean hasDistinctNormalizedText() {
+        return hasNormalizedText()
+                && !normalizedText.trim().equals(rawText.trim());
     }
 
     public String phaseDisplayName() {
@@ -134,6 +174,10 @@ public final class RxSessionSnapshot {
         return inputHealthHint;
     }
 
+    public boolean hasInputHealthHint() {
+        return !inputHealthHint.trim().isEmpty();
+    }
+
     public boolean inputLevelHot() {
         return inputLevelHot;
     }
@@ -144,6 +188,10 @@ public final class RxSessionSnapshot {
 
     public String developerFrontEndSummary() {
         return developerFrontEndSummary;
+    }
+
+    public boolean hasDeveloperFrontEndSummary() {
+        return !developerFrontEndSummary.isEmpty();
     }
 
     private static String safeText(String value) {

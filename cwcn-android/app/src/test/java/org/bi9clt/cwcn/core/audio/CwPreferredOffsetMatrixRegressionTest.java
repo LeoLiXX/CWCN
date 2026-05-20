@@ -16,6 +16,8 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public final class CwPreferredOffsetMatrixRegressionTest {
+    // Stress/audit matrix only. Large preferred-tone offsets are useful to expose
+    // robustness cliffs, but they are not the main RX release gate for real-world use.
     private static final int[] PREFERRED_MATRIX = new int[]{450, 500, 650, 800};
 
     @Test

@@ -48,6 +48,7 @@ import org.bi9clt.cwcn.core.audio.LocalFileRxAudioSource;
 import org.bi9clt.cwcn.core.audio.MicrophoneRxAudioSource;
 import org.bi9clt.cwcn.core.audio.RxAudioSource;
 import org.bi9clt.cwcn.core.audio.SyntheticFixtureRxAudioSource;
+import org.bi9clt.cwcn.core.audio.WavReplayFrameLoader;
 import org.bi9clt.cwcn.core.bootstrap.BootstrapModule;
 import org.bi9clt.cwcn.core.bootstrap.BootstrapRegistry;
 import org.bi9clt.cwcn.core.decoder.CwDecodeEvent;
@@ -67,8 +68,30 @@ import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoStateEvent;
 import org.bi9clt.cwcn.core.qso.QsoStateMachine;
+import org.bi9clt.cwcn.core.rx.RxCommittedDecodeController;
+import org.bi9clt.cwcn.core.rx.RxCommittedOutputController;
+import org.bi9clt.cwcn.core.rx.RxBootstrapTimingObserver;
+import org.bi9clt.cwcn.core.rx.RxCoreComponents;
+import org.bi9clt.cwcn.core.rx.CwFrontEndLearningGate;
+import org.bi9clt.cwcn.core.rx.LiveRxWpmGuard;
+import org.bi9clt.cwcn.core.rx.RxDeveloperStartupToneHintAnalyzer;
+import org.bi9clt.cwcn.core.rx.RxFrameSignalRunner;
+import org.bi9clt.cwcn.core.rx.RxPendingCharacterFlushDecider;
+import org.bi9clt.cwcn.core.rx.RxReplayAnalysisResult;
+import org.bi9clt.cwcn.core.rx.RxReplayAnalysisRunner;
+import org.bi9clt.cwcn.core.rx.RxReplayTurnSessionController;
 import org.bi9clt.cwcn.core.rx.RxSessionSnapshot;
 import org.bi9clt.cwcn.core.rx.RxSessionStore;
+import org.bi9clt.cwcn.core.rx.RxStableDecodeClassifier;
+import org.bi9clt.cwcn.core.rx.RxTimingDecodeRunner;
+import org.bi9clt.cwcn.core.rx.RxToneTimingRunner;
+import org.bi9clt.cwcn.core.rx.RxRawCommitGate;
+import org.bi9clt.cwcn.core.rx.RxTrailingWindowRepair;
+import org.bi9clt.cwcn.core.rx.RxTurnSessionCoordinator;
+import org.bi9clt.cwcn.core.rx.RxTurnSessionFinalizer;
+import org.bi9clt.cwcn.core.rx.TimingAnchorController;
+import org.bi9clt.cwcn.core.rx.experimental.ExperimentalRxFrontEndPipeline;
+import org.bi9clt.cwcn.core.rx.experimental.ExperimentalRxFrontEndSnapshot;
 import org.bi9clt.cwcn.core.rig.RigControlAdapter;
 import org.bi9clt.cwcn.core.rig.RigRegistry;
 import org.bi9clt.cwcn.core.rig.RigTransport;
@@ -83,6 +106,7 @@ import org.bi9clt.cwcn.core.timing.CwTimingEvent;
 import org.bi9clt.cwcn.core.timing.CwHybridTimingModel;
 import org.bi9clt.cwcn.core.timing.CwTimingSnapshot;
 import org.bi9clt.cwcn.databinding.ActivityInputDebugBinding;
+import org.bi9clt.cwcn.ui.developer.DeveloperToolsActivity;
 import org.bi9clt.cwcn.ui.qso.QsoEditorActivity;
 
 import java.util.ArrayList;
@@ -95,12 +119,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 
 public final class InputDebugActivity extends AppCompatActivity implements RxAudioSource.Callback {
     private static final int PERMISSION_REQUEST_CODE = 1001;
     private static final int AMPLITUDE_MAX = 32767;
     private static final long LIVE_UI_REFRESH_INTERVAL_MS = 120L;
     private static final double LIVE_CHARACTER_FLUSH_GAP_RATIO = 3.35d;
+    private static final int DEFAULT_DEBUG_SEED_WPM = 18;
+    private static final int LOCAL_REPLAY_ANALYSIS_PREVIEW_MAX_CHARS = 120;
+    private static final int EXPERIMENTAL_RX_SQL_PERCENT = 55;
     private static final String DEBUG_PREFERENCES = "cwcn_debug_preferences";
     private static final String PREF_PREFERRED_TONE_FREQUENCY_HZ = "preferred_tone_frequency_hz";
     private static final String PREF_LOCAL_FILE_URI = "local_file_uri";
@@ -116,8 +144,21 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private RxAudioSource activeRxAudioSource;
     private AudioInputHealthTracker audioInputHealthTracker;
     private AudioSpectrumAnalyzer audioSpectrumAnalyzer;
+    private RxCoreComponents debugRxCore;
+    private RxFrameSignalRunner debugFrameSignalRunner;
+    private LiveRxWpmGuard debugLiveRxWpmGuard;
+    private CwFrontEndLearningGate debugFrontEndLearningGate;
+    private TimingAnchorController debugTimingAnchorController;
+    private RxRawCommitGate debugRawCommitGate;
     private CwSignalProcessor cwSignalProcessor;
+    private ExperimentalRxFrontEndPipeline experimentalRxFrontEndPipeline;
     private CwHybridTimingModel cwTimingModel;
+    private RxTimingDecodeRunner debugTimingDecodeRunner;
+    private RxToneTimingRunner debugToneTimingRunner;
+    private RxCommittedDecodeController debugCommittedDecodeController;
+    private RxCommittedOutputController debugCommittedOutputController;
+    private RxTurnSessionFinalizer debugTurnSessionFinalizer;
+    private RxTurnSessionCoordinator debugTurnSessionCoordinator;
     private CwDecoder cwDecoder;
     private CwInterpreter cwInterpreter;
     private CwInterpreter qsoInterpreter;
@@ -136,6 +177,12 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private String adifExportStatusMessage = "";
     private String qsoEditorStatusMessage = "";
     private String callsignCandidateStatusMessage = "";
+    private int localReplayAnalysisSqlPercent = -1;
+    private String localReplayAnalysisKey = "";
+    private String localReplayAnalysisSummary = "";
+    private long localReplayAnalysisGeneration;
+    private String debugTurnLifecycleStatusMessage = "Turn: idle.";
+    private String debugTurnTailRepairStatusMessage = "Tail repair: none.";
     private CwFixtureScenario lastFixtureScenario;
     private CwFixtureEvaluationResult lastFixtureEvaluationResult;
     private List<CwFixtureEvaluationResult> recentFixtureEvaluationResults = new ArrayList<>();
@@ -189,19 +236,62 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         localFileRxAudioSource.setCallback(this);
         audioInputHealthTracker = new AudioInputHealthTracker();
         audioSpectrumAnalyzer = new AudioSpectrumAnalyzer();
-        cwSignalProcessor = new CwSignalProcessor();
+        debugRxCore = new RxCoreComponents();
+        cwSignalProcessor = debugRxCore.signalProcessor();
+        debugFrameSignalRunner = new RxFrameSignalRunner(
+                audioInputHealthTracker,
+                cwSignalProcessor
+        );
+        debugLiveRxWpmGuard = debugRxCore.liveRxWpmGuard();
+        debugFrontEndLearningGate = debugRxCore.frontEndLearningGate();
+        debugTimingAnchorController = debugRxCore.timingAnchorController();
+        debugRawCommitGate = debugRxCore.rawCommitGate();
         cwSignalProcessor.setExperimentalHypothesisGuardEnabled(false);
-        cwTimingModel = new CwHybridTimingModel();
-        cwTimingModel.setSeedWpm(18);
-        cwDecoder = new CwDecoder();
+        experimentalRxFrontEndPipeline = new ExperimentalRxFrontEndPipeline();
+        cwTimingModel = debugRxCore.timingModel();
+        debugRxCore.applySeedWpm(DEFAULT_DEBUG_SEED_WPM);
+        debugTimingDecodeRunner = debugRxCore.timingDecodeRunner();
+        debugToneTimingRunner = debugRxCore.toneTimingRunner();
+        debugCommittedDecodeController = new RxCommittedDecodeController(
+                cwSignalProcessor,
+                cwTimingModel,
+                debugLiveRxWpmGuard,
+                debugRxCore.turnController(),
+                debugTimingAnchorController,
+                debugRawCommitGate
+        );
+        cwDecoder = debugRxCore.decoder();
         cwInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
         qsoInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.SEMANTIC_RECOVERY);
         qsoStateMachine = new QsoStateMachine();
+        debugCommittedOutputController = new RxCommittedOutputController(
+                debugRxCore.rawInterpreter(),
+                null,
+                qsoInterpreter,
+                qsoStateMachine,
+                debugRawCommitGate
+        );
+        debugTurnSessionFinalizer = new RxTurnSessionFinalizer(
+                debugRxCore.turnTailRepairController(),
+                debugCommittedOutputController
+        );
+        debugTurnSessionCoordinator = new RxTurnSessionCoordinator(
+                cwSignalProcessor,
+                cwTimingModel,
+                debugLiveRxWpmGuard,
+                debugRxCore.turnController(),
+                debugTimingAnchorController,
+                debugRawCommitGate,
+                debugTurnSessionFinalizer,
+                debugRxCore.toneEventStabilizer(),
+                null
+        );
         localLogRepository = new LocalLogRepository(this);
         rxSessionStore = new RxSessionStore(this);
         spectrumHistoryStore = new SpectrumHistoryStore(this);
         restorePreferredToneFrequency();
         restoreSelectedLocalFile();
+        consumeDeveloperTraceIntent(getIntent());
         restoreSelectedLocalFolder();
         restorePersistedDraftIfAvailable();
         refreshStoredState();
@@ -221,6 +311,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     protected void onResume() {
         super.onResume();
         activityResumed = true;
+        consumeDeveloperTraceIntent(getIntent());
         refreshStoredState();
         refreshUiSnapshot();
     }
@@ -365,7 +456,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         CwFixtureScenario selectedScenario = selectedFixtureScenario();
         RxAudioSource selectedSource = sourceForOption(selectedOption);
         CwInterpreterSnapshot interpreterSnapshot = cwInterpreter.snapshot();
-        QsoDraftSnapshot qsoSnapshot = qsoStateMachine.snapshot();
+        CwInterpreterSnapshot committedInterpreterSnapshot = currentCommittedInterpreterSnapshot();
+        QsoDraftSnapshot qsoSnapshot = currentQsoSnapshot();
         binding.fixtureScenarioSpinner.setEnabled(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE);
         binding.fixtureScenarioLabelText.setVisibility(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE
                 ? View.VISIBLE
@@ -378,12 +470,13 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 ? View.VISIBLE
                 : View.GONE);
         boolean localFileSelected = selectedOption == InputSourceOption.LOCAL_FILE_REPLAY;
+        ensureLocalReplayAnalysis(localFileSelected);
         binding.localFileLabelText.setVisibility(localFileSelected ? View.VISIBLE : View.GONE);
         binding.localFileStatusText.setVisibility(localFileSelected ? View.VISIBLE : View.GONE);
         binding.localFolderStatusText.setVisibility(localFileSelected ? View.VISIBLE : View.GONE);
         binding.selectLocalFileButton.setVisibility(localFileSelected ? View.VISIBLE : View.GONE);
         binding.selectLocalFolderButton.setVisibility(localFileSelected ? View.VISIBLE : View.GONE);
-        setStableText(binding.localFileStatusText, localFileRxAudioSource.selectionSummary());
+        setStableText(binding.localFileStatusText, renderLocalReplayStatus());
         setStableText(binding.localFolderStatusText, renderLocalFolderStatus());
         binding.fixtureEvaluationText.setVisibility(detailedPanelsVisible || fixtureReplayInProgress
                 ? View.VISIBLE
@@ -407,7 +500,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         setStableText(binding.signalStateText, renderSignalState());
         setStableText(binding.signalHealthText, renderSignalHealthSummary());
         setStableText(binding.rxFocusStatusText, renderRxFocusStatus(selectedOption, selectedSource));
-        setStableText(binding.rxFocusDecodeText, renderRxFocusDecode(interpreterSnapshot));
+        setStableText(binding.rxFocusDecodeText, renderRxFocusDecode(committedInterpreterSnapshot));
         setStableText(binding.batchRunStatusText, renderBatchRunStatus());
         binding.signalEventStatsText.setText(renderSignalEventStats());
         binding.lastSignalEventText.setText(renderLastSignalEvent());
@@ -427,8 +520,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         setStableText(binding.qsoDraftText, renderQsoDraft(qsoSnapshot));
         syncDraftEditorFromSnapshot(qsoSnapshot, false);
         binding.qsoEditorStatusText.setText(renderQsoEditorStatus());
-        refreshCallsignCandidateButtons(interpreterSnapshot);
-        binding.callsignCandidateStatusText.setText(renderCallsignCandidateStatus(interpreterSnapshot));
+        refreshCallsignCandidateButtons(committedInterpreterSnapshot);
+        binding.callsignCandidateStatusText.setText(renderCallsignCandidateStatus(committedInterpreterSnapshot));
         binding.qsoReadinessText.setText(renderQsoReadiness(qsoSnapshot));
         binding.lastQsoEventText.setText(renderLastQsoEvent(qsoSnapshot));
         binding.qsoStorageStatusText.setText(renderQsoStorageStatus());
@@ -520,6 +613,44 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         return "Decoded: " + renderDecoderOutput()
                 + "\nNormalized: " + renderInterpreterNormalizedText(interpreterSnapshot)
                 + "\nCallsigns: " + renderInterpreterCallsigns(interpreterSnapshot);
+    }
+
+    private String renderRawCommitGateSummary() {
+        return (debugRawCommitGate.gateOpenInCurrentTurn() ? "open" : "buffering")
+                + " | pending " + debugRawCommitGate.pendingFinalEventCount();
+    }
+
+    private CwInterpreterSnapshot currentCommittedInterpreterSnapshot() {
+        if (debugCommittedOutputController == null) {
+            return cwInterpreter.snapshot();
+        }
+        CwInterpreterSnapshot snapshot = debugCommittedOutputController.rawSnapshot();
+        return snapshot == null ? cwInterpreter.snapshot() : snapshot;
+    }
+
+    private QsoDraftSnapshot currentQsoSnapshot() {
+        if (debugCommittedOutputController == null) {
+            return qsoStateMachine.snapshot();
+        }
+        QsoDraftSnapshot snapshot = debugCommittedOutputController.qsoSnapshot();
+        return snapshot == null ? qsoStateMachine.snapshot() : snapshot;
+    }
+
+    private boolean shouldTreatAsStableDebugDecode(@Nullable CwDecodeEvent decodeEvent) {
+        if (decodeEvent == null || cwSignalProcessor == null || cwTimingModel == null) {
+            return false;
+        }
+        AudioInputHealthSnapshot inputHealthSnapshot = audioInputHealthTracker == null
+                ? null
+                : audioInputHealthTracker.snapshot();
+        return RxStableDecodeClassifier.passesSimpleStableDecode(
+                decodeEvent,
+                cwSignalProcessor.snapshot(),
+                cwTimingModel.rawSnapshot(),
+                inputHealthSnapshot,
+                debugFrontEndLearningGate,
+                debugTimingAnchorController
+        );
     }
 
     private InputSourceOption selectedInputSource() {
@@ -968,6 +1099,341 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         localFileRxAudioSource.setSelectedFile(uri, savedLabel);
     }
 
+    private CharSequence renderLocalReplayStatus() {
+        StringBuilder builder = new StringBuilder(localFileRxAudioSource.selectionSummary());
+        if (!localReplayAnalysisSummary.isEmpty()) {
+            builder.append("\n\n").append(localReplayAnalysisSummary);
+        } else if (localFileRxAudioSource.selectedFileUri() != null) {
+            builder.append("\n\nShared replay inspection: waiting.");
+        }
+        return builder.toString();
+    }
+
+    private void consumeDeveloperTraceIntent(@Nullable Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        String traceWavPath = intent.getStringExtra(DeveloperToolsActivity.EXTRA_TRACE_WAV_FILE_PATH);
+        if (traceWavPath == null || traceWavPath.trim().isEmpty()) {
+            return;
+        }
+        File wavFile = new File(traceWavPath.trim());
+        if (!wavFile.exists() || !wavFile.isFile()) {
+            return;
+        }
+        int preferredToneFrequencyHz = intent.getIntExtra(
+                DeveloperToolsActivity.EXTRA_TRACE_PREFERRED_TONE_FREQUENCY_HZ,
+                -1
+        );
+        int sqlPercent = intent.getIntExtra(
+                DeveloperToolsActivity.EXTRA_TRACE_SQL_PERCENT,
+                -1
+        );
+        Uri uri = Uri.fromFile(wavFile);
+        localFileRxAudioSource.setSelectedFile(uri, wavFile.getName());
+        if (preferredToneFrequencyHz > 0) {
+            cwSignalProcessor.setPreferredToneFrequencyHz(preferredToneFrequencyHz);
+            binding.preferredToneFrequencyEditText.setText(String.valueOf(
+                    cwSignalProcessor.snapshot().preferredToneFrequencyHz()
+            ));
+        }
+        if (sqlPercent >= 0) {
+            cwSignalProcessor.setSqlPercent(sqlPercent);
+        }
+        localReplayAnalysisSqlPercent = sqlPercent >= 0 ? sqlPercent : -1;
+        binding.inputSourceSpinner.setSelection(InputSourceOption.LOCAL_FILE_REPLAY.ordinal());
+        StringBuilder footer = new StringBuilder("已载入最近一次 Operate 现场 trace: " + wavFile.getName());
+        if (preferredToneFrequencyHz > 0 || sqlPercent >= 0) {
+            footer.append(" | 现场设置");
+            if (preferredToneFrequencyHz > 0) {
+                footer.append(" Tone ").append(cwSignalProcessor.snapshot().preferredToneFrequencyHz()).append(" Hz");
+            }
+            if (sqlPercent >= 0) {
+                footer.append(preferredToneFrequencyHz > 0 ? " /" : "");
+                footer.append(" SQL ").append(sqlPercent).append("%");
+            }
+        }
+        binding.footerText.setText(footer.toString());
+        intent.removeExtra(DeveloperToolsActivity.EXTRA_TRACE_WAV_FILE_PATH);
+        intent.removeExtra(DeveloperToolsActivity.EXTRA_TRACE_PREFERRED_TONE_FREQUENCY_HZ);
+        intent.removeExtra(DeveloperToolsActivity.EXTRA_TRACE_SQL_PERCENT);
+    }
+
+    private void ensureLocalReplayAnalysis(boolean localFileSelected) {
+        Uri selectedFileUri = localFileSelected ? localFileRxAudioSource.selectedFileUri() : null;
+        if (selectedFileUri == null) {
+            if (!localReplayAnalysisKey.isEmpty() || !localReplayAnalysisSummary.isEmpty()) {
+                localReplayAnalysisKey = "";
+                localReplayAnalysisSummary = "";
+                localReplayAnalysisGeneration += 1L;
+            }
+            return;
+        }
+        int preferredToneFrequencyHz = cwSignalProcessor.snapshot().preferredToneFrequencyHz();
+        String analysisKey = buildLocalReplayAnalysisKey(
+                selectedFileUri,
+                localFileRxAudioSource.selectedFileLabel(),
+                preferredToneFrequencyHz,
+                localReplayAnalysisSqlPercent
+        );
+        if (analysisKey.isEmpty()) {
+            if (!localReplayAnalysisKey.isEmpty() || !localReplayAnalysisSummary.isEmpty()) {
+                localReplayAnalysisKey = "";
+                localReplayAnalysisSummary = "";
+                localReplayAnalysisGeneration += 1L;
+            }
+            return;
+        }
+        if (analysisKey.equals(localReplayAnalysisKey) && !localReplayAnalysisSummary.isEmpty()) {
+            return;
+        }
+        localReplayAnalysisKey = analysisKey;
+        localReplayAnalysisSummary = "Shared replay inspection: processing...";
+        long generation = ++localReplayAnalysisGeneration;
+        Uri replayFileUri = selectedFileUri;
+        String replayFileLabel = localFileRxAudioSource.selectedFileLabel();
+        new Thread(
+                () -> runLocalReplayAnalysis(
+                        replayFileUri,
+                        replayFileLabel,
+                        preferredToneFrequencyHz,
+                        localReplayAnalysisSqlPercent,
+                        analysisKey,
+                        generation
+                ),
+                "cwcn-input-debug-replay-analysis"
+        ).start();
+    }
+
+    private void runLocalReplayAnalysis(
+            Uri replayFileUri,
+            String replayFileLabel,
+            int preferredToneFrequencyHz,
+            int sqlPercent,
+            String analysisKey,
+            long generation
+    ) {
+        String summary;
+        try {
+            LocalReplayInspectionBundle analysisBundle = analyzeLocalReplay(
+                    replayFileUri,
+                    replayFileLabel,
+                    preferredToneFrequencyHz,
+                    sqlPercent
+            );
+            summary = formatLocalReplayAnalysisSummary(
+                    analysisBundle.analysisResult(),
+                    analysisBundle.startupToneHint()
+            );
+        } catch (Exception exception) {
+            summary = "Shared replay inspection: failed - " + safeReplayAnalysisErrorMessage(exception);
+        }
+        String finalSummary = summary;
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            if (generation != localReplayAnalysisGeneration || !analysisKey.equals(localReplayAnalysisKey)) {
+                return;
+            }
+            localReplayAnalysisSummary = finalSummary;
+            refreshUiSnapshot();
+        });
+    }
+
+    private LocalReplayInspectionBundle analyzeLocalReplay(
+            Uri replayFileUri,
+            String replayFileLabel,
+            int preferredToneFrequencyHz,
+            int sqlPercent
+    ) throws IOException {
+        try (InputStream inputStream = getContentResolver().openInputStream(replayFileUri)) {
+            if (inputStream == null) {
+                throw new IOException("Unable to open local replay file.");
+            }
+            WavReplayFrameLoader.LoadedWav loadedWav = new WavReplayFrameLoader().load(
+                    inputStream,
+                    replayFileLabel
+            );
+            return new LocalReplayInspectionBundle(
+                    new RxReplayAnalysisRunner().analyze(
+                            loadedWav.frames(),
+                            preferredToneFrequencyHz,
+                            sqlPercent,
+                            DEFAULT_DEBUG_SEED_WPM
+                    ),
+                    new RxDeveloperStartupToneHintAnalyzer().analyze(
+                            loadedWav.frames(),
+                            preferredToneFrequencyHz
+                    )
+            );
+        }
+    }
+
+    private String buildLocalReplayAnalysisKey(
+            Uri replayFileUri,
+            String replayFileLabel,
+            int preferredToneFrequencyHz,
+            int sqlPercent
+    ) {
+        if (replayFileUri == null) {
+            return "";
+        }
+        return replayFileUri
+                + "|"
+                + nonEmpty(replayFileLabel)
+                + "|"
+                + preferredToneFrequencyHz
+                + "|"
+                + sqlPercent;
+    }
+
+    private String formatLocalReplayAnalysisSummary(
+            @Nullable RxReplayAnalysisResult analysisResult,
+            @Nullable RxDeveloperStartupToneHintAnalyzer.Result startupToneHint
+    ) {
+        if (analysisResult == null) {
+            return "Shared replay inspection: no result.";
+        }
+        int trackedToneHz = analysisResult.signalSnapshot() == null
+                ? 0
+                : analysisResult.signalSnapshot().effectiveTrackedToneFrequencyHz();
+        double estimatedWpm = analysisResult.timingSnapshot() == null
+                ? 0.0d
+                : analysisResult.timingSnapshot().estimatedWpmPrecise() > 0.0d
+                ? analysisResult.timingSnapshot().estimatedWpmPrecise()
+                : analysisResult.timingSnapshot().estimatedWpm();
+        return "Shared replay inspection: "
+                + analysisResult.processedFrameCount()
+                + " frames | "
+                + analysisResult.toneEventCount()
+                + " tone | "
+                + analysisResult.decodeEventCount()
+                + " decode | "
+                + analysisResult.turnCount()
+                + " turns | "
+                + analysisResult.tailRepairCount()
+                + " repairs | tracked "
+                + (trackedToneHz > 0 ? trackedToneHz + " Hz" : "-")
+                + " | WPM "
+                + String.format(Locale.US, "%.1f", estimatedWpm)
+                + "\nDeveloper hint: "
+                + formatStartupToneHint(startupToneHint)
+                + "\nTurns: "
+                + buildTurnWindowSummary(analysisResult.turnWindows())
+                + "\nPreview: "
+                + trimReplayPreview(bestReplayPreview(analysisResult));
+    }
+
+    private String formatStartupToneHint(
+            @Nullable RxDeveloperStartupToneHintAnalyzer.Result startupToneHint
+    ) {
+        if (startupToneHint == null) {
+            return "startup raw spectrum hint not executed.";
+        }
+        if (!startupToneHint.accepted()) {
+            return "no conservative startup fixed-tone suggestion ("
+                    + startupToneHint.decisionCode()
+                    + ")";
+        }
+        return String.format(
+                Locale.US,
+                "try fixed tone %d Hz (startup raw spectrum only, not replay-verified; %s, %d frames)",
+                startupToneHint.suggestedToneHz(),
+                startupToneHint.clusterSummary(),
+                startupToneHint.supportFrames()
+        );
+    }
+
+    private String buildTurnWindowSummary(
+            List<RxReplayTurnSessionController.TurnWindow> turnWindows
+    ) {
+        if (turnWindows == null || turnWindows.isEmpty()) {
+            return "(none)";
+        }
+        StringBuilder builder = new StringBuilder();
+        int limit = Math.min(4, turnWindows.size());
+        for (int index = 0; index < limit; index++) {
+            RxReplayTurnSessionController.TurnWindow turnWindow = turnWindows.get(index);
+            if (turnWindow == null) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(" | ");
+            }
+            builder.append("T")
+                    .append(turnWindow.turnIndex())
+                    .append(" ")
+                    .append(turnWindow.turnStartTimestampMs())
+                    .append("-")
+                    .append(turnWindow.turnEndTimestampMs())
+                    .append(" ms");
+        }
+        if (turnWindows.size() > limit) {
+            builder.append(" | ...");
+        }
+        return builder.length() == 0 ? "(none)" : builder.toString();
+    }
+
+    private String bestReplayPreview(@Nullable RxReplayAnalysisResult analysisResult) {
+        if (analysisResult == null) {
+            return "(empty)";
+        }
+        String decodedText = analysisResult.decodedText();
+        if (decodedText != null && !decodedText.trim().isEmpty()) {
+            return decodedText.trim();
+        }
+        if (analysisResult.decoderSnapshot() != null) {
+            String fallback = analysisResult.decoderSnapshot().decodedText();
+            if (fallback != null && !fallback.trim().isEmpty()) {
+                return fallback.trim();
+            }
+        }
+        return "(empty)";
+    }
+
+    private String trimReplayPreview(@Nullable String text) {
+        if (text == null) {
+            return "(empty)";
+        }
+        String compact = text.replace('\n', ' ').replace('\r', ' ').trim().replaceAll("\\s+", " ");
+        if (compact.isEmpty()) {
+            return "(empty)";
+        }
+        if (compact.length() <= LOCAL_REPLAY_ANALYSIS_PREVIEW_MAX_CHARS) {
+            return compact;
+        }
+        return compact.substring(0, LOCAL_REPLAY_ANALYSIS_PREVIEW_MAX_CHARS - 1) + "…";
+    }
+
+    private String safeReplayAnalysisErrorMessage(@Nullable Exception exception) {
+        if (exception == null || exception.getMessage() == null || exception.getMessage().trim().isEmpty()) {
+            return "unknown error";
+        }
+        return exception.getMessage().trim();
+    }
+
+    private static final class LocalReplayInspectionBundle {
+        private final RxReplayAnalysisResult analysisResult;
+        private final RxDeveloperStartupToneHintAnalyzer.Result startupToneHint;
+
+        private LocalReplayInspectionBundle(
+                RxReplayAnalysisResult analysisResult,
+                RxDeveloperStartupToneHintAnalyzer.Result startupToneHint
+        ) {
+            this.analysisResult = analysisResult;
+            this.startupToneHint = startupToneHint;
+        }
+
+        private RxReplayAnalysisResult analysisResult() {
+            return analysisResult;
+        }
+
+        private RxDeveloperStartupToneHintAnalyzer.Result startupToneHint() {
+            return startupToneHint;
+        }
+    }
+
     private void restoreSelectedLocalFolder() {
         String savedUri = getSharedPreferences(DEBUG_PREFERENCES, MODE_PRIVATE)
                 .getString(PREF_LOCAL_FOLDER_URI, "");
@@ -1003,6 +1469,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         tryPersistableReadPermission(uri);
         String label = localFileRxAudioSource.resolveDisplayName(uri);
         localFileRxAudioSource.setSelectedFile(uri, label);
+        localReplayAnalysisSqlPercent = -1;
         getSharedPreferences(DEBUG_PREFERENCES, MODE_PRIVATE)
                 .edit()
                 .putString(PREF_LOCAL_FILE_URI, uri.toString())
@@ -1195,13 +1662,20 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         audioSpectrumAnalyzer.reset();
         lastSpectrumSnapshot = null;
         audioInputHealthTracker.reset();
-        cwSignalProcessor.reset();
+        if (debugRxCore != null) {
+            debugRxCore.resetRuntimeState(DEFAULT_DEBUG_SEED_WPM);
+        }
         cwSignalProcessor.setExperimentalHypothesisGuardEnabled(hypothesisGuardExperimentEnabled);
-        cwTimingModel.reset();
-        cwDecoder.reset();
+        experimentalRxFrontEndPipeline.reset();
         cwInterpreter.reset();
-        qsoInterpreter.reset();
-        qsoStateMachine.reset();
+        if (debugCommittedOutputController != null) {
+            debugCommittedOutputController.reset();
+        } else {
+            qsoInterpreter.reset();
+            qsoStateMachine.reset();
+        }
+        debugTurnLifecycleStatusMessage = "Turn: idle.";
+        debugTurnTailRepairStatusMessage = "Tail repair: none.";
         stopAllSourcesExcept(selectedSource);
         activeRxAudioSource = selectedSource;
         selectedSource.start();
@@ -1215,12 +1689,11 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         }
         BatchRunItem completedItem = activeBatchRunItem;
         boolean completed = detail != null && detail.toLowerCase(Locale.US).contains("completed");
-        flushPendingDecodeAt(SystemClock.elapsedRealtime());
         if (completedItem.kind == BatchRunItem.Kind.SYNTHETIC_FIXTURE && completedItem.fixtureScenario != null) {
             CwFixtureEvaluationResult evaluationResult = CwFixtureEvaluator.evaluate(
                     completedItem.fixtureScenario,
-                    cwInterpreter.snapshot(),
-                    qsoStateMachine.snapshot(),
+                    currentCommittedInterpreterSnapshot(),
+                    currentQsoSnapshot(),
                     cwSignalProcessor.snapshot(),
                     completed
             );
@@ -1484,8 +1957,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private void stopCapture() {
+        finalizeDebugRunAtStop(SystemClock.elapsedRealtime());
         stopAllSources();
-        flushPendingDecodeAt(SystemClock.elapsedRealtime());
+        experimentalRxFrontEndPipeline.reset();
         if (fixtureReplayInProgress) {
             fixtureEvaluationStatusMessage = "Fixture replay stopped before completion.";
         }
@@ -1800,7 +2274,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "\nTone-Active Unlock: " + Math.round(snapshot.toneActiveUnlockedFrameRatio() * 100.0d) + "%"
                 + " (" + snapshot.toneActiveUnlockedFrameCount() + "/" + snapshot.toneActiveFrameCount() + " active frames)"
                 + "\nCurrent Active Unlock Gap: " + snapshot.consecutiveToneActiveUnlockedFrames() + " frame(s)"
-                + "\nWorst Active Unlock Gap: " + snapshot.maxConsecutiveToneActiveUnlockedFrames() + " frame(s)";
+                + "\nWorst Active Unlock Gap: " + snapshot.maxConsecutiveToneActiveUnlockedFrames() + " frame(s)"
+                + "\nTurn State: " + debugRxCore.turnController().compactDebugSummary()
+                + "\nRaw Gate: " + renderRawCommitGateSummary();
     }
 
     private String renderDisplayToneWithRaw(int displayFrequencyHz, int rawFrequencyHz) {
@@ -1854,6 +2330,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "\nWorst frame gap: " + snapshot.worstFrameGapMs() + " ms"
                 + " | Last reset at: "
                 + (snapshot.lastFrameGapResetAtMs() >= 0L ? snapshot.lastFrameGapResetAtMs() + " ms" : "none")
+                + "\nExperimental gate: " + renderExperimentalFrontEndDetail()
                 + "\nRecent window: lock " + Math.round(snapshot.recentLockedFrameRatio() * 100.0d) + "%"
                 + " | search " + Math.round(snapshot.recentSearchFrameRatio() * 100.0d) + "%"
                 + " | active unlock " + Math.round(snapshot.recentActiveUnlockedFrameRatio() * 100.0d) + "%"
@@ -1884,11 +2361,53 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
     private String renderTimingState() {
         CwTimingSnapshot snapshot = cwTimingModel.snapshot();
+        CwSignalSnapshot signalSnapshot = cwSignalProcessor.snapshot();
+        long nowTimestampMs = SystemClock.elapsedRealtime();
         return "Timing Strategy: " + cwTimingModel.debugStrategySummary()
                 + "\nDot Estimate: " + snapshot.dotEstimateMs() + " ms"
                 + "\nDash Estimate: " + snapshot.dashEstimateMs() + " ms"
                 + "\nIntra Gap Estimate: " + snapshot.intraGapEstimateMs() + " ms"
-                + "\nEstimated WPM: " + snapshot.estimatedWpm();
+                + "\nEstimated WPM: " + snapshot.estimatedWpm()
+                + "\nTurn: " + debugTurnLifecycleStatusMessage
+                + "\nTail Repair: " + debugTurnTailRepairStatusMessage
+                + "\nWPM Guard: " + debugLiveRxWpmGuard.compactDebugSummary(
+                signalSnapshot,
+                snapshot,
+                nowTimestampMs
+        )
+                + "\nTiming Anchor: " + debugTimingAnchorController.compactDebugSummary();
+    }
+
+    private void traceDebugTurnFinalization(
+            @Nullable RxTurnSessionFinalizer.TurnFinalization turnFinalization,
+            long timestampMs,
+            String reason
+    ) {
+        if (turnFinalization == null) {
+            debugTurnTailRepairStatusMessage = "Tail repair: none.";
+            return;
+        }
+        RxTrailingWindowRepair.RepairResult repairResult = turnFinalization.repairResult();
+        debugTurnTailRepairStatusMessage = "Tail repair: "
+                + safePreview(repairResult.baseTailText(), 24)
+                + " -> "
+                + safePreview(repairResult.repairedTailText(), 24)
+                + " @"
+                + timestampMs
+                + "ms"
+                + " (" + safeText(reason) + ")";
+    }
+
+    private String safePreview(@Nullable String value, int maxChars) {
+        String text = safeText(value);
+        if (text.length() <= maxChars) {
+            return text;
+        }
+        return text.substring(0, Math.max(0, maxChars - 1)) + "…";
+    }
+
+    private String safeText(@Nullable String value) {
+        return value == null ? "" : value;
     }
 
     private String renderTimingEventStats() {
@@ -2196,7 +2715,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private String renderAdifFieldMap() {
-        List<String> mappings = CwAdifExporter.previewMappedFields(qsoStateMachine.snapshot());
+        List<String> mappings = CwAdifExporter.previewMappedFields(currentQsoSnapshot());
         if (mappings.isEmpty()) {
             return getString(R.string.adif_field_map_empty);
         }
@@ -2204,7 +2723,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private String renderAdifPreview() {
-        String preview = CwAdifExporter.buildPreview(qsoStateMachine.snapshot());
+        String preview = CwAdifExporter.buildPreview(currentQsoSnapshot());
         if (preview.isEmpty()) {
             return getString(R.string.adif_preview_empty);
         }
@@ -2212,7 +2731,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private String renderQsoEditorStatus() {
-        QsoDraftSnapshot snapshot = qsoStateMachine.snapshot();
+        QsoDraftSnapshot snapshot = currentQsoSnapshot();
         StringBuilder builder = new StringBuilder();
         builder.append(hasManualCorrections(snapshot) ? "Manual override active." : "Using live decoded draft.");
         if (draftEditorDirty) {
@@ -2511,6 +3030,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     @Override
     public void onStateChanged(RxAudioSource.State state, String detail) {
         mainHandler.post(() -> {
+            if (state == RxAudioSource.State.IDLE || state == RxAudioSource.State.ERROR) {
+                finalizeDebugRunAtStop(SystemClock.elapsedRealtime());
+            }
             if (batchRunInProgress
                     && activeBatchRunItem != null
                     && (state == RxAudioSource.State.IDLE || state == RxAudioSource.State.ERROR)) {
@@ -2520,11 +3042,10 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                     && state == RxAudioSource.State.IDLE
                     && lastFixtureScenario != null) {
                 boolean completed = detail != null && detail.toLowerCase(Locale.US).contains("completed");
-                flushPendingDecodeAt(SystemClock.elapsedRealtime());
                 lastFixtureEvaluationResult = CwFixtureEvaluator.evaluate(
                         lastFixtureScenario,
-                        cwInterpreter.snapshot(),
-                        qsoStateMachine.snapshot(),
+                        currentCommittedInterpreterSnapshot(),
+                        currentQsoSnapshot(),
                         cwSignalProcessor.snapshot(),
                         completed
                 );
@@ -2547,35 +3068,102 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     }
 
     private void flushPendingDecodeAt(long timestampMs) {
-        List<CwTimingEvent> timingEvents = cwTimingModel.flushPendingGap(timestampMs);
-        for (CwTimingEvent timingEvent : timingEvents) {
-            List<CwDecodeEvent> decodeEvents = cwDecoder.process(timingEvent);
-            for (CwDecodeEvent decodeEvent : decodeEvents) {
-                cwInterpreter.process(decodeEvent);
-                qsoInterpreter.process(decodeEvent);
-                qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
-            }
+        if (debugTimingDecodeRunner != null) {
+            CwSignalSnapshot currentSignalSnapshot = cwSignalProcessor == null
+                    ? null
+                    : cwSignalProcessor.snapshot();
+            CwTimingSnapshot currentTimingSnapshot = cwTimingModel == null
+                    ? null
+                    : cwTimingModel.rawSnapshot();
+            boolean allowTimingLearning = shouldAllowDebugTimingLearning(
+                    currentSignalSnapshot,
+                    currentTimingSnapshot,
+                    timestampMs
+            );
+            List<CwTimingEvent> timingEvents = cwTimingModel.flushPendingGap(
+                    timestampMs,
+                    allowTimingLearning
+            );
+            currentSignalSnapshot = cwSignalProcessor == null
+                    ? null
+                    : cwSignalProcessor.snapshot();
+            currentTimingSnapshot = cwTimingModel.rawSnapshot();
+            AudioInputHealthSnapshot inputHealthSnapshot = audioInputHealthTracker == null
+                    ? null
+                    : audioInputHealthTracker.snapshot();
+            CwSignalSnapshot finalSignalSnapshot = currentSignalSnapshot;
+            CwTimingSnapshot finalTimingSnapshot = currentTimingSnapshot;
+            debugTimingDecodeRunner.dispatchTimingEvents(
+                    timingEvents,
+                    timingEvent -> prepareDebugTimingEventForDecode(
+                            timingEvent,
+                            finalSignalSnapshot,
+                            finalTimingSnapshot,
+                            inputHealthSnapshot
+                    ),
+                    this::consumeDebugDecodeEvent
+            );
+            debugTimingDecodeRunner.flushPendingCharacter(
+                    timestampMs,
+                    this::consumeDebugDecodeEvent
+            );
         }
-        List<CwDecodeEvent> trailingDecodeEvents = cwDecoder.flushPendingCharacter(timestampMs);
-        for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
+    }
+
+    private void finalizeDebugRunAtStop(long timestampMs) {
+        flushPendingDecodeAt(timestampMs);
+        if (debugTurnSessionFinalizer != null) {
+            traceDebugTurnFinalization(
+                    debugTurnSessionFinalizer.finalizeCurrentTurn(timestampMs),
+                    timestampMs,
+                    "stop"
+            );
+            debugTurnSessionFinalizer.endTurn();
+        }
+    }
+
+    private void consumeDebugDecodeEvent(CwDecodeEvent decodeEvent) {
+        if (decodeEvent == null) {
+            return;
+        }
+        cwInterpreter.process(decodeEvent);
+        if (debugCommittedDecodeController == null || debugTurnSessionFinalizer == null) {
             if (decodeEvent.type() == CwDecodeEvent.Type.CHARACTER_DECODED
                     && !decodeEvent.unknownCharacter()) {
                 cwTimingModel.notifyStableDecode(decodeEvent.timestampMs());
             }
-            cwInterpreter.process(decodeEvent);
             qsoInterpreter.process(decodeEvent);
             qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
+            return;
+        }
+        boolean stableDecodeAccepted = shouldTreatAsStableDebugDecode(decodeEvent);
+        List<CwDecodeEvent> admittedEvents = debugCommittedDecodeController.admit(
+                decodeEvent,
+                stableDecodeAccepted
+        );
+        for (CwDecodeEvent admittedEvent : admittedEvents) {
+            debugTurnSessionFinalizer.processCommittedDecodeEvent(admittedEvent);
         }
     }
 
     @Override
     public void onAudioFrame(AudioFrame frame) {
+        if (frame == null || debugFrameSignalRunner == null) {
+            return;
+        }
         receivedFrameCount += 1L;
         receivedSampleCount += frame.sampleCount();
         lastPeakAmplitude = frame.peakAmplitude();
         lastRmsAmplitude = frame.rmsAmplitude();
-        audioInputHealthTracker.process(frame);
-        CwSignalSnapshot signalSnapshotBeforeProcess = cwSignalProcessor.snapshot();
+        RxFrameSignalRunner.Result frameSignalResult = debugFrameSignalRunner.processFrame(
+                frame,
+                SystemClock.elapsedRealtime()
+        );
+        if (frameSignalResult == null) {
+            return;
+        }
+        AudioInputHealthSnapshot inputHealthSnapshot = frameSignalResult.inputHealthSnapshot();
+        CwSignalSnapshot signalSnapshotBeforeProcess = frameSignalResult.signalSnapshotBeforeProcess();
         lastSpectrumSnapshot = audioSpectrumAnalyzer.process(
                 frame,
                 signalSnapshotBeforeProcess.preferredToneFrequencyHz(),
@@ -2592,73 +3180,289 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 signalSnapshotBeforeProcess.hypothesisGuardAppliedFrequencyHz(),
                 signalSnapshotBeforeProcess.hypothesisGuardDecision()
         );
-        List<CwToneEvent> toneEvents = cwSignalProcessor.process(frame);
-        for (CwToneEvent toneEvent : toneEvents) {
-            List<CwTimingEvent> timingEvents = cwTimingModel.process(toneEvent);
-            for (CwTimingEvent timingEvent : timingEvents) {
-                List<CwDecodeEvent> decodeEvents = cwDecoder.process(timingEvent);
-                for (CwDecodeEvent decodeEvent : decodeEvents) {
-                    if (decodeEvent.type() == CwDecodeEvent.Type.CHARACTER_DECODED
-                            && !decodeEvent.unknownCharacter()) {
-                        cwTimingModel.notifyStableDecode(decodeEvent.timestampMs());
-                    }
-                    cwInterpreter.process(decodeEvent);
-                    qsoInterpreter.process(decodeEvent);
-                    qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
-                }
+        feedExperimentalFrontEnd(frame, inputHealthSnapshot);
+        maybeHandleDebugTurnTransition(
+                frameSignalResult.signalSnapshotAfterProcess(),
+                frameSignalResult.frameEndTimestampMs()
+        );
+        if (debugTurnSessionFinalizer != null) {
+            for (CwToneEvent toneEvent : frameSignalResult.toneEvents()) {
+                debugTurnSessionFinalizer.noteToneEvent(toneEvent);
             }
+        }
+        if (debugToneTimingRunner != null) {
+            final CwSignalSnapshot[] finalSignalSnapshot = new CwSignalSnapshot[1];
+            final CwTimingSnapshot[] finalTimingSnapshot = new CwTimingSnapshot[1];
+            debugToneTimingRunner.dispatchToneEvents(
+                    frameSignalResult.toneEvents(),
+                    toneEvent -> {
+                        CwSignalSnapshot currentSignalSnapshot = cwSignalProcessor.snapshot();
+                        CwTimingSnapshot currentTimingSnapshot = cwTimingModel.rawSnapshot();
+                        boolean allowTimingLearning = shouldAllowDebugTimingLearningForEvent(
+                                toneEvent,
+                                currentSignalSnapshot,
+                                currentTimingSnapshot,
+                                inputHealthSnapshot
+                        );
+                        List<CwTimingEvent> timingEvents = cwTimingModel.process(
+                                toneEvent,
+                                allowTimingLearning
+                        );
+                        finalSignalSnapshot[0] = cwSignalProcessor.snapshot();
+                        finalTimingSnapshot[0] = cwTimingModel.rawSnapshot();
+                        return timingEvents;
+                    },
+                    null,
+                    timingEvent -> prepareDebugTimingEventForDecode(
+                            timingEvent,
+                            finalSignalSnapshot[0],
+                            finalTimingSnapshot[0],
+                            inputHealthSnapshot
+                    ),
+                    this::consumeDebugDecodeEvent
+            );
         }
         maybeFlushPendingCharacterDuringSilence(frame);
         scheduleLiveUiRefresh();
     }
 
     private void maybeFlushPendingCharacterDuringSilence(AudioFrame frame) {
-        if (frame == null || cwDecoder == null || cwTimingModel == null || cwSignalProcessor == null) {
+        if (frame == null
+                || debugTimingDecodeRunner == null
+                || cwTimingModel == null
+                || cwSignalProcessor == null
+                || !debugTimingDecodeRunner.hasPendingCharacter()) {
             return;
         }
-        if (!cwDecoder.hasPendingCharacter()) {
-            return;
-        }
-
+        long flushTimestampMs = estimateFrameEndTimestampMs(frame);
         CwSignalSnapshot signalSnapshot = cwSignalProcessor.snapshot();
-        if (signalSnapshot.toneActive()) {
+        maybeHandleDebugTurnTransition(signalSnapshot, flushTimestampMs);
+        RxPendingCharacterFlushDecider.Decision flushDecision =
+                RxPendingCharacterFlushDecider.evaluate(
+                        frame,
+                        flushTimestampMs,
+                        signalSnapshot,
+                        minimumLiveCharacterFlushGapMs(flushTimestampMs),
+                        RxPendingCharacterFlushDecider.ActivityPolicy.MEANINGFUL_TURN_ACTIVITY
+                );
+        if (!flushDecision.shouldFlush()) {
             return;
         }
-        CwToneEvent lastSignalEvent = signalSnapshot.lastEvent();
-        if (lastSignalEvent == null || lastSignalEvent.type() != CwToneEvent.Type.TONE_OFF) {
-            return;
-        }
-
-        long frameDurationMs = Math.max(
-                1L,
-                Math.round(frame.sampleCount() * 1000.0d / frame.sampleRateHz())
+        debugTimingDecodeRunner.flushPendingCharacter(
+                flushDecision.flushTimestampMs(),
+                this::consumeDebugDecodeEvent
         );
-        long flushTimestampMs = frame.capturedAtMs() + frameDurationMs;
-        long silentGapMs = Math.max(0L, flushTimestampMs - lastSignalEvent.timestampMs());
-        long minFlushGapMs = minimumLiveCharacterFlushGapMs();
-        if (silentGapMs < minFlushGapMs) {
+    }
+
+    private boolean shouldAllowDebugTimingLearning(
+            @Nullable CwSignalSnapshot signalSnapshot,
+            @Nullable CwTimingSnapshot timingSnapshot,
+            long timelineTimestampMs
+    ) {
+        if (debugFrontEndLearningGate != null
+                && !debugFrontEndLearningGate.shouldAllowTimingLearning(
+                signalSnapshot,
+                audioInputHealthTracker == null ? null : audioInputHealthTracker.snapshot()
+        )) {
+            return false;
+        }
+        long nowTimestampMs = timelineTimestampMs > 0L
+                ? timelineTimestampMs
+                : SystemClock.elapsedRealtime();
+        boolean baseAllow = debugLiveRxWpmGuard == null
+                || debugLiveRxWpmGuard.shouldAllowTimingLearning(
+                signalSnapshot,
+                timingSnapshot,
+                nowTimestampMs
+        );
+        return debugTimingAnchorController == null
+                || debugTimingAnchorController.shouldAllowTimingLearning(
+                signalSnapshot,
+                timingSnapshot,
+                baseAllow,
+                nowTimestampMs
+        );
+    }
+
+    private boolean shouldAllowDebugTimingLearningForEvent(
+            @Nullable CwToneEvent toneEvent,
+            @Nullable CwSignalSnapshot signalSnapshot,
+            @Nullable CwTimingSnapshot timingSnapshot,
+            @Nullable AudioInputHealthSnapshot inputHealthSnapshot
+    ) {
+        boolean trustedTimingEstablished = debugTimingAnchorController != null
+                && debugTimingAnchorController.trustedDotEstimateMs() > 0L;
+        if (debugFrontEndLearningGate != null
+                && !debugFrontEndLearningGate.shouldAllowTimingLearningForEvent(
+                toneEvent,
+                signalSnapshot,
+                inputHealthSnapshot,
+                trustedTimingEstablished
+        )) {
+            return false;
+        }
+        long nowTimestampMs = toneEvent == null
+                ? SystemClock.elapsedRealtime()
+                : toneEvent.timestampMs();
+        boolean baseAllow = debugLiveRxWpmGuard == null
+                || debugLiveRxWpmGuard.shouldAllowTimingLearningForEvent(
+                toneEvent,
+                signalSnapshot,
+                timingSnapshot,
+                nowTimestampMs
+        );
+        return debugTimingAnchorController == null
+                || debugTimingAnchorController.shouldAllowTimingLearningForEvent(
+                toneEvent,
+                signalSnapshot,
+                timingSnapshot,
+                baseAllow,
+                nowTimestampMs
+        );
+    }
+
+    @Nullable
+    private CwTimingEvent prepareDebugTimingEventForDecode(
+            @Nullable CwTimingEvent timingEvent,
+            @Nullable CwSignalSnapshot currentSignalSnapshot,
+            @Nullable CwTimingSnapshot currentTimingSnapshot,
+            @Nullable AudioInputHealthSnapshot inputHealthSnapshot
+    ) {
+        if (timingEvent == null) {
+            return null;
+        }
+        RxBootstrapTimingObserver.maybeNoteBootstrapCadenceObservation(
+                timingEvent,
+                currentSignalSnapshot,
+                currentTimingSnapshot,
+                inputHealthSnapshot,
+                cwTimingModel,
+                debugLiveRxWpmGuard,
+                debugTimingAnchorController,
+                debugFrontEndLearningGate
+        );
+        RxBootstrapTimingObserver.maybeNoteBootstrapTimingBoundary(
+                timingEvent,
+                currentSignalSnapshot,
+                currentTimingSnapshot,
+                inputHealthSnapshot,
+                cwTimingModel,
+                debugLiveRxWpmGuard,
+                debugTimingAnchorController,
+                debugFrontEndLearningGate,
+                debugRxCore.turnController()
+        );
+        if (debugRawCommitGate != null) {
+            debugRawCommitGate.noteTimingEvent(
+                    timingEvent,
+                    debugTimingAnchorController != null
+                            && debugTimingAnchorController.trustedDotEstimateMs() > 0L,
+                    debugTimingAnchorController == null
+                            ? TimingAnchorController.TrustOrigin.NONE
+                            : debugTimingAnchorController.trustOrigin(),
+                    debugTimingAnchorController == null
+                            ? 0L
+                            : debugTimingAnchorController.trustedDotEstimateMs(),
+                    debugTimingAnchorController == null
+                            ? -1L
+                            : debugTimingAnchorController.lastTrustedUpdateTimestampMs()
+            );
+        }
+        return adaptDebugTimingEvent(
+                timingEvent,
+                currentSignalSnapshot,
+                currentTimingSnapshot
+        );
+    }
+
+    @Nullable
+    private CwTimingEvent adaptDebugTimingEvent(
+            @Nullable CwTimingEvent timingEvent,
+            @Nullable CwSignalSnapshot signalSnapshot,
+            @Nullable CwTimingSnapshot timingSnapshot
+    ) {
+        long nowTimestampMs = timingEvent == null
+                ? SystemClock.elapsedRealtime()
+                : timingEvent.timestampMs();
+        CwTimingEvent adaptedTimingEvent = timingEvent;
+        if (debugLiveRxWpmGuard != null) {
+            adaptedTimingEvent = debugLiveRxWpmGuard.adaptTimingEvent(
+                    adaptedTimingEvent,
+                    signalSnapshot,
+                    timingSnapshot,
+                    nowTimestampMs
+            );
+        }
+        if (debugTimingAnchorController != null) {
+            adaptedTimingEvent = debugTimingAnchorController.adaptTimingEvent(
+                    adaptedTimingEvent,
+                    signalSnapshot,
+                    timingSnapshot,
+                    nowTimestampMs
+            );
+        }
+        return adaptedTimingEvent;
+    }
+
+    private void maybeHandleDebugTurnTransition(
+            @Nullable CwSignalSnapshot signalSnapshot,
+            long timestampMs
+    ) {
+        if (debugTurnSessionCoordinator == null
+                || cwTimingModel == null
+                || signalSnapshot == null) {
             return;
         }
-
-        List<CwDecodeEvent> trailingDecodeEvents = cwDecoder.flushPendingCharacter(flushTimestampMs);
-        for (CwDecodeEvent decodeEvent : trailingDecodeEvents) {
-            if (decodeEvent.type() == CwDecodeEvent.Type.CHARACTER_DECODED
-                    && !decodeEvent.unknownCharacter()) {
-                cwTimingModel.notifyStableDecode(decodeEvent.timestampMs());
-            }
-            cwInterpreter.process(decodeEvent);
-            qsoInterpreter.process(decodeEvent);
-            qsoStateMachine.process(qsoInterpreter.snapshot(), decodeEvent.timestampMs());
+        CwTimingSnapshot timingSnapshot = cwTimingModel.rawSnapshot();
+        RxTurnSessionCoordinator.Observation observation = debugTurnSessionCoordinator.observe(
+                signalSnapshot,
+                false,
+                timestampMs,
+                resolveDebugTimingReferenceWpm(timingSnapshot)
+        );
+        if (observation.startedNewTurn()) {
+            debugTurnLifecycleStatusMessage = "Turn start: " + observation.reason()
+                    + " | seed=" + observation.turnSeedWpm();
+        } else if (observation.endedTurn()) {
+            debugTurnLifecycleStatusMessage = "Turn end: " + observation.reason()
+                    + (observation.frontEndResetApplied() ? " | front-end reset" : "");
+            traceDebugTurnFinalization(
+                    observation.turnFinalization(),
+                    timestampMs,
+                    observation.reason()
+            );
+        }
+        if (observation.endedTurn() && observation.frontEndResetApplied()) {
+            experimentalRxFrontEndPipeline.reset();
         }
     }
 
-    private long minimumLiveCharacterFlushGapMs() {
-        CwTimingSnapshot timingSnapshot = cwTimingModel.snapshot();
-        long dotEstimateMs = Math.max(1L, timingSnapshot.dotEstimateMs());
-        return Math.max(
-                1L,
-                Math.round(dotEstimateMs * LIVE_CHARACTER_FLUSH_GAP_RATIO)
-        );
+    private int resolveDebugTimingReferenceWpm(@Nullable CwTimingSnapshot timingSnapshot) {
+        if (timingSnapshot == null) {
+            return 0;
+        }
+        if (timingSnapshot.estimatedWpm() > 0) {
+            return timingSnapshot.estimatedWpm();
+        }
+        return (int) Math.round(Math.max(0.0d, timingSnapshot.estimatedWpmPrecise()));
+    }
+
+    private long minimumLiveCharacterFlushGapMs(long timelineTimestampMs) {
+        if (cwTimingModel == null) {
+            return 1L;
+        }
+        CwSignalSnapshot signalSnapshot = cwSignalProcessor == null
+                ? null
+                : cwSignalProcessor.snapshot();
+        CwTimingSnapshot timingSnapshot = cwTimingModel.rawSnapshot();
+        long dotEstimateMs = debugLiveRxWpmGuard == null
+                ? Math.max(1L, timingSnapshot.dotEstimateMs())
+                : Math.max(1L, debugLiveRxWpmGuard.resolveEffectiveDotEstimateMs(
+                signalSnapshot,
+                timingSnapshot,
+                timelineTimestampMs > 0L ? timelineTimestampMs : SystemClock.elapsedRealtime()
+        ));
+        return Math.max(1L, Math.round(dotEstimateMs * LIVE_CHARACTER_FLUSH_GAP_RATIO));
     }
 
     private void scheduleLiveUiRefresh() {
@@ -2678,7 +3482,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         }
         lastLiveUiRefreshAtMs = SystemClock.elapsedRealtime();
         CwInterpreterSnapshot interpreterSnapshot = cwInterpreter.snapshot();
-        QsoDraftSnapshot qsoSnapshot = qsoStateMachine.snapshot();
+        CwInterpreterSnapshot committedInterpreterSnapshot = currentCommittedInterpreterSnapshot();
+        QsoDraftSnapshot qsoSnapshot = currentQsoSnapshot();
         binding.frameStatsText.setText(renderFrameStats());
         updateLevelViews(lastPeakAmplitude, lastRmsAmplitude);
         refreshAudioSpectrumView();
@@ -2688,7 +3493,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 binding.rxFocusStatusText,
                 renderRxFocusStatus(selectedInputSource(), sourceForOption(selectedInputSource()))
         );
-        setStableText(binding.rxFocusDecodeText, renderRxFocusDecode(interpreterSnapshot));
+        setStableText(binding.rxFocusDecodeText, renderRxFocusDecode(committedInterpreterSnapshot));
         binding.signalEventStatsText.setText(renderSignalEventStats());
         binding.lastSignalEventText.setText(renderLastSignalEvent());
         binding.timingStateText.setText(renderTimingState());
@@ -2708,8 +3513,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.fixtureEvaluationText.setText(renderFixtureEvaluationStatus());
         syncDraftEditorFromSnapshot(qsoSnapshot, false);
         binding.qsoEditorStatusText.setText(renderQsoEditorStatus());
-        refreshCallsignCandidateButtons(interpreterSnapshot);
-        binding.callsignCandidateStatusText.setText(renderCallsignCandidateStatus(interpreterSnapshot));
+        refreshCallsignCandidateButtons(committedInterpreterSnapshot);
+        binding.callsignCandidateStatusText.setText(renderCallsignCandidateStatus(committedInterpreterSnapshot));
         binding.qsoReadinessText.setText(renderQsoReadiness(qsoSnapshot));
         binding.lastQsoEventText.setText(renderLastQsoEvent(qsoSnapshot));
         binding.qsoStorageStatusText.setText(renderQsoStorageStatus());
@@ -2720,7 +3525,69 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.resetDraftEditsButton.setEnabled(hasManualCorrections(qsoSnapshot));
         binding.rxFocusStopCaptureButton.setEnabled(anySourceActive());
         binding.runBatchAnalysisButton.setEnabled(!anySourceActive() && !batchRunInProgress);
-        publishRxSessionSnapshot(interpreterSnapshot, qsoSnapshot);
+        publishRxSessionSnapshot(committedInterpreterSnapshot, qsoSnapshot);
+    }
+
+    private void feedExperimentalFrontEnd(
+            AudioFrame frame,
+            @Nullable AudioInputHealthSnapshot inputHealthSnapshot
+    ) {
+        if (frame == null || experimentalRxFrontEndPipeline == null || cwSignalProcessor == null) {
+            return;
+        }
+        CwSignalSnapshot signalSnapshot = cwSignalProcessor.snapshot();
+        long timestampMs = estimateFrameEndTimestampMs(frame);
+        experimentalRxFrontEndPipeline.process(
+                signalSnapshot,
+                inputHealthSnapshot,
+                EXPERIMENTAL_RX_SQL_PERCENT,
+                timestampMs
+        );
+    }
+
+    private String renderExperimentalFrontEndDetail() {
+        if (experimentalRxFrontEndPipeline == null) {
+            return "not available";
+        }
+        ExperimentalRxFrontEndSnapshot snapshot = experimentalRxFrontEndPipeline.snapshot();
+        if (snapshot == null || snapshot.lastObservation() == null) {
+            return "waiting for frame observations";
+        }
+        return "state " + snapshot.envelopeState()
+                + " | pressure "
+                + Math.round(snapshot.admissionPressure() * 100.0d)
+                + "%"
+                + " | pendingResume "
+                + yesNo(snapshot.pendingResume())
+                + " | track "
+                + snapshot.lastObservation().trackedToneFrequencyHz()
+                + " Hz"
+                + " | tone/noise "
+                + String.format(
+                Locale.US,
+                "%.2f",
+                snapshot.lastObservation().noiseFloorEstimate() <= 0.0d
+                        ? 0.0d
+                        : snapshot.lastObservation().trackedToneRmsAmplitude()
+                        / snapshot.lastObservation().noiseFloorEstimate()
+        )
+                + "x"
+                + " | lock "
+                + Math.round(snapshot.lastObservation().recentLockedFrameRatio() * 100.0d)
+                + "%"
+                + " | near "
+                + Math.round(snapshot.lastObservation().recentNearTargetLockedFrameRatio() * 100.0d)
+                + "%"
+                + " | unl "
+                + Math.round(snapshot.lastObservation().recentActiveUnlockedFrameRatio() * 100.0d)
+                + "%";
+    }
+
+    private long estimateFrameEndTimestampMs(@Nullable AudioFrame frame) {
+        return RxPendingCharacterFlushDecider.resolveFrameEndTimestampMs(
+                frame,
+                SystemClock.elapsedRealtime()
+        );
     }
 
     private void publishRxSessionSnapshot(
@@ -2748,6 +3615,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 timingSnapshot.estimatedWpm(),
                 timingSnapshot.estimatedWpm(),
                 interpreterSnapshot == null ? "" : interpreterSnapshot.rawText(),
+                "",
+                "",
                 qsoSnapshot == null ? "" : qsoSnapshot.normalizedText(),
                 qsoSnapshot == null || qsoSnapshot.phase() == null ? "" : qsoSnapshot.phase().displayName(),
                 qsoSnapshot == null ? "" : qsoSnapshot.remoteCallsignCandidate(),

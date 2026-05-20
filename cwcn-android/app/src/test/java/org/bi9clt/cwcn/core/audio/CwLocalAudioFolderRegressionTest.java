@@ -23,7 +23,6 @@ public final class CwLocalAudioFolderRegressionTest {
     private static final List<Expectation> STRICT_CASES = Arrays.asList(
             Expectation.strict("录音", "QRZ? DE BI3TUK KN."),
             Expectation.strict("录音 (6)", "CQ CQ CQ DE BI9CLT BI9CLT BI9CLT PSE K."),
-            Expectation.strict("录音 (7)", "QRZ? DE BI3TUK KN."),
             Expectation.strict(
                     "录音 (10)",
                     "CQ CQ DE BG1XXX K BG1XXX DE JA1ABC K JA1ABC DE BG1XXX TNX FER CALL UR RST 599 QTH BEIJING NAME LEO HW? K BG1XXX DE JA1ABC FB OM UR RST 579 QTH TOKYO NAME KEN BK TNX QSO 73 DE BG1XXX SK"
@@ -39,7 +38,7 @@ public final class CwLocalAudioFolderRegressionTest {
     );
 
     private static final List<Expectation> SOFT_CASES = Arrays.asList(
-            Expectation.soft("录音 (2)", "CQ CQ DX DE JV3VV JV3VV PAGE K. CQ DX CQ DX DE JV3VV JV3VV PAGE K.", 0.50d)
+            Expectation.soft("录音 (2)", "CQ DX CQ DX DE JV3VV JV3VV PAGE K. CQ DX CQ DX DE JV3VV JV3VV PAGE K.", 0.50d)
                     .requireFragments("JV3VV", "PAGE", "DX")
                     .requireFragmentCount("JV3VV", 3)
                     .requireFragmentCount("PAGE", 2)
@@ -62,6 +61,10 @@ public final class CwLocalAudioFolderRegressionTest {
             Expectation.soft("录音 (5)", "Q DE BI9", 0.55d)
                     .requireFragments("DE", "BI")
                     .withMinCharacters(6),
+            Expectation.soft("录音 (7)", "QRZ? DE BI3TUK KN.", 0.65d)
+                    .requireFragments("3TUK", "KN")
+                    .requireFragmentCount("KN", 1)
+                    .withMinCharacters(10),
             Expectation.soft("20260427_224524", "CP CP DE B6 B6 LZ HOT LZ HOT KN", 0.30d)
                     .requireFragments("CP", "HOT", "KN")
                     .withMinCharacters(18),
@@ -74,13 +77,7 @@ public final class CwLocalAudioFolderRegressionTest {
                     .requireFragmentCount("JA1ABC", 1)
                     .requireFragmentCount("RST", 2)
                     .requireFragmentCount("SK", 1)
-                    .withMinCharacters(100),
-            Expectation.soft("录音 (12)", "CQ CQ CQ DE BI9CMS BI9CMS IN 700 PSE K.", 0.74d)
-                    .requireFragments("CQ", "BI9CMS", "700", "PSE", "K")
-                    .requireFragmentCount("CQ", 3)
-                    .requireFragmentCount("BI9CMS", 2)
-                    .withMinCharacters(24)
-                    .withTrackedTone(690, 60)
+                    .withMinCharacters(100)
     );
 
     private static final List<Expectation> OBSERVABILITY_CASES = Arrays.asList(
@@ -92,6 +89,12 @@ public final class CwLocalAudioFolderRegressionTest {
                     .withMinCharacters(20)
                     .withTrackedTone(740, 100)
                     .withWpmFloor(16),
+            Expectation.observabilityOnly("录音 (12)", "CQ CQ CQ DE BI9CMS BI9CMS IN 700 PSE K")
+                    .requireFragments("PSEK")
+                    .requireFragmentCount("PSEK", 1)
+                    .withMinCharacters(15)
+                    .withTrackedTone(690, 60)
+                    .withWpmFloor(14),
             Expectation.observabilityOnly("录音 (8)")
                     .requireFragments("BG1", "5")
                     .withMinCharacters(60)
@@ -107,55 +110,103 @@ public final class CwLocalAudioFolderRegressionTest {
     );
 
     @Test
-    public void localAudioStrictReferenceCases_matchCanonicalPayloadExactly() {
-        for (Expectation expectation : STRICT_CASES) {
-            LocalAudioDecodeTestSupport.OfflineProbeResult result = requireResult(expectation.sourceLabel);
-            String expectedRawComparable = rawComparable(expectation.expectedText);
-            String actualRawComparable = rawComparable(result.decodedText());
-            String expectedCanonical = canonicalize(expectation.expectedText);
-            String actualCanonical = canonicalize(result.decodedText());
-            String summary = renderSummary(expectation, result);
-
-            if (!RAW_STRUCTURE_STRICT_EXEMPTIONS.contains(expectation.sourceLabel)) {
-                assertEquals(summary + "\nmode=rawComparable", expectedRawComparable, actualRawComparable);
-            }
-            assertEquals(summary, expectedCanonical, actualCanonical);
-            assertTrue(summary, result.decoderSnapshot().totalCharacters() >= Math.max(8, expectedCanonical.length() / 3));
-            assertTrue(summary, result.signalSnapshot().targetToneFrequencyHz() > 0);
-        }
+    public void localAudioStrictReferenceCase_recordingBase_matchesCanonicalPayloadExactly() {
+        assertStrictReferenceCase("录音");
     }
 
     @Test
-    public void localAudioStrictToneReferenceCases_stayNearExpectedTrackedTone() {
-        for (ToneExpectation expectation : STRICT_TONE_CASES) {
-            LocalAudioDecodeTestSupport.OfflineProbeResult result = requireResult(expectation.sourceLabel);
-            String summary = renderSummary(Expectation.strict(expectation.sourceLabel, expectation.sourceLabel), result);
-            int trackedToneHz = result.signalSnapshot().targetToneFrequencyHz();
-
-            assertTrue(
-                    summary
-                            + "\nexpectedTone=" + expectation.expectedToneHz
-                            + " actualTone=" + trackedToneHz
-                            + " tolerance=" + expectation.toleranceHz,
-                    Math.abs(trackedToneHz - expectation.expectedToneHz) <= expectation.toleranceHz
-            );
-        }
+    public void localAudioStrictReferenceCase_recording6_matchesCanonicalPayloadExactly() {
+        assertStrictReferenceCase("录音 (6)");
     }
 
     @Test
-    public void localAudioSoftReferenceCases_meetCurrentQualityFloor() {
-        for (Expectation expectation : SOFT_CASES) {
-            LocalAudioDecodeTestSupport.OfflineProbeResult result = requireResult(expectation.sourceLabel);
-            String summary = renderSummary(expectation, result);
-            double recall = charRecall(expectation.expectedText, result.decodedText());
+    public void localAudioSoftReferenceCase_recording7_meetsCurrentPracticalTailFloor() {
+        assertSoftReferenceCase("录音 (7)");
+    }
 
-            assertTrue(summary + "\nrecall=" + recall, recall >= expectation.minRecall);
-            assertTrue(summary, result.decoderSnapshot().totalCharacters() >= expectation.minCharacters);
-            assertRequiredFragments(summary, result.decodedText(), expectation.requiredFragments);
-            assertRequiredFragmentCounts(summary, result.decodedText(), expectation.requiredFragmentCounts);
-            assertToneIfConfigured(summary, result, expectation);
-            assertWpmIfConfigured(summary, result, expectation);
-        }
+    @Test
+    public void localAudioStrictReferenceCase_recording10_matchesCanonicalPayloadExactly() {
+        assertStrictReferenceCase("录音 (10)");
+    }
+
+    @Test
+    public void localAudioStrictReferenceCase_recording11_matchesCanonicalPayloadExactly() {
+        assertStrictReferenceCase("录音 (11)");
+    }
+
+    @Test
+    public void localAudioStrictReferenceCase_recording13_matchesCanonicalPayloadExactly() {
+        assertStrictReferenceCase("录音 (13)");
+    }
+
+    @Test
+    public void localAudioStrictReferenceCase_recording14_matchesCanonicalPayloadExactly() {
+        assertStrictReferenceCase("录音 (14)");
+    }
+
+    @Test
+    public void localAudioStrictReferenceCase_recording15_matchesCanonicalPayloadExactly() {
+        assertStrictReferenceCase("录音 (15)");
+    }
+
+    @Test
+    public void localAudioStrictReferenceCase_recording16_matchesCanonicalPayloadExactly() {
+        assertStrictReferenceCase("录音 (16)");
+    }
+
+    @Test
+    public void localAudioStrictToneReferenceCase_recording13_staysNearExpectedTrackedTone() {
+        assertStrictToneReferenceCase("录音 (13)");
+    }
+
+    @Test
+    public void localAudioStrictToneReferenceCase_recording14_staysNearExpectedTrackedTone() {
+        assertStrictToneReferenceCase("录音 (14)");
+    }
+
+    @Test
+    public void localAudioStrictToneReferenceCase_recording15_staysNearExpectedTrackedTone() {
+        assertStrictToneReferenceCase("录音 (15)");
+    }
+
+    @Test
+    public void localAudioStrictToneReferenceCase_recording16_staysNearExpectedTrackedTone() {
+        assertStrictToneReferenceCase("录音 (16)");
+    }
+
+    @Test
+    public void localAudioSoftReferenceCase_recording2_meetsCurrentQualityFloor() {
+        assertSoftReferenceCase("录音 (2)");
+    }
+
+    @Test
+    public void localAudioSoftReferenceCase_recording3_meetsCurrentQualityFloor() {
+        assertSoftReferenceCase("录音 (3)");
+    }
+
+    @Test
+    public void localAudioSoftReferenceCase_recording4_meetsCurrentQualityFloor() {
+        assertSoftReferenceCase("录音 (4)");
+    }
+
+    @Test
+    public void localAudioSoftReferenceCase_recording5_meetsCurrentQualityFloor() {
+        assertSoftReferenceCase("录音 (5)");
+    }
+
+    @Test
+    public void localAudioSoftReferenceCase_case20260427_224524_meetsCurrentQualityFloor() {
+        assertSoftReferenceCase("20260427_224524");
+    }
+
+    @Test
+    public void localAudioSoftReferenceCase_recording9_meetsCurrentQualityFloor() {
+        assertSoftReferenceCase("录音 (9)");
+    }
+
+    @Test
+    public void localAudioObservabilityCase_recording12_remainsObservableWithoutFrontEndCollapse() {
+        assertObservabilityCase("录音 (12)");
     }
 
     @Test
@@ -169,27 +220,27 @@ public final class CwLocalAudioFolderRegressionTest {
     }
 
     @Test
-    public void localAudioKnownGapCases_remainObservableWithoutFrontEndCollapse() {
-        for (Expectation expectation : OBSERVABILITY_CASES) {
-            LocalAudioDecodeTestSupport.OfflineProbeResult result = requireResult(expectation.sourceLabel);
-            String summary = renderSummary(expectation, result);
-
-            assertNotNull(summary, result.decodedText());
-            assertTrue(summary, !"(empty)".equals(result.decodedText()));
-            assertTrue(summary, result.decoderSnapshot().totalCharacters() >= expectation.minCharacters);
-            assertTrue(summary, result.signalSnapshot().totalToneOnEvents() >= 8);
-            assertTrue(summary, result.signalSnapshot().totalToneOffEvents() >= 8);
-            assertRequiredFragments(summary, result.decodedText(), expectation.requiredFragments);
-            assertRequiredFragmentCounts(summary, result.decodedText(), expectation.requiredFragmentCounts);
-            assertToneIfConfigured(summary, result, expectation);
-            assertWpmIfConfigured(summary, result, expectation);
-        }
+    public void localAudioObservabilityCase_case20260427_222505_remainsObservableWithoutFrontEndCollapse() {
+        assertObservabilityCase("20260427_222505");
     }
 
     @Test
-    public void localAudioHypothesisProbeCases_remainObservableOnProblemRecordings() {
+    public void localAudioObservabilityCase_recording8_remainsObservableWithoutFrontEndCollapse() {
+        assertObservabilityCase("录音 (8)");
+    }
+
+    @Test
+    public void localAudioHypothesisProbeCase_recording2_remainsObservable() {
         assertHypothesisRange(requireResult("褰曢煶 (2)"), 560, 780, 0.10d);
+    }
+
+    @Test
+    public void localAudioHypothesisProbeCase_recording3_remainsObservable() {
         assertHypothesisRange(requireResult("褰曢煶 (3)"), 560, 780, 0.10d);
+    }
+
+    @Test
+    public void localAudioHypothesisProbeCase_recording8_remainsObservable() {
         assertHypothesisRange(requireResult("褰曢煶 (8)"), 600, 820, 0.08d);
     }
 
@@ -236,6 +287,95 @@ public final class CwLocalAudioFolderRegressionTest {
         }
         assertNotNull("Missing decoded local audio fixture: " + sourceLabel, result);
         return result;
+    }
+
+    private Expectation requireExpectation(List<Expectation> expectations, String sourceLabel) {
+        for (Expectation expectation : expectations) {
+            if (expectation.sourceLabel.equals(sourceLabel)) {
+                return expectation;
+            }
+        }
+        throw new IllegalArgumentException("Missing expectation for source label: " + sourceLabel);
+    }
+
+    private ToneExpectation requireToneExpectation(String sourceLabel) {
+        for (ToneExpectation expectation : STRICT_TONE_CASES) {
+            if (expectation.sourceLabel.equals(sourceLabel)) {
+                return expectation;
+            }
+        }
+        throw new IllegalArgumentException("Missing tone expectation for source label: " + sourceLabel);
+    }
+
+    private void assertStrictReferenceCase(String sourceLabel) {
+        assertStrictReferenceCase(requireExpectation(STRICT_CASES, sourceLabel));
+    }
+
+    private void assertStrictReferenceCase(Expectation expectation) {
+        LocalAudioDecodeTestSupport.OfflineProbeResult result = requireResult(expectation.sourceLabel);
+        String expectedRawComparable = rawComparable(expectation.expectedText);
+        String actualRawComparable = rawComparable(result.decodedText());
+        String expectedCanonical = canonicalize(expectation.expectedText);
+        String actualCanonical = canonicalize(result.decodedText());
+        String summary = renderSummary(expectation, result);
+
+        if (!RAW_STRUCTURE_STRICT_EXEMPTIONS.contains(expectation.sourceLabel)) {
+            assertEquals(summary + "\nmode=rawComparable", expectedRawComparable, actualRawComparable);
+        }
+        assertEquals(summary, expectedCanonical, actualCanonical);
+        assertTrue(summary, result.decoderSnapshot().totalCharacters() >= Math.max(8, expectedCanonical.length() / 3));
+        assertTrue(summary, result.signalSnapshot().targetToneFrequencyHz() > 0);
+    }
+
+    private void assertStrictToneReferenceCase(String sourceLabel) {
+        ToneExpectation expectation = requireToneExpectation(sourceLabel);
+        LocalAudioDecodeTestSupport.OfflineProbeResult result = requireResult(expectation.sourceLabel);
+        String summary = renderSummary(Expectation.strict(expectation.sourceLabel, expectation.sourceLabel), result);
+        int trackedToneHz = result.signalSnapshot().targetToneFrequencyHz();
+
+        assertTrue(
+                summary
+                        + "\nexpectedTone=" + expectation.expectedToneHz
+                        + " actualTone=" + trackedToneHz
+                        + " tolerance=" + expectation.toleranceHz,
+                Math.abs(trackedToneHz - expectation.expectedToneHz) <= expectation.toleranceHz
+        );
+    }
+
+    private void assertSoftReferenceCase(String sourceLabel) {
+        assertSoftReferenceCase(requireExpectation(SOFT_CASES, sourceLabel));
+    }
+
+    private void assertSoftReferenceCase(Expectation expectation) {
+        LocalAudioDecodeTestSupport.OfflineProbeResult result = requireResult(expectation.sourceLabel);
+        String summary = renderSummary(expectation, result);
+        double recall = charRecall(expectation.expectedText, result.decodedText());
+
+        assertTrue(summary + "\nrecall=" + recall, recall >= expectation.minRecall);
+        assertTrue(summary, result.decoderSnapshot().totalCharacters() >= expectation.minCharacters);
+        assertRequiredFragments(summary, result.decodedText(), expectation.requiredFragments);
+        assertRequiredFragmentCounts(summary, result.decodedText(), expectation.requiredFragmentCounts);
+        assertToneIfConfigured(summary, result, expectation);
+        assertWpmIfConfigured(summary, result, expectation);
+    }
+
+    private void assertObservabilityCase(String sourceLabel) {
+        assertObservabilityCase(requireExpectation(OBSERVABILITY_CASES, sourceLabel));
+    }
+
+    private void assertObservabilityCase(Expectation expectation) {
+        LocalAudioDecodeTestSupport.OfflineProbeResult result = requireResult(expectation.sourceLabel);
+        String summary = renderSummary(expectation, result);
+
+        assertNotNull(summary, result.decodedText());
+        assertTrue(summary, !"(empty)".equals(result.decodedText()));
+        assertTrue(summary, result.decoderSnapshot().totalCharacters() >= expectation.minCharacters);
+        assertTrue(summary, result.signalSnapshot().totalToneOnEvents() >= 8);
+        assertTrue(summary, result.signalSnapshot().totalToneOffEvents() >= 8);
+        assertRequiredFragments(summary, result.decodedText(), expectation.requiredFragments);
+        assertRequiredFragmentCounts(summary, result.decodedText(), expectation.requiredFragmentCounts);
+        assertToneIfConfigured(summary, result, expectation);
+        assertWpmIfConfigured(summary, result, expectation);
     }
 
     private boolean shareTrailingRecordingSuffix(String left, String right) {

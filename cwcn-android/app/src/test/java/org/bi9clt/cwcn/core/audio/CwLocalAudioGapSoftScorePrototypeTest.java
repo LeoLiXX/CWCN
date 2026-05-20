@@ -19,6 +19,9 @@ import java.util.Map;
 
 public final class CwLocalAudioGapSoftScorePrototypeTest {
     private static final Map<String, String> MORSE_REFERENCE = buildMorseReference();
+    private static final int PREFERRED_TONE_HZ = 700;
+    private static final int SEED_WPM = 15;
+    private static final int SQL_PERCENT = 55;
     private static final int OVERLONG_SEQUENCE_MIN_SYMBOLS = 6;
     private static final double PROMOTION_MIN_RATIO = 0.95d;
     private static final double PROMOTION_MAX_RATIO = 1.35d;
@@ -32,7 +35,14 @@ public final class CwLocalAudioGapSoftScorePrototypeTest {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Missing WAV fixture for recording (8)"));
         LocalAudioDecodeTestSupport.OfflineDetailedProbeResult detailed =
-                LocalAudioDecodeTestSupport.decodeWavFileDetailed(wavFile);
+                LocalAudioDecodeTestSupport.decodeWavFileDetailedLiveLike(
+                        wavFile,
+                        PREFERRED_TONE_HZ,
+                        SEED_WPM,
+                        SQL_PERCENT,
+                        false,
+                        CwInterpreter.RecoveryMode.RAW_COPY_FOCUS
+                );
 
         LinkedHashMap<String, LocalAudioDecodeTestSupport.ForcedToneReplayResult> replays = new LinkedHashMap<>();
         replays.put("TRK", LocalAudioDecodeTestSupport.replayForcedTrackedToneDecode(detailed));

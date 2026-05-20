@@ -17,7 +17,7 @@ public final class CwLocalAudioTrailingWindowRedecodeProbeTest {
 
     @Test
     public void recording2_recentWordPrototype_printsBaselineVsLocalRedecode() {
-        probeBySuffix("(2)", "CQ CQ DX DE JV3VV JV3VV PAGE K. CQ DX CQ DX DE JV3VV JV3VV PAGE K.");
+        probeBySuffix("(2)", "CQ DX CQ DX DE JV3VV JV3VV PAGE K. CQ DX CQ DX DE JV3VV JV3VV PAGE K.");
     }
 
     @Test

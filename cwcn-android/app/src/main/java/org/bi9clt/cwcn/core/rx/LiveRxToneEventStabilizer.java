@@ -28,17 +28,36 @@ public final class LiveRxToneEventStabilizer {
     private static final double WEAK_ISOLATION_MAX = 0.60d;
     private static final double HOT_FRAME_RATIO_MIN = 0.34d;
     private static final double CLIPPING_FRAME_RATIO_MIN = 0.03d;
+    private static final double CONFIDENT_SHORT_TONE_MIN_DOT_RATIO = 0.20d;
+    private static final long CONFIDENT_SHORT_TONE_MIN_ABSOLUTE_MS = 16L;
+    private static final double CONFIDENT_SHORT_TONE_PRECEDING_GAP_MAX_DOT_RATIO = 2.20d;
+    private static final long CONFIDENT_SHORT_TONE_PRECEDING_GAP_MAX_ABSOLUTE_MS = 110L;
+    private static final double CONFIDENT_TONE_START_LOCKED_RATIO_MIN = 0.52d;
+    private static final double CONFIDENT_TONE_START_DOMINANCE_MIN = 0.62d;
+    private static final double CONFIDENT_TONE_START_ISOLATION_MIN = 0.48d;
+    private static final double CONFIDENT_TONE_START_STRONG_EVIDENCE_LOCKED_RATIO_MIN = 0.50d;
+    private static final double CONFIDENT_TONE_START_STRONG_EVIDENCE_ACTIVE_UNLOCKED_RATIO_MAX = 0.08d;
+    private static final double CONFIDENT_TONE_START_STRONG_EVIDENCE_DOMINANCE_MIN = 0.90d;
+    private static final double CONFIDENT_TONE_START_STRONG_EVIDENCE_ISOLATION_MIN = 0.70d;
 
     @Nullable
     private CwToneEvent pendingToneOnCandidate;
     private long pendingToneOnConfirmAtMs = -1L;
+    private boolean pendingToneOnConfidentStart;
+    private long pendingToneOnPrecedingGapMs = -1L;
     @Nullable
     private CwToneEvent pendingToneOffCandidate;
     private long pendingToneOffExpiresAtMs = -1L;
     private long pendingToneOffBridgeWindowMs = -1L;
     private boolean pendingToneOffDropIfIsolated;
+    private boolean pendingToneOffProtectedIfReleased;
     private long bridgedPrefixDurationMs = -1L;
     private long bridgedSplitTimestampMs = -1L;
+    private boolean activeToneConfidentStart;
+    private long activeTonePrecedingGapMs = -1L;
+    private long lastReleasedToneOffTimestampMs = -1L;
+    private long lastProtectedToneOffTimestampMs = -1L;
+    private long lastProtectedToneOffDurationMs = -1L;
     private int delayedToneOnCount;
     private int confirmedToneOnCount;
     private int droppedToneOnFragmentCount;
@@ -52,8 +71,14 @@ public final class LiveRxToneEventStabilizer {
         pendingToneOffExpiresAtMs = -1L;
         pendingToneOffBridgeWindowMs = -1L;
         pendingToneOffDropIfIsolated = false;
+        pendingToneOffProtectedIfReleased = false;
         bridgedPrefixDurationMs = -1L;
         bridgedSplitTimestampMs = -1L;
+        activeToneConfidentStart = false;
+        activeTonePrecedingGapMs = -1L;
+        lastReleasedToneOffTimestampMs = -1L;
+        lastProtectedToneOffTimestampMs = -1L;
+        lastProtectedToneOffDurationMs = -1L;
         delayedToneOnCount = 0;
         confirmedToneOnCount = 0;
         droppedToneOnFragmentCount = 0;
@@ -78,7 +103,9 @@ public final class LiveRxToneEventStabilizer {
 
         if (bridgeActive()) {
             if (toneEvent.type() == CwToneEvent.Type.TONE_OFF) {
-                filteredEvents.add(mergeBridgedToneOff(toneEvent));
+                CwToneEvent mergedToneOff = mergeBridgedToneOff(toneEvent);
+                filteredEvents.add(mergedToneOff);
+                noteEmittedToneOff(mergedToneOff, false);
                 bridgedToneOffCount += 1;
                 clearBridge();
                 return filteredEvents;
@@ -120,6 +147,8 @@ public final class LiveRxToneEventStabilizer {
             pendingToneOnCandidate = toneEvent;
             pendingToneOnConfirmAtMs = toneEvent.timestampMs()
                     + onsetConfirmWindowMs(referenceDotEstimateMs, inputHealthSnapshot);
+            pendingToneOnConfidentStart = isConfidentToneStart(signalSnapshot, inputHealthSnapshot);
+            pendingToneOnPrecedingGapMs = resolveToneOnPrecedingGapMs(toneEvent.timestampMs());
             delayedToneOnCount += 1;
             return filteredEvents;
         }
@@ -134,17 +163,32 @@ public final class LiveRxToneEventStabilizer {
             pendingToneOffCandidate = toneEvent;
             pendingToneOffBridgeWindowMs = bridgeGapWindowMs(referenceDotEstimateMs, inputHealthSnapshot);
             pendingToneOffExpiresAtMs = toneEvent.timestampMs() + pendingToneOffBridgeWindowMs;
-            pendingToneOffDropIfIsolated = shouldSuppressShortTone(
+            boolean suppressShortTone = looksLikeShortToneFragment(
                     toneEvent,
-                    signalSnapshot,
+                    inputHealthSnapshot,
+                    referenceDotEstimateMs
+            ) && isUnstableConfidence(signalSnapshot, inputHealthSnapshot);
+            pendingToneOffProtectedIfReleased = suppressShortTone
+                    && shouldPreserveIsolatedShortTone(
+                    toneEvent,
                     inputHealthSnapshot,
                     referenceDotEstimateMs
             );
+            pendingToneOffDropIfIsolated = suppressShortTone && !pendingToneOffProtectedIfReleased;
             delayedToneOffCount += 1;
             return filteredEvents;
         }
 
         filteredEvents.add(toneEvent);
+        if (toneEvent.type() == CwToneEvent.Type.TONE_ON) {
+            noteEmittedToneOn(
+                    toneEvent.timestampMs(),
+                    isConfidentToneStart(signalSnapshot, inputHealthSnapshot),
+                    resolveToneOnPrecedingGapMs(toneEvent.timestampMs())
+            );
+        } else if (toneEvent.type() == CwToneEvent.Type.TONE_OFF) {
+            noteEmittedToneOff(toneEvent, false);
+        }
         return filteredEvents;
     }
 
@@ -164,7 +208,13 @@ public final class LiveRxToneEventStabilizer {
         return toneEvent != null
                 && toneEvent.type() == CwToneEvent.Type.TONE_OFF
                 && looksLikeShortToneFragment(toneEvent, inputHealthSnapshot, referenceDotEstimateMs)
-                && isUnstableConfidence(signalSnapshot, inputHealthSnapshot);
+                && isUnstableConfidence(signalSnapshot, inputHealthSnapshot)
+                && !isProtectedToneOff(toneEvent)
+                && !shouldPreserveIsolatedShortTone(
+                toneEvent,
+                inputHealthSnapshot,
+                referenceDotEstimateMs
+        );
     }
 
     public LiveRxToneEventStabilizerStats stats() {
@@ -259,7 +309,7 @@ public final class LiveRxToneEventStabilizer {
                 1L,
                 Math.min(
                         hotInput ? HOT_FRAGMENT_TONE_MAX_ABSOLUTE_MS : FRAGMENT_TONE_MAX_ABSOLUTE_MS,
-                        Math.round(referenceDotEstimateMs * (hotInput
+                        Math.round(Math.max(1L, referenceDotEstimateMs) * (hotInput
                                 ? HOT_FRAGMENT_TONE_MAX_DOT_RATIO
                                 : FRAGMENT_TONE_MAX_DOT_RATIO))
                 )
@@ -274,8 +324,8 @@ public final class LiveRxToneEventStabilizer {
         boolean hotInput = isHotInput(inputHealthSnapshot);
         if (referenceDotEstimateMs <= 0L) {
             return hotInput ? HOT_ONSET_CONFIRM_MAX_ABSOLUTE_MS : ONSET_CONFIRM_MAX_ABSOLUTE_MS;
-        }
-        return Math.max(
+        } else {
+            return Math.max(
                 1L,
                 Math.min(
                         hotInput ? HOT_ONSET_CONFIRM_MAX_ABSOLUTE_MS : ONSET_CONFIRM_MAX_ABSOLUTE_MS,
@@ -283,7 +333,8 @@ public final class LiveRxToneEventStabilizer {
                                 ? HOT_ONSET_CONFIRM_MAX_DOT_RATIO
                                 : ONSET_CONFIRM_MAX_DOT_RATIO))
                 )
-        );
+            );
+        }
     }
 
     private long bridgeGapWindowMs(
@@ -293,16 +344,17 @@ public final class LiveRxToneEventStabilizer {
         boolean hotInput = isHotInput(inputHealthSnapshot);
         if (referenceDotEstimateMs <= 0L) {
             return hotInput ? HOT_BRIDGE_GAP_MAX_ABSOLUTE_MS : BRIDGE_GAP_MAX_ABSOLUTE_MS;
+        } else {
+            return Math.max(
+                    1L,
+                    Math.min(
+                            hotInput ? HOT_BRIDGE_GAP_MAX_ABSOLUTE_MS : BRIDGE_GAP_MAX_ABSOLUTE_MS,
+                            Math.round(referenceDotEstimateMs * (hotInput
+                                    ? HOT_BRIDGE_GAP_MAX_DOT_RATIO
+                                    : BRIDGE_GAP_MAX_DOT_RATIO))
+                    )
+            );
         }
-        return Math.max(
-                1L,
-                Math.min(
-                        hotInput ? HOT_BRIDGE_GAP_MAX_ABSOLUTE_MS : BRIDGE_GAP_MAX_ABSOLUTE_MS,
-                        Math.round(referenceDotEstimateMs * (hotInput
-                                ? HOT_BRIDGE_GAP_MAX_DOT_RATIO
-                                : BRIDGE_GAP_MAX_DOT_RATIO))
-                )
-        );
     }
 
     private boolean isUnstableConfidence(
@@ -374,11 +426,14 @@ public final class LiveRxToneEventStabilizer {
         pendingToneOffExpiresAtMs = -1L;
         pendingToneOffBridgeWindowMs = -1L;
         pendingToneOffDropIfIsolated = false;
+        pendingToneOffProtectedIfReleased = false;
     }
 
     private void clearPendingToneOnCandidate() {
         pendingToneOnCandidate = null;
         pendingToneOnConfirmAtMs = -1L;
+        pendingToneOnConfidentStart = false;
+        pendingToneOnPrecedingGapMs = -1L;
     }
 
     private void clearBridge() {
@@ -391,6 +446,11 @@ public final class LiveRxToneEventStabilizer {
             return;
         }
         filteredEvents.add(pendingToneOnCandidate);
+        noteEmittedToneOn(
+                pendingToneOnCandidate.timestampMs(),
+                pendingToneOnConfidentStart,
+                pendingToneOnPrecedingGapMs
+        );
         confirmedToneOnCount += 1;
         clearPendingToneOnCandidate();
     }
@@ -401,10 +461,114 @@ public final class LiveRxToneEventStabilizer {
         }
         if (!pendingToneOffDropIfIsolated) {
             filteredEvents.add(pendingToneOffCandidate);
+            noteEmittedToneOff(pendingToneOffCandidate, pendingToneOffProtectedIfReleased);
         } else {
             droppedIsolatedToneOffCount += 1;
+            clearActiveToneTracking();
         }
         clearPendingCandidate();
+    }
+
+    private boolean shouldPreserveIsolatedShortTone(
+            @Nullable CwToneEvent toneEvent,
+            @Nullable AudioInputHealthSnapshot inputHealthSnapshot,
+            long referenceDotEstimateMs
+    ) {
+        if (toneEvent == null
+                || toneEvent.type() != CwToneEvent.Type.TONE_OFF
+                || toneEvent.toneDurationMs() <= 0L
+                || referenceDotEstimateMs <= 0L
+                || isClippingInput(inputHealthSnapshot)
+                || !activeToneConfidentStart
+                || activeTonePrecedingGapMs < 0L) {
+            return false;
+        }
+        long minimumToneMs = Math.max(
+                CONFIDENT_SHORT_TONE_MIN_ABSOLUTE_MS,
+                Math.round(referenceDotEstimateMs * CONFIDENT_SHORT_TONE_MIN_DOT_RATIO)
+        );
+        if (toneEvent.toneDurationMs() < minimumToneMs) {
+            return false;
+        }
+        long maximumPrecedingGapMs = Math.max(
+                1L,
+                Math.min(
+                        CONFIDENT_SHORT_TONE_PRECEDING_GAP_MAX_ABSOLUTE_MS,
+                        Math.round(referenceDotEstimateMs * CONFIDENT_SHORT_TONE_PRECEDING_GAP_MAX_DOT_RATIO)
+                )
+        );
+        return activeTonePrecedingGapMs <= maximumPrecedingGapMs;
+    }
+
+    private boolean isConfidentToneStart(
+            @Nullable CwSignalSnapshot signalSnapshot,
+            @Nullable AudioInputHealthSnapshot inputHealthSnapshot
+    ) {
+        if (signalSnapshot == null
+                || isClippingInput(inputHealthSnapshot)
+                || !signalSnapshot.targetToneLocked()) {
+            return false;
+        }
+        boolean baselineConfident = signalSnapshot.recentLockedFrameRatio() >= CONFIDENT_TONE_START_LOCKED_RATIO_MIN
+                && signalSnapshot.toneDominanceRatio() >= CONFIDENT_TONE_START_DOMINANCE_MIN
+                && signalSnapshot.narrowbandIsolationRatio() >= CONFIDENT_TONE_START_ISOLATION_MIN;
+        if (baselineConfident) {
+            return true;
+        }
+        return signalSnapshot.recentLockedFrameRatio() >= CONFIDENT_TONE_START_STRONG_EVIDENCE_LOCKED_RATIO_MIN
+                && signalSnapshot.recentActiveUnlockedFrameRatio()
+                <= CONFIDENT_TONE_START_STRONG_EVIDENCE_ACTIVE_UNLOCKED_RATIO_MAX
+                && signalSnapshot.toneDominanceRatio() >= CONFIDENT_TONE_START_STRONG_EVIDENCE_DOMINANCE_MIN
+                && signalSnapshot.narrowbandIsolationRatio()
+                >= CONFIDENT_TONE_START_STRONG_EVIDENCE_ISOLATION_MIN;
+    }
+
+    private long resolveToneOnPrecedingGapMs(long toneOnTimestampMs) {
+        if (lastReleasedToneOffTimestampMs < 0L) {
+            return -1L;
+        }
+        return Math.max(0L, toneOnTimestampMs - lastReleasedToneOffTimestampMs);
+    }
+
+    private void noteEmittedToneOn(
+            long toneOnTimestampMs,
+            boolean confidentToneStart,
+            long precedingGapMs
+    ) {
+        activeToneConfidentStart = confidentToneStart;
+        activeTonePrecedingGapMs = precedingGapMs;
+        clearProtectedToneOff();
+    }
+
+    private void noteEmittedToneOff(CwToneEvent toneOffEvent, boolean protectedToneOff) {
+        if (toneOffEvent == null || toneOffEvent.type() != CwToneEvent.Type.TONE_OFF) {
+            return;
+        }
+        lastReleasedToneOffTimestampMs = toneOffEvent.timestampMs();
+        if (protectedToneOff) {
+            lastProtectedToneOffTimestampMs = toneOffEvent.timestampMs();
+            lastProtectedToneOffDurationMs = toneOffEvent.toneDurationMs();
+        } else {
+            clearProtectedToneOff();
+        }
+        clearActiveToneTracking();
+    }
+
+    private boolean isProtectedToneOff(@Nullable CwToneEvent toneEvent) {
+        return toneEvent != null
+                && toneEvent.type() == CwToneEvent.Type.TONE_OFF
+                && toneEvent.timestampMs() == lastProtectedToneOffTimestampMs
+                && toneEvent.toneDurationMs() == lastProtectedToneOffDurationMs;
+    }
+
+    private void clearActiveToneTracking() {
+        activeToneConfidentStart = false;
+        activeTonePrecedingGapMs = -1L;
+    }
+
+    private void clearProtectedToneOff() {
+        lastProtectedToneOffTimestampMs = -1L;
+        lastProtectedToneOffDurationMs = -1L;
     }
 
     private boolean isHotInput(@Nullable AudioInputHealthSnapshot inputHealthSnapshot) {
@@ -412,4 +576,10 @@ public final class LiveRxToneEventStabilizer {
                 && (inputHealthSnapshot.recentHotFrameRatio() >= HOT_FRAME_RATIO_MIN
                 || inputHealthSnapshot.recentClippingFrameRatio() >= CLIPPING_FRAME_RATIO_MIN);
     }
+
+    private boolean isClippingInput(@Nullable AudioInputHealthSnapshot inputHealthSnapshot) {
+        return inputHealthSnapshot != null
+                && inputHealthSnapshot.recentClippingFrameRatio() >= CLIPPING_FRAME_RATIO_MIN;
+    }
+
 }

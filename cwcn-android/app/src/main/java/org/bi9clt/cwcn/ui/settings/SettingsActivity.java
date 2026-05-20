@@ -55,6 +55,47 @@ public final class SettingsActivity extends AppCompatActivity {
     private static final String ACTION_USB_KEYER_PERMISSION =
             "org.bi9clt.cwcn.action.SETTINGS_USB_KEYER_PERMISSION";
 
+    private enum FixedToneLearningWindowPreset {
+        TIGHT("人工锁频: 紧锁 ±30Hz", "紧锁", 30),
+        STANDARD("人工锁频: 标准 ±50Hz", "标准", 50),
+        WIDE("人工锁频: 宽松 ±70Hz", "宽松", 70),
+        CUSTOM("人工锁频: 自定义", "自定义", null);
+
+        private final String displayName;
+        private final String shortLabel;
+        @Nullable
+        private final Integer windowHz;
+
+        FixedToneLearningWindowPreset(String displayName, String shortLabel, @Nullable Integer windowHz) {
+            this.displayName = displayName;
+            this.shortLabel = shortLabel;
+            this.windowHz = windowHz;
+        }
+
+        @Nullable
+        Integer windowHz() {
+            return windowHz;
+        }
+
+        String shortLabel() {
+            return shortLabel;
+        }
+
+        static FixedToneLearningWindowPreset fromWindowHz(int windowHz) {
+            for (FixedToneLearningWindowPreset preset : values()) {
+                if (preset.windowHz != null && preset.windowHz == windowHz) {
+                    return preset;
+                }
+            }
+            return CUSTOM;
+        }
+
+        @Override
+        public String toString() {
+            return displayName;
+        }
+    }
+
     private ActivitySettingsBinding binding;
     private DeveloperModeStore developerModeStore;
     private StationProfileStore stationProfileStore;
@@ -162,6 +203,7 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.weatherDescriptionEditText.addTextChangedListener(stationWatcher);
         binding.defaultWpmEditText.addTextChangedListener(cwDefaultsWatcher);
         binding.defaultToneEditText.addTextChangedListener(cwDefaultsWatcher);
+        binding.fixedToneLearningWindowEditText.addTextChangedListener(cwDefaultsWatcher);
         binding.templateCqEditText.addTextChangedListener(txTemplatesWatcher);
         binding.templateCqDxEditText.addTextChangedListener(txTemplatesWatcher);
         binding.templateQrzEditText.addTextChangedListener(txTemplatesWatcher);
@@ -192,6 +234,7 @@ public final class SettingsActivity extends AppCompatActivity {
         attachAutoSaveOnFocusLoss(binding.weatherDescriptionEditText, this::saveStationProfile);
         attachAutoSaveOnFocusLoss(binding.defaultWpmEditText, this::saveCwDefaults);
         attachAutoSaveOnFocusLoss(binding.defaultToneEditText, this::saveCwDefaults);
+        attachAutoSaveOnFocusLoss(binding.fixedToneLearningWindowEditText, this::saveCwDefaults);
         attachAutoSaveOnFocusLoss(binding.templateCqEditText, this::saveTxTemplates);
         attachAutoSaveOnFocusLoss(binding.templateCqDxEditText, this::saveTxTemplates);
         attachAutoSaveOnFocusLoss(binding.templateQrzEditText, this::saveTxTemplates);
@@ -230,6 +273,14 @@ public final class SettingsActivity extends AppCompatActivity {
         toneModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         binding.rxToneModeSpinner.setAdapter(toneModeAdapter);
 
+        ArrayAdapter<FixedToneLearningWindowPreset> fixedToneWindowPresetAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                FixedToneLearningWindowPreset.values()
+        );
+        fixedToneWindowPresetAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.fixedToneLearningWindowPresetSpinner.setAdapter(fixedToneWindowPresetAdapter);
+
         AdapterView.OnItemSelectedListener cwDefaultsSpinnerListener = new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -247,6 +298,31 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.rxInputModeSpinner.setOnItemSelectedListener(cwDefaultsSpinnerListener);
         binding.rxMicSourceModeSpinner.setOnItemSelectedListener(cwDefaultsSpinnerListener);
         binding.rxToneModeSpinner.setOnItemSelectedListener(cwDefaultsSpinnerListener);
+        binding.fixedToneLearningWindowPresetSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (syncingEditors || !autoSaveEnabled) {
+                    return;
+                }
+                FixedToneLearningWindowPreset selectedPreset = selectedSpinnerValue(
+                        binding.fixedToneLearningWindowPresetSpinner,
+                        FixedToneLearningWindowPreset.fromWindowHz(rxInputSettingsStore.fixedToneLearningWindowHz())
+                );
+                Integer windowHz = selectedPreset.windowHz();
+                if (windowHz != null) {
+                    syncingEditors = true;
+                    binding.fixedToneLearningWindowEditText.setText(String.valueOf(windowHz));
+                    syncingEditors = false;
+                }
+                cwDefaultsDirty = true;
+                binding.cwDefaultsStatusText.setText(renderCwDefaultsEditorStatus());
+                saveCwDefaults();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
     }
 
     private void setupRouteEditorControls() {
@@ -410,7 +486,9 @@ public final class SettingsActivity extends AppCompatActivity {
         ));
         binding.cwDefaultsInfoButton.setOnClickListener(view -> showInfoDialog(
                 "CW 默认值",
-                "这里配置默认 WPM、固定音调和 RX 输入策略。改动会立即生效，用来约束正式操作时的默认收发行为。"
+                "这里配置默认 WPM、固定音调、人工锁频学习窗口和 RX 输入策略。"
+                        + "普通情况建议保持“标准 ±50Hz”；样本很脏且中心频率已知时，可尝试“紧锁 ±30Hz”；"
+                        + "如果担心收得过窄，也可以切到“宽松 ±70Hz”或直接自定义数值。"
         ));
         binding.txTemplatesInfoButton.setOnClickListener(view -> showInfoDialog(
                 "发送模板",
@@ -497,7 +575,8 @@ public final class SettingsActivity extends AppCompatActivity {
                 + settings.defaultWpm()
                 + " WPM / "
                 + settings.defaultToneFrequencyHz()
-                + " Hz"
+                + " Hz / "
+                + renderFixedToneLearningWindowSummary(rxInputSettingsStore.fixedToneLearningWindowHz())
                 + "\nRX "
                 + rxInputSettingsStore.rxInputMode().displayName()
                 + " / "
@@ -556,12 +635,22 @@ public final class SettingsActivity extends AppCompatActivity {
         return settings.defaultWpm() + " WPM"
                 + "  |  "
                 + settings.defaultToneFrequencyHz() + " Hz"
+                + "  |  "
+                + renderFixedToneLearningWindowSummary(rxInputSettingsStore.fixedToneLearningWindowHz())
                 + "\n"
                 + rxInputSettingsStore.rxInputMode().displayName()
                 + "  |  "
                 + rxInputSettingsStore.rxToneMode().displayName()
                 + "  |  "
                 + rxInputSettingsStore.micSourceMode().displayName();
+    }
+
+    private String renderFixedToneLearningWindowSummary(int windowHz) {
+        FixedToneLearningWindowPreset preset = FixedToneLearningWindowPreset.fromWindowHz(windowHz);
+        if (preset == FixedToneLearningWindowPreset.CUSTOM) {
+            return "锁频 ±" + windowHz + " Hz（自定义）";
+        }
+        return "锁频 ±" + windowHz + " Hz（" + preset.shortLabel() + "）";
     }
 
     private String renderTxTemplatesSummary() {
@@ -656,6 +745,12 @@ public final class SettingsActivity extends AppCompatActivity {
         syncingEditors = true;
         binding.defaultWpmEditText.setText(String.valueOf(settings.defaultWpm()));
         binding.defaultToneEditText.setText(String.valueOf(settings.defaultToneFrequencyHz()));
+        int fixedToneLearningWindowHz = rxInputSettingsStore.fixedToneLearningWindowHz();
+        binding.fixedToneLearningWindowEditText.setText(String.valueOf(fixedToneLearningWindowHz));
+        selectSpinnerValue(
+                binding.fixedToneLearningWindowPresetSpinner,
+                FixedToneLearningWindowPreset.fromWindowHz(fixedToneLearningWindowHz)
+        );
         selectSpinnerValue(binding.rxInputModeSpinner, rxInputSettingsStore.rxInputMode());
         selectSpinnerValue(binding.rxMicSourceModeSpinner, rxInputSettingsStore.micSourceMode());
         selectSpinnerValue(binding.rxToneModeSpinner, rxInputSettingsStore.rxToneMode());
@@ -740,6 +835,7 @@ public final class SettingsActivity extends AppCompatActivity {
     private void saveCwDefaults() {
         binding.defaultWpmEditText.setError(null);
         binding.defaultToneEditText.setError(null);
+        binding.fixedToneLearningWindowEditText.setError(null);
 
         Integer defaultWpm = parsePositiveInt(
                 binding.defaultWpmEditText.getText(),
@@ -762,6 +858,22 @@ public final class SettingsActivity extends AppCompatActivity {
                 "音调建议保持在 200 到 2000 Hz 之间。"
         );
         if (defaultTone == null) {
+            return;
+        }
+
+        Integer fixedToneLearningWindowHz = parsePositiveInt(
+                binding.fixedToneLearningWindowEditText.getText(),
+                binding.fixedToneLearningWindowEditText,
+                "锁频学习窗口必须是整数。",
+                org.bi9clt.cwcn.core.signal.CwSignalProcessor.MIN_FIXED_TONE_LEARNING_WINDOW_HZ,
+                org.bi9clt.cwcn.core.signal.CwSignalProcessor.MAX_FIXED_TONE_LEARNING_WINDOW_HZ,
+                "锁频学习窗口建议保持在 "
+                        + org.bi9clt.cwcn.core.signal.CwSignalProcessor.MIN_FIXED_TONE_LEARNING_WINDOW_HZ
+                        + " 到 "
+                        + org.bi9clt.cwcn.core.signal.CwSignalProcessor.MAX_FIXED_TONE_LEARNING_WINDOW_HZ
+                        + " Hz 之间。"
+        );
+        if (fixedToneLearningWindowHz == null) {
             return;
         }
 
@@ -799,6 +911,7 @@ public final class SettingsActivity extends AppCompatActivity {
                 binding.rxToneModeSpinner,
                 rxInputSettingsStore.rxToneMode()
         ));
+        rxInputSettingsStore.setFixedToneLearningWindowHz(fixedToneLearningWindowHz);
         cwDefaultsDirty = false;
         cwDefaultsStatusMessage = "CW / RX 默认值已自动保存到 " + resolveCwDefaultsScope(profile) + "。";
         refreshUi();

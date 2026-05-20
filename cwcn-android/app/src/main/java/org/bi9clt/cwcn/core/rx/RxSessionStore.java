@@ -33,6 +33,8 @@ public final class RxSessionStore {
             object.put("estimatedWpm", snapshot.estimatedWpm());
             object.put("stableEstimatedWpm", snapshot.stableEstimatedWpm());
             object.put("rawText", snapshot.rawText());
+            object.put("fallbackSuggestedText", snapshot.fallbackSuggestedText());
+            object.put("fallbackNotesText", snapshot.fallbackNotesText());
             object.put("normalizedText", snapshot.normalizedText());
             object.put("phaseDisplayName", snapshot.phaseDisplayName());
             object.put("remoteCallsign", snapshot.remoteCallsign());
@@ -67,6 +69,8 @@ public final class RxSessionStore {
                     object.optInt("estimatedWpm", 0),
                     object.optInt("stableEstimatedWpm", object.optInt("estimatedWpm", 0)),
                     object.optString("rawText", ""),
+                    object.optString("fallbackSuggestedText", ""),
+                    object.optString("fallbackNotesText", ""),
                     object.optString("normalizedText", ""),
                     object.optString("phaseDisplayName", ""),
                     object.optString("remoteCallsign", ""),

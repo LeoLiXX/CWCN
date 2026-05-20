@@ -110,6 +110,25 @@
                 android:layout_marginTop="12dp"
                 android:text="打开 RX 实验台" />
 
+            <TextView
+                android:id="@+id/latestTraceStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:lineSpacingExtra="3dp"
+                android:padding="12dp"
+                android:text="最近现场 trace：暂无。"
+                android:textColor="@color/cwcn_body"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/openLatestTraceReplayButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="回放最近一次现场 Trace" />
+
             <Button
                 android:id="@+id/openTxConsoleButton"
                 android:layout_width="match_parent"

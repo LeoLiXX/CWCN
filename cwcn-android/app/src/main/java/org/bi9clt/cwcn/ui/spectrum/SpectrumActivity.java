@@ -25,6 +25,7 @@ import org.bi9clt.cwcn.core.rig.RigProfileSettings;
 import org.bi9clt.cwcn.core.rig.RigSelectionStore;
 import org.bi9clt.cwcn.core.spectrum.SpectrumHistoryStore;
 import org.bi9clt.cwcn.core.spectrum.SpectrumSnapshotData;
+import org.bi9clt.cwcn.core.spectrum.SqlThresholdAdvisor;
 import org.bi9clt.cwcn.databinding.ActivitySpectrumBinding;
 import org.bi9clt.cwcn.ui.navigation.FormalBottomNavStyler;
 import org.bi9clt.cwcn.ui.operate.OperateActivity;
@@ -42,8 +43,6 @@ public final class SpectrumActivity extends AppCompatActivity {
     private static final int MIN_FOCUS_FREQUENCY_HZ = 100;
     private static final int MAX_FOCUS_FREQUENCY_HZ = 2900;
     private static final int FOCUS_FREQUENCY_STEP_HZ = 5;
-    private static final int FIXED_TONE_TRACKING_HALF_WINDOW_HZ = 50;
-
     private ActivitySpectrumBinding binding;
     private RxSessionStore rxSessionStore;
     private LocalLogRepository localLogRepository;
@@ -234,7 +233,9 @@ public final class SpectrumActivity extends AppCompatActivity {
     private void applyFocusFrequency(int focusFrequencyHz, int autoTrackedFrequencyHz) {
         boolean fixedToneMode = rxInputSettingsStore != null
                 && rxInputSettingsStore.rxToneMode() == RxInputSettingsStore.RxToneMode.FIXED_TONE;
-        int trackingHalfWindowHz = fixedToneMode ? FIXED_TONE_TRACKING_HALF_WINDOW_HZ : 0;
+        int trackingHalfWindowHz = fixedToneMode && rxInputSettingsStore != null
+                ? rxInputSettingsStore.fixedToneLearningWindowHz()
+                : 0;
         binding.rulerFrequencyView.setCenterFrequencyHz(focusFrequencyHz);
         binding.rulerFrequencyView.setAutoTrackedFrequencyHz(autoTrackedFrequencyHz);
         binding.columnarView.setTouchFrequencyHz(focusFrequencyHz);
@@ -327,15 +328,17 @@ public final class SpectrumActivity extends AppCompatActivity {
 
     private void applySqlMeter(@Nullable SpectrumSnapshotData latestSpectrum) {
         if (latestSpectrum == null) {
-            binding.spectrumSqlMeterView.setLevels(0f, 0f, 0f, 0f, 0f);
+            binding.spectrumSqlMeterView.setLevels(0f, 0f, 0f, 0f, 0f, 0f);
             return;
         }
+        SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(latestSpectrum);
         binding.spectrumSqlMeterView.setLevels(
                 latestSpectrum.sqlFrameRmsAmplitude(),
                 latestSpectrum.sqlToneRmsAmplitude(),
                 latestSpectrum.sqlNoiseFloorEstimate(),
                 latestSpectrum.sqlAttackThreshold(),
-                latestSpectrum.sqlReleaseThreshold()
+                latestSpectrum.sqlReleaseThreshold(),
+                recommendation.available() ? recommendation.recommendedThresholdLevel() : 0f
         );
     }
 
@@ -346,7 +349,15 @@ public final class SpectrumActivity extends AppCompatActivity {
         int threshold = latestSpectrum.sqlAttackThreshold();
         int current = Math.round(latestSpectrum.sqlFrameRmsAmplitude());
         int delta = current - threshold;
-        return "IN " + current + " / SQL " + threshold + " (" + String.format(Locale.US, "%+d", delta) + ")";
+        SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(latestSpectrum);
+        StringBuilder builder = new StringBuilder();
+        builder.append("IN ").append(current)
+                .append(" / SQL ").append(threshold)
+                .append(" (").append(String.format(Locale.US, "%+d", delta)).append(")");
+        if (recommendation.available()) {
+            builder.append(" / REC ").append(recommendation.recommendedThresholdLevel());
+        }
+        return builder.toString();
     }
 
     private String renderSqlHint(@Nullable SpectrumSnapshotData latestSpectrum) {
@@ -358,19 +369,41 @@ public final class SpectrumActivity extends AppCompatActivity {
         int threshold = latestSpectrum.sqlAttackThreshold();
         int noise = latestSpectrum.sqlNoiseFloorEstimate();
         int delta = Math.round(frameLevel) - threshold;
+        SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(latestSpectrum);
+        String recommendationSuffix = recommendation.available()
+                ? buildSqlRecommendationHintSuffix(recommendation)
+                : "";
         if (frameLevel < threshold) {
             if ((threshold - frameLevel) <= Math.max(4f, threshold * 0.08f)) {
-                return "当前总体输入刚好在线下方，适合等有效 CW 冲线。";
+                return "当前总体输入刚好在线下方，适合等有效 CW 冲线。" + recommendationSuffix;
             }
-            return "当前总体输入低于 SQL 线 " + Math.abs(delta) + "，背景噪声会被压住。";
+            return "当前总体输入低于 SQL 线 " + Math.abs(delta) + "，背景噪声会被压住。" + recommendationSuffix;
         }
         if (toneLevel > threshold) {
-            return "当前音调分量已越过 SQL 线 " + Math.abs(Math.round(toneLevel) - threshold) + "，应允许 CW 通过。";
+            return "当前音调分量已越过 SQL 线 " + Math.abs(Math.round(toneLevel) - threshold) + "，应允许 CW 通过。"
+                    + recommendationSuffix;
         }
         if (noise >= threshold) {
-            return "背景噪声已经贴近或越过 SQL 线，建议继续上调 SQL。";
+            return "背景噪声已经贴近或越过 SQL 线，建议继续上调 SQL。" + recommendationSuffix;
         }
-        return "当前总体输入已越过 SQL 线 " + Math.abs(delta) + "，若不是 CW 可再提高 SQL。";
+        return "当前总体输入已越过 SQL 线 " + Math.abs(delta) + "，若不是 CW 可再提高 SQL。"
+                + recommendationSuffix;
+    }
+
+    private String buildSqlRecommendationHintSuffix(SqlThresholdAdvisor.Recommendation recommendation) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(" 建议线 ").append(recommendation.recommendedThresholdLevel())
+                .append("，噪声 ").append(recommendation.noiseFloorLevel());
+        if (recommendation.limitedBySafetyFloor()) {
+            builder.append("，当前受系统下限保护。");
+            return builder.toString();
+        }
+        if (recommendation.limitedByToneHeadroom()) {
+            builder.append("，已给弱 CW 留出过线空间。");
+            return builder.toString();
+        }
+        builder.append("，当前按略高于噪声估计。");
+        return builder.toString();
     }
 
     private String renderStatusMain(
@@ -429,7 +462,7 @@ public final class SpectrumActivity extends AppCompatActivity {
         if (snapshot == null
                 || developerModeStore == null
                 || !developerModeStore.isEnabled()
-                || !hasMeaningfulText(snapshot.developerFrontEndSummary())) {
+                || !snapshot.hasDeveloperFrontEndSummary()) {
             return "";
         }
         return snapshot.developerFrontEndSummary();

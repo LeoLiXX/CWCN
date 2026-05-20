@@ -662,7 +662,27 @@
                     android:singleLine="true"
                     android:textColor="@color/cwcn_body"
                     android:textColorHint="@color/cwcn_subtitle" />
+
+                <EditText
+                    android:id="@+id/fixedToneLearningWindowEditText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="锁频 ±Hz"
+                    android:inputType="number"
+                    android:padding="8dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
             </LinearLayout>
+
+            <Spinner
+                android:id="@+id/fixedToneLearningWindowPresetSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" />
 
             <LinearLayout
                 android:layout_width="match_parent"

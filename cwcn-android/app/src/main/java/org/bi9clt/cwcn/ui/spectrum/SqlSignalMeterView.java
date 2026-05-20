@@ -20,6 +20,7 @@ public final class SqlSignalMeterView extends View {
     private final Paint framePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint tonePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint thresholdPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint recommendedThresholdPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF trackRect = new RectF();
 
@@ -28,6 +29,7 @@ public final class SqlSignalMeterView extends View {
     private float noiseLevel;
     private float thresholdLevel;
     private float releaseLevel;
+    private float recommendedThresholdLevel;
     private float displayCeiling = MIN_DISPLAY_CEILING;
 
     public SqlSignalMeterView(Context context) {
@@ -57,6 +59,8 @@ public final class SqlSignalMeterView extends View {
         tonePaint.setColor(0xff8ee7ff);
         thresholdPaint.setColor(0xff74ebdd);
         thresholdPaint.setStrokeWidth(dp(1.4f));
+        recommendedThresholdPaint.setColor(0xffffb347);
+        recommendedThresholdPaint.setStrokeWidth(dp(1.2f));
         labelPaint.setColor(0xff8ee7ff);
         labelPaint.setTextSize(dp(8f));
     }
@@ -68,11 +72,23 @@ public final class SqlSignalMeterView extends View {
             float thresholdLevel,
             float releaseLevel
     ) {
+        setLevels(frameLevel, toneLevel, noiseLevel, thresholdLevel, releaseLevel, 0f);
+    }
+
+    public void setLevels(
+            float frameLevel,
+            float toneLevel,
+            float noiseLevel,
+            float thresholdLevel,
+            float releaseLevel,
+            float recommendedThresholdLevel
+    ) {
         this.frameLevel = Math.max(0f, frameLevel);
         this.toneLevel = Math.max(0f, toneLevel);
         this.noiseLevel = Math.max(0f, noiseLevel);
         this.thresholdLevel = Math.max(0f, thresholdLevel);
         this.releaseLevel = Math.max(0f, releaseLevel);
+        this.recommendedThresholdLevel = Math.max(0f, recommendedThresholdLevel);
         updateDisplayCeiling();
         postInvalidateOnAnimation();
     }
@@ -80,7 +96,7 @@ public final class SqlSignalMeterView extends View {
     private void updateDisplayCeiling() {
         float observedMax = Math.max(
                 Math.max(frameLevel, toneLevel),
-                Math.max(Math.max(noiseLevel, thresholdLevel), releaseLevel)
+                Math.max(Math.max(noiseLevel, thresholdLevel), Math.max(releaseLevel, recommendedThresholdLevel))
         );
         float targetCeiling = Math.max(MIN_DISPLAY_CEILING, observedMax * 1.14f);
         if (displayCeiling <= 0f) {
@@ -117,6 +133,7 @@ public final class SqlSignalMeterView extends View {
         canvas.restoreToCount(saveCount);
 
         canvas.drawRoundRect(trackRect, radius, radius, strokePaint);
+        drawRecommendedThreshold(canvas);
         drawThreshold(canvas, labelBandHeight);
     }
 
@@ -170,6 +187,14 @@ public final class SqlSignalMeterView extends View {
         );
         float baseline = getPaddingTop() + labelBandHeight - dp(1f);
         canvas.drawText(label, textLeft, baseline, labelPaint);
+    }
+
+    private void drawRecommendedThreshold(Canvas canvas) {
+        if (recommendedThresholdLevel <= 0f) {
+            return;
+        }
+        float x = levelToX(recommendedThresholdLevel);
+        canvas.drawLine(x, trackRect.top - dp(1f), x, trackRect.bottom, recommendedThresholdPaint);
     }
 
     private float levelToX(float level) {

@@ -17,7 +17,7 @@ public final class CwAdaptiveTimingModel {
     private static final double FAST_CONTEXT_MAX_DOT_SPEEDUP_STEP_RATIO = 0.985d;
     private static final double INTRA_GAP_MAX_RATIO = 1.95d;
     private static final double LETTER_GAP_MAX_RATIO = 5.2d;
-    private static final double WORD_GAP_MAX_RATIO = 10.8d;
+    private static final double WORD_GAP_MAX_RATIO = 12.8d;
     private static final double WORD_GAP_INTRA_RATIO_FALLBACK = 5.0d;
     private static final double WORD_GAP_DOT_RATIO_FALLBACK_MIN = 3.15d;
 

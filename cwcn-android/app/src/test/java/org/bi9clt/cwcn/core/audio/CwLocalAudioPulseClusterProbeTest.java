@@ -1,6 +1,7 @@
 package org.bi9clt.cwcn.core.audio;
 
 import org.bi9clt.cwcn.core.decoder.CwDecodeEvent;
+import org.bi9clt.cwcn.core.interpreter.CwInterpreter;
 import org.bi9clt.cwcn.core.timing.CwTimingEvent;
 import org.junit.Test;
 
@@ -12,12 +13,16 @@ import java.util.Locale;
 import java.util.Map;
 
 public final class CwLocalAudioPulseClusterProbeTest {
+    private static final int PREFERRED_TONE_HZ = 700;
+    private static final int SEED_WPM = 15;
+    private static final int SQL_PERCENT = 55;
+    private static final long OPENING_UNKNOWN_WINDOW_END_MS = 8000L;
     private static final ProbeTarget[] OPENING_TARGETS = new ProbeTarget[]{
-            new ProbeTarget("opening-cq", "--.--.-"),
-            new ProbeTarget("questioned-bg1xxx", "-.--..."),
-            new ProbeTarget("questioned-ja1abc", "-.-.---")
+            new ProbeTarget("opening-first-unknown", null, OPENING_UNKNOWN_WINDOW_END_MS),
+            new ProbeTarget("questioned-bg1xxx", "-.--...", Long.MAX_VALUE),
+            new ProbeTarget("questioned-ja1abc", "-.-.---", Long.MAX_VALUE)
     };
-    private static final double[] CLUSTER_THRESHOLDS = new double[]{0.75d, 1.00d, 1.25d};
+    private static final double[] CLUSTER_THRESHOLDS = new double[]{0.75d, 1.00d, 1.20d, 1.25d};
 
     @Test
     public void printRecording8OpeningPulseClusters() throws Exception {
@@ -26,7 +31,14 @@ public final class CwLocalAudioPulseClusterProbeTest {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Missing WAV fixture for recording (8)"));
         LocalAudioDecodeTestSupport.OfflineDetailedProbeResult detailed =
-                LocalAudioDecodeTestSupport.decodeWavFileDetailed(wavFile);
+                LocalAudioDecodeTestSupport.decodeWavFileDetailedLiveLike(
+                        wavFile,
+                        PREFERRED_TONE_HZ,
+                        SEED_WPM,
+                        SQL_PERCENT,
+                        false,
+                        CwInterpreter.RecoveryMode.RAW_COPY_FOCUS
+                );
 
         LinkedHashMap<String, LocalAudioDecodeTestSupport.ForcedToneReplayResult> replays = new LinkedHashMap<>();
         replays.put("TRK", LocalAudioDecodeTestSupport.replayForcedTrackedToneDecode(detailed));
@@ -35,14 +47,26 @@ public final class CwLocalAudioPulseClusterProbeTest {
 
         for (ProbeTarget target : OPENING_TARGETS) {
             for (Map.Entry<String, LocalAudioDecodeTestSupport.ForcedToneReplayResult> entry : replays.entrySet()) {
-                CharacterTimingDetail detail = findUnknownDetail(entry.getValue(), target.sequence);
+                CharacterTimingDetail detail = findUnknownDetail(
+                        entry.getValue(),
+                        target.sequence,
+                        target.maxTimestampMs
+                );
                 System.out.println(
                         "==== " + entry.getValue().sourceLabel()
                                 + " " + entry.getKey()
                                 + " pulse-cluster [" + target.label + "] ===="
                 );
+                System.out.println("opening=" + sanitize(textAtOrBefore(
+                        entry.getValue().decodeEvents(),
+                        OPENING_UNKNOWN_WINDOW_END_MS
+                )));
+                System.out.println("flush=" + sanitize(textAtOrBefore(
+                        entry.getValue().decodeEvents(),
+                        Long.MAX_VALUE
+                )));
                 if (detail == null) {
-                    System.out.println("target-seq=" + target.sequence + " not-found");
+                    System.out.println("target=" + (target.sequence == null ? "first-unknown" : target.sequence) + " not-found");
                     continue;
                 }
                 System.out.println("seq=" + detail.decodeEvent.sourceSequence() + " ts=" + detail.decodeEvent.timestampMs());
@@ -64,7 +88,24 @@ public final class CwLocalAudioPulseClusterProbeTest {
             LocalAudioDecodeTestSupport.ForcedToneReplayResult replay,
             String sourceSequence
     ) {
+        return findUnknownDetail(replay, sourceSequence, Long.MAX_VALUE);
+    }
+
+    private static CharacterTimingDetail findUnknownDetail(
+            LocalAudioDecodeTestSupport.ForcedToneReplayResult replay,
+            String sourceSequence,
+            long maxTimestampMs
+    ) {
         List<CharacterTimingDetail> details = buildCharacterTimingDetails(replay);
+        if (sourceSequence == null) {
+            for (CharacterTimingDetail detail : details) {
+                if (detail.decodeEvent.unknownCharacter()
+                        && detail.decodeEvent.timestampMs() <= maxTimestampMs) {
+                    return detail;
+                }
+            }
+            return null;
+        }
         for (CharacterTimingDetail detail : details) {
             if (!detail.decodeEvent.unknownCharacter()) {
                 continue;
@@ -74,6 +115,25 @@ public final class CwLocalAudioPulseClusterProbeTest {
             }
         }
         return null;
+    }
+
+    private static String textAtOrBefore(List<CwDecodeEvent> decodeEvents, long timestampMs) {
+        String latestText = "";
+        for (CwDecodeEvent decodeEvent : decodeEvents) {
+            if (decodeEvent == null) {
+                continue;
+            }
+            if (decodeEvent.timestampMs() <= timestampMs) {
+                latestText = decodeEvent.outputText();
+                continue;
+            }
+            break;
+        }
+        return latestText == null ? "" : latestText;
+    }
+
+    private static String sanitize(String value) {
+        return value == null ? "(null)" : value.replace('\u25A1', '?');
     }
 
     private static List<CharacterTimingDetail> buildCharacterTimingDetails(
@@ -274,10 +334,12 @@ public final class CwLocalAudioPulseClusterProbeTest {
     private static final class ProbeTarget {
         private final String label;
         private final String sequence;
+        private final long maxTimestampMs;
 
-        private ProbeTarget(String label, String sequence) {
+        private ProbeTarget(String label, String sequence, long maxTimestampMs) {
             this.label = label;
             this.sequence = sequence;
+            this.maxTimestampMs = maxTimestampMs;
         }
     }
 }

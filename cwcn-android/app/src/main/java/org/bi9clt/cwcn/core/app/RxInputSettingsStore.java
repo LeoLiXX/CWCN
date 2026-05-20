@@ -8,6 +8,7 @@ public final class RxInputSettingsStore {
     private static final String KEY_RX_INPUT_MODE = "rx_input_mode";
     private static final String KEY_MIC_SOURCE_MODE = "mic_source_mode";
     private static final String KEY_RX_TONE_MODE = "rx_tone_mode";
+    private static final String KEY_FIXED_TONE_LEARNING_WINDOW_HZ = "fixed_tone_learning_window_hz";
 
     public enum RxInputMode {
         AUTO("自动", "无电台时优先走手机麦克风；有正式路由时优先尝试外部音频输入。"),
@@ -135,6 +136,24 @@ public final class RxInputSettingsStore {
     public void setRxToneMode(RxToneMode mode) {
         preferences.edit()
                 .putString(KEY_RX_TONE_MODE, mode == null ? RxToneMode.AUTO_TRACK.name() : mode.name())
+                .apply();
+    }
+
+    public int fixedToneLearningWindowHz() {
+        return org.bi9clt.cwcn.core.signal.CwSignalProcessor.clampFixedToneLearningWindowHz(
+                preferences.getInt(
+                        KEY_FIXED_TONE_LEARNING_WINDOW_HZ,
+                        org.bi9clt.cwcn.core.signal.CwSignalProcessor.DEFAULT_FIXED_TONE_LEARNING_WINDOW_HZ
+                )
+        );
+    }
+
+    public void setFixedToneLearningWindowHz(int windowHz) {
+        preferences.edit()
+                .putInt(
+                        KEY_FIXED_TONE_LEARNING_WINDOW_HZ,
+                        org.bi9clt.cwcn.core.signal.CwSignalProcessor.clampFixedToneLearningWindowHz(windowHz)
+                )
                 .apply();
     }
 

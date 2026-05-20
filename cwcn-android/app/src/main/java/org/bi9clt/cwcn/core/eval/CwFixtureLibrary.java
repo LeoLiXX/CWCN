@@ -265,9 +265,9 @@ public final class CwFixtureLibrary {
             new CwFixtureScenario(
                     "user_speed_shift_jv3vv_700hz",
                     "User Speed Shift JV3VV 700Hz",
-                    "CQ CQ DX DE JV3VV JV3VV PAGE K / CQ DX CQ DX DE JV3VV JV3VV PAGE K",
+                    "CQ DX CQ DX DE JV3VV JV3VV PAGE K / CQ DX CQ DX DE JV3VV JV3VV PAGE K",
                     Arrays.asList(
-                            "CQ CQ DX DE JV3VV JV3VV PAGE K",
+                            "CQ DX CQ DX DE JV3VV JV3VV PAGE K",
                             "CQ DX CQ DX DE JV3VV JV3VV PAGE K"
                     ),
                     1200,
@@ -289,7 +289,7 @@ public final class CwFixtureLibrary {
                     ),
                     250,
                     450,
-                    "CQ CQ DX DE JV3VV JV3VV PAGE K CQ DX CQ DX DE JV3VV JV3VV PAGE K",
+                    "CQ DX CQ DX DE JV3VV JV3VV PAGE K CQ DX CQ DX DE JV3VV JV3VV PAGE K",
                     Collections.singletonList("JV3VV"),
                     Arrays.asList(
                             "CQ / calling flow",

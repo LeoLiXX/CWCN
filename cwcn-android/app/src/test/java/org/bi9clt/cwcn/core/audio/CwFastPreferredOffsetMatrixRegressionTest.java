@@ -17,6 +17,8 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public final class CwFastPreferredOffsetMatrixRegressionTest {
+    // Stress/audit matrix only. This suite intentionally pushes fast/noisy and
+    // off-preferred combinations beyond the core production path.
     private static final int[] PREFERRED_MATRIX = new int[]{450, 500, 650, 800};
 
     @Test

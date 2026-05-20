@@ -1,6 +1,7 @@
 package org.bi9clt.cwcn.core.audio;
 
 import org.bi9clt.cwcn.core.decoder.CwDecodeEvent;
+import org.bi9clt.cwcn.core.interpreter.CwInterpreter;
 import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 import org.bi9clt.cwcn.core.signal.CwToneEvent;
 import org.bi9clt.cwcn.core.timing.CwTimingEvent;
@@ -12,11 +13,15 @@ import java.util.List;
 import java.util.Locale;
 
 public final class CwLocalAudioFrontEndWindowProbeTest {
+    private static final int PREFERRED_TONE_HZ = 700;
+    private static final int SEED_WPM = 15;
+    private static final int SQL_PERCENT = 55;
     private static final long WINDOW_PADDING_MS = 120L;
+    private static final long OPENING_UNKNOWN_WINDOW_END_MS = 8000L;
     private static final ProbeTarget[] OPENING_TARGETS = new ProbeTarget[]{
-            new ProbeTarget("opening-cq", "--.--.-"),
-            new ProbeTarget("questioned-bg1xxx", "-.--..."),
-            new ProbeTarget("questioned-ja1abc", "-.-.---")
+            new ProbeTarget("opening-first-unknown", null, OPENING_UNKNOWN_WINDOW_END_MS),
+            new ProbeTarget("questioned-bg1xxx", "-.--...", Long.MAX_VALUE),
+            new ProbeTarget("questioned-ja1abc", "-.-.---", Long.MAX_VALUE)
     };
 
     @Test
@@ -26,7 +31,14 @@ public final class CwLocalAudioFrontEndWindowProbeTest {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Missing WAV fixture for recording (8)"));
         LocalAudioDecodeTestSupport.OfflineDetailedProbeResult detailed =
-                LocalAudioDecodeTestSupport.decodeWavFileDetailed(wavFile);
+                LocalAudioDecodeTestSupport.decodeWavFileDetailedLiveLike(
+                        wavFile,
+                        PREFERRED_TONE_HZ,
+                        SEED_WPM,
+                        SQL_PERCENT,
+                        false,
+                        CwInterpreter.RecoveryMode.RAW_COPY_FOCUS
+                );
         LocalAudioDecodeTestSupport.ForcedToneReplayResult trkReplay =
                 LocalAudioDecodeTestSupport.replayForcedTrackedToneDecode(detailed);
         LocalAudioDecodeTestSupport.ForcedToneReplayResult effReplay =
@@ -35,7 +47,7 @@ public final class CwLocalAudioFrontEndWindowProbeTest {
                 LocalAudioDecodeTestSupport.replayForcedHypothesisToneDecode(detailed);
 
         List<CharacterTimingDetail> baseDetails = buildCharacterTimingDetails(
-                detailed.decodeEvents(),
+                detailed.rawDecodeEvents(),
                 detailed.timingEvents()
         );
         List<CharacterTimingDetail> trkDetails = buildCharacterTimingDetails(
@@ -53,6 +65,7 @@ public final class CwLocalAudioFrontEndWindowProbeTest {
         for (ProbeTarget target : OPENING_TARGETS) {
             WindowReference reference = findWindowReference(
                     target.sequence,
+                    target.maxTimestampMs,
                     baseDetails,
                     trkDetails,
                     effDetails,
@@ -75,7 +88,7 @@ public final class CwLocalAudioFrontEndWindowProbeTest {
             printFrameWindow(detailed, startTimestampMs, endTimestampMs);
             printToneEventWindow(detailed.toneEvents(), startTimestampMs, endTimestampMs);
             printTimingEventWindow(detailed.timingEvents(), startTimestampMs, endTimestampMs);
-            printDecodeEventWindow(detailed.decodeEvents(), startTimestampMs, endTimestampMs);
+            printDecodeEventWindow(detailed.rawDecodeEvents(), startTimestampMs, endTimestampMs);
         }
     }
 
@@ -123,26 +136,53 @@ public final class CwLocalAudioFrontEndWindowProbeTest {
 
     private static WindowReference findWindowReference(
             String sourceSequence,
+            long maxTimestampMs,
             List<CharacterTimingDetail> baseDetails,
             List<CharacterTimingDetail> trkDetails,
             List<CharacterTimingDetail> effDetails,
             List<CharacterTimingDetail> hypDetails
     ) {
-        CharacterTimingDetail detail = findCharacterDetail(baseDetails, sourceSequence);
+        CharacterTimingDetail detail = findCharacterDetail(baseDetails, sourceSequence, maxTimestampMs);
         if (detail != null) {
             return new WindowReference("BASE", detail);
         }
-        detail = findCharacterDetail(trkDetails, sourceSequence);
+        detail = findCharacterDetail(trkDetails, sourceSequence, maxTimestampMs);
         if (detail != null) {
             return new WindowReference("TRK-REPLAY", detail);
         }
-        detail = findCharacterDetail(effDetails, sourceSequence);
+        detail = findCharacterDetail(effDetails, sourceSequence, maxTimestampMs);
         if (detail != null) {
             return new WindowReference("EFF-REPLAY", detail);
         }
-        detail = findCharacterDetail(hypDetails, sourceSequence);
+        detail = findCharacterDetail(hypDetails, sourceSequence, maxTimestampMs);
         if (detail != null) {
             return new WindowReference("HYP-REPLAY", detail);
+        }
+        return null;
+    }
+
+    private static CharacterTimingDetail findCharacterDetail(
+            List<CharacterTimingDetail> details,
+            String sourceSequence,
+            long maxTimestampMs
+    ) {
+        if (sourceSequence == null) {
+            return findFirstUnknownDetail(details, maxTimestampMs);
+        }
+        return findCharacterDetail(details, sourceSequence);
+    }
+
+    private static CharacterTimingDetail findFirstUnknownDetail(
+            List<CharacterTimingDetail> details,
+            long maxTimestampMs
+    ) {
+        for (CharacterTimingDetail detail : details) {
+            if (!detail.decodeEvent.unknownCharacter()) {
+                continue;
+            }
+            if (detail.decodeEvent.timestampMs() <= maxTimestampMs) {
+                return detail;
+            }
         }
         return null;
     }
@@ -152,17 +192,21 @@ public final class CwLocalAudioFrontEndWindowProbeTest {
             CwDecodeEvent characterEvent,
             int searchStart
     ) {
+        int fallbackIndex = -1;
         for (int index = Math.max(0, searchStart); index < timingEvents.size(); index++) {
             CwTimingEvent timingEvent = timingEvents.get(index);
-            if (timingEvent.timestampMs() != characterEvent.timestampMs()) {
+            if (timingEvent.kind() != CwTimingEvent.Kind.GAP
+                    || timingEvent.classification() == CwTimingEvent.Classification.INTRA_SYMBOL_GAP) {
                 continue;
             }
-            if (timingEvent.kind() == CwTimingEvent.Kind.GAP
-                    && timingEvent.classification() != CwTimingEvent.Classification.INTRA_SYMBOL_GAP) {
+            if (timingEvent.timestampMs() == characterEvent.timestampMs()) {
                 return index;
             }
+            if (fallbackIndex < 0 && timingEvent.timestampMs() > characterEvent.timestampMs()) {
+                fallbackIndex = index;
+            }
         }
-        return -1;
+        return fallbackIndex;
     }
 
     private static List<CwTimingEvent> collectCharacterTimingEvents(
@@ -239,10 +283,12 @@ public final class CwLocalAudioFrontEndWindowProbeTest {
                     : snapshot.totalToneOffEvents() - previousSnapshot.totalToneOffEvents();
             System.out.println(String.format(
                     Locale.US,
-                    "F @%d peak=%d rms=%.1f clip=%d act=%s lock=%s trk=%d eff=%d hyp=%s tone=%.1f resid=%.1f dom=%.0f%% iso=%.0f%% thr=%d/%d floor=%d/%d on+%d off+%d last=%s",
+                    "F @%d peak=%d rms=%.1f det=%.1f clip=%d act=%s lock=%s trk=%d eff=%d hyp=%s tone=%.1f resid=%.1f dom=%.0f%% iso=%.0f%% thr=%d/%d floor=%d/%d "
+                            + "wv=%s/%d rel=%s app=%s relThr=%d req=%.1f trust=%s/%s/%s weakHold=%d onset=%s accept=%s/%s rescue=%s curRescue=%s gap=%d/%d cont=%s/%d lc=%.2f on+%d off+%d last=%s",
                     timestampMs,
                     frame.peakAmplitude(),
                     frame.rmsAmplitude(),
+                    trace.detectionLevel(),
                     frame.clippedSampleCount(),
                     snapshot.toneActive(),
                     snapshot.targetToneLocked(),
@@ -257,11 +303,48 @@ public final class CwLocalAudioFrontEndWindowProbeTest {
                     snapshot.releaseThreshold(),
                     snapshot.noiseFloorEstimate(),
                     snapshot.signalFloorEstimate(),
+                    trace.weakValleyBridgeActive(),
+                    trace.weakValleyBridgeFramesRemaining(),
+                    trace.releaseTailHoldDecision(),
+                    trace.releaseTailHoldApplied(),
+                    trace.toneActiveReleaseThreshold(),
+                    trace.releaseTailHoldRequiredDetectionThreshold(),
+                    trace.releaseTailHoldSufficientRecentTrust(),
+                    trace.releaseTailHoldCurrentRunStableBootstrapEligible(),
+                    trace.releaseTailHoldCurrentRunWeakBootstrapEligible(),
+                    trace.currentToneRunWeakBootstrapReleaseTailHoldCount(),
+                    compactOnsetDecision(trace),
+                    trace.toneOnAccepted(),
+                    trace.toneOnAcceptedByRescue(),
+                    compactRescueDecision(trace),
+                    trace.currentToneStartedByPostReleaseRescue(),
+                    trace.postReleaseGapMs(),
+                    trace.postReleaseWindowMs(),
+                    trace.postReleaseRescueContinuationWindowActive(),
+                    trace.postReleaseRescueContinuationWindowRemainingMs(),
+                    trace.localContrastRatio(),
                     deltaOn,
                     deltaOff,
                     renderLastEvent(snapshot.lastEvent())
             ));
         }
+    }
+
+    private static String compactOnsetDecision(LocalAudioDecodeTestSupport.FrameSignalTrace trace) {
+        return trace.toneOnDecision()
+                + "/aq=" + trace.attackQualified()
+                + "/mem=" + trace.trackedToneMemoryActiveBeforeFrame()
+                + "/aHz=" + trace.attackAnchorFrequencyHzBeforeFrame()
+                + "/onThr=" + trace.toneOnThreshold();
+    }
+
+    private static String compactRescueDecision(LocalAudioDecodeTestSupport.FrameSignalTrace trace) {
+        return trace.postReleaseRescueDecision()
+                + "/steady=" + trace.steadyLateGapNearTargetRescueCandidate()
+                + "/lowGrow=" + trace.lowGrowthStrongSteadyNearTargetRescue()
+                + "/near=" + trace.nearTargetPostReleaseToneOnRescue()
+                + "/supp=" + trace.postReleaseSteadyCarrierSuppressed()
+                + "/delay=" + trace.farAttackToneOnDelayed();
     }
 
     private static void printToneEventWindow(
@@ -392,10 +475,12 @@ public final class CwLocalAudioFrontEndWindowProbeTest {
     private static final class ProbeTarget {
         private final String label;
         private final String sequence;
+        private final long maxTimestampMs;
 
-        private ProbeTarget(String label, String sequence) {
+        private ProbeTarget(String label, String sequence, long maxTimestampMs) {
             this.label = label;
             this.sequence = sequence;
+            this.maxTimestampMs = maxTimestampMs;
         }
     }
 

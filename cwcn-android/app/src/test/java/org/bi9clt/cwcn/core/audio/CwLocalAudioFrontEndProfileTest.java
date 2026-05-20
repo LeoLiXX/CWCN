@@ -38,11 +38,14 @@ public final class CwLocalAudioFrontEndProfileTest {
         assertTrue(summary, profile.rawTargetDisagreementFrames() > 0);
         assertTrue(
                 summary,
-                profile.effectiveTrackedDisagreementFrames() <= profile.rawTargetDisagreementFrames()
+                profile.effectiveTrackedNearRepresentativeFrames()
+                        >= profile.rawTargetNearRepresentativeFrames()
         );
         assertTrue(summary, summary.contains("guard("));
         assertTrue(summary, summary.contains("trkSplit("));
         assertTrue(summary, summary.contains("rawConsensus("));
+        assertTrue(summary, profile.trackedToneSplitSegmentCount() > 0);
+        assertTrue(summary, profile.rawConsensusOutlierSegmentCount() > 0);
     }
 
     @Test

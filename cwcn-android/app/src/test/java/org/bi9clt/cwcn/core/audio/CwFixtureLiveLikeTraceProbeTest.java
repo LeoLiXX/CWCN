@@ -58,6 +58,11 @@ public final class CwFixtureLiveLikeTraceProbeTest {
         traceScenario("sweeping_boundary_interferer_directed_report", 670, 15);
     }
 
+    @Test
+    public void traceToneSweepVvvLiveLikeFrom450Preferred() {
+        traceScenario("user_tone_sweep_vvv_18wpm", 450, 18);
+    }
+
     private void traceScenario(String scenarioId, int preferredToneHz, int seedWpm) {
         CwFixtureScenario scenario = findScenario(scenarioId);
         SyntheticFixtureRxAudioSource source = new SyntheticFixtureRxAudioSource();
