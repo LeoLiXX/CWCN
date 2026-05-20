@@ -52,9 +52,11 @@ import org.bi9clt.cwcn.core.decoder.CwDecodeEvent;
 import org.bi9clt.cwcn.core.decoder.CwDecoder;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreter;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreterSnapshot;
-import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
+import org.bi9clt.cwcn.core.qso.QsoDraftFactory;
+import org.bi9clt.cwcn.core.qso.QsoPhase;
+import org.bi9clt.cwcn.core.qso.QsoStateEvent;
 import org.bi9clt.cwcn.core.rx.LiveRxTraceRecorder;
 import org.bi9clt.cwcn.core.rx.LiveRxTraceStore;
 import org.bi9clt.cwcn.core.rx.LiveRxWpmGuard;
@@ -123,6 +125,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
+import android.widget.Toast;
+
 public final class OperateActivity extends AppCompatActivity implements RxAudioSource.Callback {
     private static final String ACTION_USB_KEYER_PERMISSION =
             "org.bi9clt.cwcn.action.OPERATE_USB_KEYER_PERMISSION";
@@ -177,8 +181,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         NONE,
         CHART,
         SQL,
-        TEMPLATE,
-        DRAFT
+        TEMPLATE
     }
 
     private enum TranscriptEntryType {
@@ -303,7 +306,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
     };
 
-    private AppOverviewSnapshot lastOverview;
     private RxSessionSnapshot lastRxSessionSnapshot;
     private SpectrumSnapshotData lastUiSpectrumSnapshot;
     private OverlayMode overlayMode = OverlayMode.NONE;
@@ -343,6 +345,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private boolean transcriptUseUtc = true;
     private boolean transcriptTimelineActive;
     private boolean conversationAutoScrollPending = true;
+    private boolean transcriptRxSuppressedDuringTx;
+    private boolean immediateTxPausedRxCapture;
+    private boolean operateActivityResumed;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -388,6 +393,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     @Override
     protected void onResume() {
         super.onResume();
+        operateActivityResumed = true;
         sharedActiveInstance = new WeakReference<>(this);
         preserveRxAcrossSpectrumNavigation = false;
         refreshUi();
@@ -409,6 +415,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     @Override
     protected void onPause() {
+        operateActivityResumed = false;
         mainHandler.removeCallbacks(liveRefreshRunnable);
         mainHandler.removeCallbacks(txProgressRefreshRunnable);
         if (!preserveRxAcrossSpectrumNavigation) {
@@ -454,9 +461,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private void setupActions() {
         binding.openRigSetupButton.setOnClickListener(view ->
                 startActivity(new Intent(this, RigSetupActivity.class)));
-        binding.reviewDraftButton.setOnClickListener(view ->
-                startActivity(new Intent(this, QsoEditorActivity.class)));
-        binding.expandDraftButton.setOnClickListener(view -> toggleOverlay(OverlayMode.DRAFT));
         binding.bottomNavView.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();
             if (itemId == R.id.menu_nav_operate) {
@@ -485,6 +489,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         binding.sqlQuickChip.setOnClickListener(view -> toggleOverlay(OverlayMode.SQL));
         binding.transcriptTimeModeChip.setOnClickListener(view -> toggleTranscriptTimeMode());
         binding.clearTranscriptChip.setOnClickListener(view -> clearTranscriptDisplay());
+        binding.callsignHintText.setOnClickListener(view -> openQsoEditorFromCallsignHint());
         binding.overlayScrim.setOnClickListener(view -> hideOverlay());
         binding.closeOverlayButton.setOnClickListener(view -> hideOverlay());
         binding.rxFootnoteText.setOnClickListener(view -> {
@@ -785,19 +790,19 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void refreshUi() {
-        lastOverview = localLogRepository.loadOverview();
         lastRxSessionSnapshot = rxSessionStore.load();
         lastUiSpectrumSnapshot = latestSpectrumSnapshotForUi();
         binding.statusMainText.setText(renderStatusMain(lastRxSessionSnapshot));
         binding.statusDetailText.setText(renderStatusDetail(lastRxSessionSnapshot));
         binding.sourceChipText.setText(renderSourceChip(lastRxSessionSnapshot));
-        binding.draftSummaryHeadlineText.setText(renderDraftSummaryHeadline(lastOverview));
-        binding.draftSummaryMetaText.setText(renderDraftSummaryMeta(lastOverview));
-        binding.draftStatusText.setText(renderDraftStatus(lastOverview, lastRxSessionSnapshot));
-        binding.draftPreviewText.setText(renderDraftPreview(lastOverview));
+        boolean callsignHintAvailable = hasMeaningfulText(resolvePrimaryCallsignHint(lastRxSessionSnapshot));
+        binding.callsignHintText.setText(renderCallsignHint(lastRxSessionSnapshot));
         binding.rxFootnoteText.setText(renderRxFootnote(lastRxSessionSnapshot));
-        setVisibleWhenHasText(binding.draftStatusText);
-        binding.draftPreviewText.setVisibility(View.GONE);
+        binding.callsignHintText.setEnabled(callsignHintAvailable);
+        binding.callsignHintText.setAlpha(callsignHintAvailable ? 1.0f : 0.62f);
+        binding.callsignHintText.setBackgroundResource(callsignHintAvailable
+                ? R.drawable.operate_chip_active_background
+                : R.drawable.operate_chip_background);
         setVisibleWhenHasText(binding.rxFootnoteText);
         binding.rxFootnoteText.setClickable(
                 (shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission())
@@ -823,7 +828,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void refreshConversationOnly() {
-        renderConversationCards(buildOperateStreamEntries(lastRxSessionSnapshot, lastOverview));
+        renderConversationCards(buildOperateStreamEntries(lastRxSessionSnapshot));
     }
 
     private void updateComposerUi() {
@@ -1124,87 +1129,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             return snapshot.developerFrontEndSummary();
         }
         if (isOperateRxRawOnlyMode()) {
-            return "当前只观察 RAW 抄收，呼号/语义/QSO 草稿已脱离 RX 主链。";
-        }
-        if (snapshot.needManualReview()) {
-            return "接收内容建议先人工复核，再确认草稿。";
-        }
-        if (snapshot.readyForDraftConfirmation()) {
-            return "当前接收已经可以支持草稿确认。";
+            return "当前主界面只保留 transcript 与 RAW 抄收，日志判断由人工完成。";
         }
         return "";
-    }
-
-    private String renderDraftSummaryHeadline(@Nullable AppOverviewSnapshot overview) {
-        if (isOperateRxRawOnlyMode()) {
-            return "RAW RX ONLY";
-        }
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft == null) {
-            return "当前没有活动草稿";
-        }
-        return safeValue(draft.remoteCallsignCandidate())
-                + "  |  "
-                + draft.phase().displayName()
-                + "  |  "
-                + (draft.readyForDraftConfirmation() ? "可确认" : "构建中");
-    }
-
-    private String renderDraftSummaryMeta(@Nullable AppOverviewSnapshot overview) {
-        if (isOperateRxRawOnlyMode()) {
-            return "呼号/语义/QSO 草稿已暂时停用";
-        }
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft == null) {
-            return "RST -/-  |  姓名 -  |  QTH -";
-        }
-        return "RST "
-                + safeValue(draft.rstSentCandidate())
-                + "/"
-                + safeValue(draft.rstRcvdCandidate())
-                + "  |  姓名 "
-                + safeValue(draft.nameCandidate())
-                + "  |  QTH "
-                + safeValue(draft.qthCandidate());
-    }
-
-    private String renderDraftStatus(
-            @Nullable AppOverviewSnapshot overview,
-            @Nullable RxSessionSnapshot snapshot
-    ) {
-        if (isOperateRxRawOnlyMode()) {
-            return "当前阶段只保留 RAW 接收链，增值解释暂停。";
-        }
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft == null) {
-            return "";
-        }
-        if (draft.needManualReview() || (snapshot != null && snapshot.needManualReview())) {
-            return "写入日志前需要人工复核";
-        }
-        if (draft.readyForDraftConfirmation()) {
-            return "可复核并确认";
-        }
-        return "草稿仍在根据最近抄收内容继续构建";
-    }
-
-    private String renderDraftPreview(@Nullable AppOverviewSnapshot overview) {
-        if (isOperateRxRawOnlyMode()) {
-            return "请直接观察上方 RAW 输出。";
-        }
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft == null) {
-            return "";
-        }
-        String normalized = normalizedTextOrNull(draft.normalizedText());
-        if (normalized != null) {
-            return normalized;
-        }
-        List<String> hints = safeHints(draft);
-        if (!hints.isEmpty()) {
-            return hints.get(0);
-        }
-        return "暂时还没有可读的草稿内容。";
     }
 
     private String renderTxStatus(boolean hasDraft) {
@@ -1382,6 +1309,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         syncOperateRxToneMode();
         syncOperateSql();
         syncOperateTimingSeedWpm();
+        if (shouldPausePhoneRxDuringImmediateTx()) {
+            stopOperateRxCapture(false);
+            return;
+        }
         if (shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission()) {
             stopOperateRxCapture(false);
             clearOperateRxPresentationState();
@@ -1480,7 +1411,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 nowElapsedMs,
                 "stop"
         );
-        finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
+        if (!isRxTranscriptSuppressed()) {
+            finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
+        }
         if (publishFinalSnapshot) {
             publishOperateSessionSnapshot(false, true);
         }
@@ -1561,6 +1494,19 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         activeRxTranscriptEntryId = -1L;
         activeRxTranscriptStartedAtEpochMs = 0L;
         activeRxTranscriptBaselineText = "";
+        transcriptRxSuppressedDuringTx = false;
+        immediateTxPausedRxCapture = false;
+    }
+
+    private boolean isRxTranscriptSuppressed() {
+        return transcriptRxSuppressedDuringTx && txSendInProgress;
+    }
+
+    private boolean shouldPausePhoneRxDuringImmediateTx() {
+        return txSendInProgress
+                && shouldUsePhoneMicrophoneRx()
+                && hasMicrophonePermission()
+                && immediateTxPausedRxCapture;
     }
 
     private String resolveOperateRouteSummary(@Nullable RigProfile profile) {
@@ -1602,14 +1548,169 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return templateText.substring(0, 17) + "...";
     }
 
+    private String renderCallsignHint(@Nullable RxSessionSnapshot snapshot) {
+        String primary = resolvePrimaryCallsignHint(snapshot);
+        if (!hasMeaningfulText(primary)) {
+            return "候选呼号: 等待更清晰的 RX turn";
+        }
+        StringBuilder builder = new StringBuilder("候选呼号: ")
+                .append(primary.trim());
+        String context = renderCallsignHintContext(snapshot);
+        if (hasMeaningfulText(context)) {
+            builder.append("  |  ").append(context.trim());
+        }
+        builder.append("  |  点按进入日志编辑");
+        return builder.toString();
+    }
+
+    @Nullable
+    private String resolvePrimaryCallsignHint(@Nullable RxSessionSnapshot snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+        if (hasMeaningfulText(snapshot.remoteCallsign())) {
+            return snapshot.remoteCallsign().trim();
+        }
+        CwInterpreterSnapshot rawSnapshot = operateCommittedOutputController == null
+                ? null
+                : operateCommittedOutputController.rawSnapshot();
+        if (rawSnapshot == null || rawSnapshot.callsignCandidates() == null) {
+            return null;
+        }
+        for (String candidate : rawSnapshot.callsignCandidates()) {
+            if (isUiFriendlyCallsignCandidate(candidate)) {
+                return candidate.trim();
+            }
+        }
+        return null;
+    }
+
+    private String renderCallsignHintContext(@Nullable RxSessionSnapshot snapshot) {
+        if (snapshot == null) {
+            return "";
+        }
+        ArrayList<String> parts = new ArrayList<>();
+        if (snapshot.effectiveToneFrequencyHz() > 0) {
+            parts.add(snapshot.effectiveToneFrequencyHz() + "Hz");
+        }
+        int displayWpm = resolveDisplayWpm(snapshot);
+        if (displayWpm > 0) {
+            parts.add(displayWpm + "WPM");
+        }
+        if (snapshot.hasDistinctFallbackSuggestedText()) {
+            parts.add("有兜底候选");
+        }
+        return parts.isEmpty() ? "" : String.join("  |  ", parts);
+    }
+
+    private boolean isUiFriendlyCallsignCandidate(@Nullable String candidate) {
+        if (!hasMeaningfulText(candidate)) {
+            return false;
+        }
+        String normalized = candidate.trim().toUpperCase(Locale.US);
+        if (normalized.length() > 8) {
+            return false;
+        }
+        if (!normalized.matches("[A-Z0-9?]+")) {
+            return false;
+        }
+        boolean hasDigit = false;
+        for (int index = 0; index < normalized.length(); index++) {
+            if (Character.isDigit(normalized.charAt(index))) {
+                hasDigit = true;
+                break;
+            }
+        }
+        return hasDigit;
+    }
+
+    private void openQsoEditorFromCallsignHint() {
+        String callsign = resolvePrimaryCallsignHint(lastRxSessionSnapshot);
+        if (!hasMeaningfulText(callsign)) {
+            Toast.makeText(this, "当前没有可用的候选呼号。", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (localLogRepository == null) {
+            Toast.makeText(this, "日志仓库当前不可用。", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        long seedTimestamp = resolveCallsignHintTimestamp(lastRxSessionSnapshot);
+        String stationCallsign = trimToNull(
+                stationProfileStore == null ? null : stationProfileStore.stationCallsign()
+        );
+        String rawContext = resolveCallsignHintRawContext(lastRxSessionSnapshot);
+        ArrayList<String> hints = new ArrayList<>();
+        hints.add("seeded-from-operate");
+        hints.add("candidate-selected-manually");
+        QsoDraftSnapshot seededDraft = new QsoDraftSnapshot(
+                QsoPhase.IDLE,
+                stationCallsign,
+                callsign.trim(),
+                null,
+                null,
+                null,
+                null,
+                stationCallsign != null,
+                true,
+                false,
+                false,
+                false,
+                false,
+                rawContext == null ? "" : rawContext,
+                hints,
+                false,
+                callsign.contains("?"),
+                seedTimestamp,
+                new QsoStateEvent(seedTimestamp, QsoPhase.IDLE, "seeded from operate callsign hint")
+        );
+        localLogRepository.saveDraft(seededDraft);
+        startActivity(new Intent(this, QsoEditorActivity.class));
+    }
+
+    private long resolveCallsignHintTimestamp(@Nullable RxSessionSnapshot snapshot) {
+        if (activeRxTranscriptStartedAtEpochMs > 0L) {
+            return activeRxTranscriptStartedAtEpochMs;
+        }
+        if (snapshot != null && snapshot.updatedAtEpochMs() > 0L) {
+            return snapshot.updatedAtEpochMs();
+        }
+        return System.currentTimeMillis();
+    }
+
+    @Nullable
+    private String resolveCallsignHintRawContext(@Nullable RxSessionSnapshot snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+        String rawText = normalizedTextOrNull(snapshot.rawText());
+        if (rawText != null) {
+            return rawText;
+        }
+        String fallbackText = normalizedTextOrNull(snapshot.fallbackSuggestedText());
+        if (fallbackText != null) {
+            return fallbackText;
+        }
+        return null;
+    }
+
+    @Nullable
+    private String trimToNull(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private String renderReceiveMeta(RxSessionSnapshot snapshot) {
         StringBuilder builder = new StringBuilder();
-        builder.append(isOperateRxRawOnlyMode()
-                        ? "RAW"
-                        : safeValue(snapshot.phaseDisplayName()))
-                .append("  |  RAW")
-                .append("  |  ")
-                .append(renderAge(snapshot.updatedAtEpochMs()));
+        if (isOperateRxRawOnlyMode()) {
+            builder.append("RAW");
+        } else {
+            builder.append(safeValue(snapshot.phaseDisplayName()))
+                    .append("  |  RAW");
+        }
+        builder.append("  |  ").append(renderAge(snapshot.updatedAtEpochMs()));
         if (!isOperateRxRawOnlyMode() && snapshot.needManualReview()) {
             builder.append("  |  待复核");
         }
@@ -1638,7 +1739,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         for (CwDecodeEvent admittedEvent : admittedEvents) {
             traceOperateDecodeEvent(admittedEvent);
             operateTurnSessionFinalizer.processCommittedDecodeEvent(admittedEvent);
-            updateActiveRxTranscriptEntryFromDecodeEvent(admittedEvent, System.currentTimeMillis());
+            if (!isRxTranscriptSuppressed()) {
+                updateActiveRxTranscriptEntryFromDecodeEvent(admittedEvent, System.currentTimeMillis());
+            }
         }
     }
 
@@ -1665,7 +1768,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         syncTemplateSelector(template);
         updateTemplateButtonStates();
         if (populateComposer) {
-            binding.txComposeEditText.setText(buildTemplateText(template, lastOverview));
+            binding.txComposeEditText.setText(buildTemplateText(template));
             binding.txComposeEditText.setSelection(binding.txComposeEditText.getText() == null
                     ? 0
                     : binding.txComposeEditText.getText().length());
@@ -1691,9 +1794,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 : R.drawable.operate_chip_background);
     }
 
-    private String buildTemplateText(String template, @Nullable AppOverviewSnapshot overview) {
+    private String buildTemplateText(String template) {
         String rawTemplate = rawTemplateText(template);
-        return renderTemplateVariables(rawTemplate, overview);
+        return renderTemplateVariables(rawTemplate);
     }
 
     private String rawTemplateText(String template) {
@@ -1715,27 +1818,23 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return TxTemplateStore.DEFAULT_CQ;
     }
 
-    private String resolveStationCallsign(@Nullable AppOverviewSnapshot overview) {
+    private String resolveStationCallsign() {
         String saved = stationProfileStore == null ? null : stationProfileStore.stationCallsign();
         if (hasMeaningfulText(saved)) {
             return saved.trim();
         }
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft != null && hasMeaningfulText(draft.stationCallsignUsed())) {
-            return draft.stationCallsignUsed().trim();
-        }
         return "<MYCALL>";
     }
 
-    private String renderTemplateVariables(String rawTemplate, @Nullable AppOverviewSnapshot overview) {
+    private String renderTemplateVariables(String rawTemplate) {
         if (!hasMeaningfulText(rawTemplate)) {
             return "";
         }
         String rendered = rawTemplate;
-        rendered = replaceTemplateAliases(rendered, resolveStationCallsign(overview), "MYCALL", "MYCALLSIGN");
-        rendered = replaceTemplateAliases(rendered, resolveRemoteCallsign(overview), "CALL", "CALLSIGN", "HISCALL");
-        rendered = replaceTemplateAliases(rendered, resolveRstReceived(overview), "RST_RECV", "RST_RCVD", "MYRST");
-        rendered = replaceTemplateAliases(rendered, resolveRstSent(overview), "RST", "RST_SENT", "URRST");
+        rendered = replaceTemplateAliases(rendered, resolveStationCallsign(), "MYCALL", "MYCALLSIGN");
+        rendered = replaceTemplateAliases(rendered, resolveRemoteCallsign(), "CALL", "CALLSIGN", "HISCALL");
+        rendered = replaceTemplateAliases(rendered, resolveRstReceived(), "RST_RECV", "RST_RCVD", "MYRST");
+        rendered = replaceTemplateAliases(rendered, resolveRstSent(), "RST", "RST_SENT", "URRST");
         rendered = replaceTemplateAliases(rendered, resolveStationName(), "NAME");
         rendered = replaceTemplateAliases(rendered, resolveStationQth(), "QTH");
         rendered = replaceTemplateAliases(rendered, resolveStationGrid(), "GRID", "MYGRID");
@@ -1772,27 +1871,19 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return hasMeaningfulText(saved) ? saved.trim() : "<NAME>";
     }
 
-    private String resolveRemoteCallsign(@Nullable AppOverviewSnapshot overview) {
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft != null && hasMeaningfulText(draft.remoteCallsignCandidate())) {
-            return draft.remoteCallsignCandidate().trim();
+    private String resolveRemoteCallsign() {
+        String hinted = resolvePrimaryCallsignHint(lastRxSessionSnapshot);
+        if (hasMeaningfulText(hinted)) {
+            return hinted.trim();
         }
         return "<CALL>";
     }
 
-    private String resolveRstSent(@Nullable AppOverviewSnapshot overview) {
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft != null && hasMeaningfulText(draft.rstSentCandidate())) {
-            return draft.rstSentCandidate().trim();
-        }
+    private String resolveRstSent() {
         return "<RST>";
     }
 
-    private String resolveRstReceived(@Nullable AppOverviewSnapshot overview) {
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft != null && hasMeaningfulText(draft.rstRcvdCandidate())) {
-            return draft.rstRcvdCandidate().trim();
-        }
+    private String resolveRstReceived() {
         return "<RST_RCVD>";
     }
 
@@ -1819,13 +1910,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private String resolveStationWeather() {
         String saved = stationProfileStore == null ? null : stationProfileStore.weatherDescription();
         return hasMeaningfulText(saved) ? saved.trim() : "<WX>";
-    }
-
-    private List<String> safeHints(@Nullable QsoDraftSnapshot draft) {
-        if (draft == null || draft.hints() == null) {
-            return Collections.emptyList();
-        }
-        return draft.hints();
     }
 
     private void syncTemplateSelector(String template) {
@@ -1872,7 +1956,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         binding.chartOverlayContent.setVisibility(overlayMode == OverlayMode.CHART ? View.VISIBLE : View.GONE);
         binding.sqlOverlayContent.setVisibility(overlayMode == OverlayMode.SQL ? View.VISIBLE : View.GONE);
         binding.templateOverlayContent.setVisibility(overlayMode == OverlayMode.TEMPLATE ? View.VISIBLE : View.GONE);
-        binding.draftOverlayContent.setVisibility(overlayMode == OverlayMode.DRAFT ? View.VISIBLE : View.GONE);
 
         switch (overlayMode) {
             case CHART:
@@ -1891,11 +1974,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 binding.overlayTitleText.setText("模板");
                 binding.overlaySubtitleText.setText("当前待发送文本");
                 binding.templateOverlayText.setText(renderTemplateOverlayText());
-                break;
-            case DRAFT:
-                binding.overlayTitleText.setText("通联详情");
-                binding.overlaySubtitleText.setText("当前草稿摘要");
-                binding.draftOverlayText.setText(renderDraftOverlayText(lastOverview, lastRxSessionSnapshot));
                 break;
             default:
                 break;
@@ -2003,71 +2081,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     private String renderTemplateOverlayText() {
         String rawTemplate = rawTemplateText(selectedTemplate);
-        String renderedTemplate = buildTemplateText(selectedTemplate, lastOverview);
+        String renderedTemplate = buildTemplateText(selectedTemplate);
         return "当前模板: " + selectedTemplate
                 + "\n\n模板原文:\n"
                 + rawTemplate
                 + "\n\n展开后:\n"
                 + renderedTemplate;
-    }
-
-    private String renderDraftOverlayText(
-            @Nullable AppOverviewSnapshot overview,
-            @Nullable RxSessionSnapshot snapshot
-    ) {
-        if (isOperateRxRawOnlyMode()) {
-            if (snapshot != null && snapshot.hasRawText()) {
-                StringBuilder builder = new StringBuilder()
-                        .append("当前 Operate RX 只保留 RAW。\n\n最近 RAW:\n")
-                        .append(snapshot.rawText().trim());
-                if (snapshot.hasDistinctFallbackSuggestedText()) {
-                    builder.append("\n\n兜底猜测:\n").append(snapshot.fallbackSuggestedText().trim());
-                }
-                if (snapshot.hasFallbackNotesText()) {
-                    builder.append("\n\n切分候选:\n").append(snapshot.fallbackNotesText().trim());
-                }
-                return builder.toString();
-            }
-            return "当前 Operate RX 只保留 RAW。\n\n呼号识别、语义解释、QSO 草稿构建暂时已脱离主链。";
-        }
-        QsoDraftSnapshot draft = overview == null ? null : overview.activeDraft();
-        if (draft == null) {
-            return "当前没有活动草稿。";
-        }
-        StringBuilder builder = new StringBuilder();
-        builder.append("对方呼号: ").append(safeValue(draft.remoteCallsignCandidate()))
-                .append("\n阶段: ").append(draft.phase().displayName())
-                .append("\nRST: ").append(safeValue(draft.rstSentCandidate()))
-                .append("/").append(safeValue(draft.rstRcvdCandidate()))
-                .append("\n姓名: ").append(safeValue(draft.nameCandidate()))
-                .append("\nQTH: ").append(safeValue(draft.qthCandidate()))
-                .append("\n可确认: ").append(yesNoZh(draft.readyForDraftConfirmation()))
-                .append("\n人工复核: ").append(yesNoZh(draft.needManualReview()))
-                .append("\n更新时间: ").append(renderAge(draft.updatedAtEpochMs()))
-                .append("\n\n归一化草稿:\n")
-                .append(safeValue(draft.normalizedText()));
-
-        List<String> hints = safeHints(draft);
-        if (hints.isEmpty()) {
-            builder.append("\n\n提示: -");
-        } else {
-            builder.append("\n\n提示:");
-            for (String hint : hints) {
-                builder.append("\n- ").append(hint);
-            }
-        }
-
-        if (snapshot != null && snapshot.hasRawText()) {
-            builder.append("\n\n最近 RAW:\n").append(snapshot.rawText().trim());
-        }
-        if (snapshot != null
-                && snapshot.hasDistinctFallbackSuggestedText()) {
-            builder.append("\n\n兜底猜测:\n").append(snapshot.fallbackSuggestedText().trim());
-        }
-        if (snapshot != null && snapshot.hasFallbackNotesText()) {
-            builder.append("\n\n切分候选:\n").append(snapshot.fallbackNotesText().trim());
-        }
-        return builder.toString();
     }
 
     @Override
@@ -2869,7 +2888,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
         lastOperateRxPublishAtElapsedMs = nowElapsedMs;
         lastRxSessionSnapshot = sessionSnapshot;
-        refreshActiveRxTranscriptEntryFromSnapshot(sessionSnapshot);
+        if (!isRxTranscriptSuppressed()) {
+            refreshActiveRxTranscriptEntryFromSnapshot(sessionSnapshot);
+        }
     }
 
     private String renderDeveloperFrontEndSummary(
@@ -3045,6 +3066,18 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         activeTxPlan = txPlan;
         activeTxPlaybackSnapshot = initialPlaybackSnapshot(txPlan);
         activeTxStopSupported = adapterSupportsStop(adapter);
+        transcriptRxSuppressedDuringTx = true;
+        finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
+        immediateTxPausedRxCapture = false;
+        if (shouldUsePhoneMicrophoneRx() && hasMicrophonePermission()) {
+            RxAudioSource source = activeOperateRxAudioSource;
+            if (source != null
+                    && (source.state() == RxAudioSource.State.RUNNING
+                    || source.state() == RxAudioSource.State.STARTING)) {
+                immediateTxPausedRxCapture = true;
+                stopOperateRxCapture(false);
+            }
+        }
         beginActiveTxTranscriptEntry(System.currentTimeMillis());
         mainHandler.removeCallbacks(txProgressRefreshRunnable);
         mainHandler.post(txProgressRefreshRunnable);
@@ -3069,6 +3102,13 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 activeTxPlaybackSnapshot = finalizePlaybackSnapshot(activeTxPlaybackSnapshot, sent, status);
                 activeTxStopSupported = false;
                 finalizeActiveTxTranscriptEntry(status);
+                transcriptRxSuppressedDuringTx = false;
+                if (immediateTxPausedRxCapture) {
+                    immediateTxPausedRxCapture = false;
+                    if (operateActivityResumed) {
+                        syncOperateRxEngine();
+                    }
+                }
                 updateComposerUi();
                 refreshConversationOnly();
             });
@@ -3144,9 +3184,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 ? ""
                 : binding.txComposeEditText.getText().toString().trim();
         if (!composeText.isEmpty()) {
-            return renderTemplateVariables(composeText, lastOverview).trim();
+            return renderTemplateVariables(composeText).trim();
         }
-        String templateText = buildTemplateText(selectedTemplate, lastOverview);
+        String templateText = buildTemplateText(selectedTemplate);
         return templateText == null ? "" : templateText.trim();
     }
 
@@ -3948,10 +3988,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return styled;
     }
 
-    private List<StreamEntry> buildOperateStreamEntries(
-            @Nullable RxSessionSnapshot snapshot,
-            @Nullable AppOverviewSnapshot overview
-    ) {
+    private List<StreamEntry> buildOperateStreamEntries(@Nullable RxSessionSnapshot snapshot) {
         ArrayList<StreamEntry> entries = new ArrayList<>();
         if (transcriptTimelineActive) {
             for (TranscriptEntry transcriptEntry : operateTranscriptEntries) {

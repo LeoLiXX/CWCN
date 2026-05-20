@@ -147,6 +147,25 @@
                         android:textStyle="bold" />
                 </LinearLayout>
 
+                <TextView
+                    android:id="@+id/callsignHintText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/operate_chip_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:maxLines="2"
+                    android:minHeight="24dp"
+                    android:paddingStart="6dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="4dp"
+                    android:textColor="@color/cwcn_accent"
+                    android:textSize="8sp"
+                    android:textStyle="bold"
+                    android:visibility="visible" />
+
                 <ScrollView
                     android:id="@+id/conversationScrollView"
                     android:layout_width="match_parent"
@@ -188,87 +207,6 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="草稿"
-                        android:textColor="@color/cwcn_title"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
-
-                    <ImageButton
-                        android:id="@+id/reviewDraftButton"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:alpha="0.82"
-                        android:background="@android:color/transparent"
-                        android:contentDescription="编辑草稿"
-                        android:padding="3dp"
-                        android:scaleType="centerInside"
-                        android:src="@drawable/ic_ui_edit"
-                        android:tint="@color/cwcn_subtitle" />
-
-                    <ImageButton
-                        android:id="@+id/expandDraftButton"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:layout_marginStart="6dp"
-                        android:alpha="0.82"
-                        android:background="@android:color/transparent"
-                        android:contentDescription="展开草稿"
-                        android:padding="3dp"
-                        android:scaleType="centerInside"
-                        android:src="@drawable/ic_ui_expand"
-                        android:tint="@color/cwcn_subtitle" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/draftSummaryHeadlineText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:maxLines="1"
-                    android:textColor="@color/cwcn_title"
-                    android:textSize="10sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/draftSummaryMetaText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="1dp"
-                    android:maxLines="1"
-                    android:textColor="@color/cwcn_subtitle"
-                    android:textSize="8sp" />
-
-                <TextView
-                    android:id="@+id/draftStatusText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:maxLines="1"
-                    android:textColor="@color/cwcn_accent"
-                    android:textSize="7sp"
-                    android:textStyle="bold"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/draftPreviewText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:maxLines="2"
-                    android:textColor="@color/cwcn_body"
-                    android:textSize="9sp"
-                    android:visibility="gone" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -725,24 +663,6 @@
                 android:layout_marginTop="12dp"
                 android:fontFamily="monospace"
                 android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/draftOverlayContent"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/draftOverlayText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:lineSpacingExtra="4dp"
                 android:textColor="@color/cwcn_body"
                 android:textSize="14sp" />
         </LinearLayout>
