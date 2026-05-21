@@ -7,7 +7,9 @@ import org.bi9clt.cwcn.R;
 public final class FormalBottomNavStyler {
     public enum Page {
         OPERATE,
-        SPECTRUM
+        SPECTRUM,
+        LOGBOOK,
+        SETTINGS
     }
 
     private FormalBottomNavStyler() {
@@ -17,9 +19,22 @@ public final class FormalBottomNavStyler {
         if (navView == null) {
             return;
         }
-        int desiredItemId = activePage == Page.OPERATE
-                ? R.id.menu_nav_operate
-                : R.id.menu_nav_spectrum;
+        int desiredItemId;
+        switch (activePage) {
+            case OPERATE:
+                desiredItemId = R.id.menu_nav_operate;
+                break;
+            case LOGBOOK:
+                desiredItemId = R.id.menu_nav_logbook;
+                break;
+            case SETTINGS:
+                desiredItemId = R.id.menu_nav_settings;
+                break;
+            case SPECTRUM:
+            default:
+                desiredItemId = R.id.menu_nav_spectrum;
+                break;
+        }
         if (navView.getSelectedItemId() != desiredItemId) {
             navView.setSelectedItemId(desiredItemId);
         }

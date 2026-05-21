@@ -104,17 +104,25 @@ public final class QsoWorkflowSummaryFormatterTest {
 
     @Test
     public void confirmedLogReviewSummaryExplainsUncertainCallsign() {
+        long qsoTimeUtcEpochMs = org.bi9clt.cwcn.core.log.LogDisplayFormatter.parseUtcDateTimeMillis(
+                "20260423",
+                "123000"
+        );
         ConfirmedQsoLog log = new ConfirmedQsoLog(
                 7L,
                 "BG7?OZ",
-                "20260423",
-                "123000",
-                "CW",
+                "BI9CLT",
+                qsoTimeUtcEpochMs,
+                7_000_000L,
                 "599",
                 null,
                 null,
                 null,
-                "BI9CLT",
+                null,
+                null,
+                null,
+                true,
+                "CW",
                 "completed",
                 "BI9CLT DE BG7?OZ TU 73 BK",
                 true,

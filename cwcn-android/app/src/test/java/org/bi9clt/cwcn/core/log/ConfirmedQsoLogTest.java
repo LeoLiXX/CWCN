@@ -14,17 +14,22 @@ import java.util.Collections;
 public final class ConfirmedQsoLogTest {
     @Test
     public void withDraftEditsPreservesIdentityAndUtcFieldsWhileUpdatingEditableFields() {
+        long qsoTimeUtcEpochMs = LogDisplayFormatter.parseUtcDateTimeMillis("20260423", "101530");
         ConfirmedQsoLog log = new ConfirmedQsoLog(
                 42L,
                 "BG7YOZ",
-                "20260423",
-                "101530",
-                "CW",
+                "BI9CLT",
+                qsoTimeUtcEpochMs,
+                7_000_000L,
                 "599",
                 "579",
                 "OLD",
+                "PM01AA",
+                null,
                 "BEIJING",
-                "BI9CLT",
+                null,
+                true,
+                "CW",
                 "completed",
                 "OLD TEXT",
                 true,
@@ -53,7 +58,15 @@ public final class ConfirmedQsoLogTest {
                 new QsoStateEvent(1234L, QsoPhase.COMPLETED, "edited")
         );
 
-        ConfirmedQsoLog updated = log.withDraftEdits(editedDraft);
+        ConfirmedQsoLog updated = log.withDraftEdits(
+                editedDraft,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
 
         assertEquals(42L, updated.id());
         assertEquals("20260423", updated.qsoDateUtc());

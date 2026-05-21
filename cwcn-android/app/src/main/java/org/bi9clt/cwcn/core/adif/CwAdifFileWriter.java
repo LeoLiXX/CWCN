@@ -20,6 +20,15 @@ public final class CwAdifFileWriter {
     }
 
     public static File export(Context context, List<ConfirmedQsoLog> logs, String programVersion) throws IOException {
+        return export(context, logs, programVersion, null);
+    }
+
+    public static File export(
+            Context context,
+            List<ConfirmedQsoLog> logs,
+            String programVersion,
+            String requestLabel
+    ) throws IOException {
         File baseDir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
         if (baseDir == null) {
             baseDir = context.getFilesDir();
@@ -30,7 +39,10 @@ public final class CwAdifFileWriter {
             throw new IOException("Unable to create export directory.");
         }
 
-        String fileName = "cwcn-log-"
+        String normalizedLabel = normalizeLabel(requestLabel);
+        String fileName = "cwcn-log"
+                + (normalizedLabel == null ? "" : "-" + normalizedLabel)
+                + "-"
                 + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date())
                 + ".adi";
         File targetFile = new File(exportDir, fileName);
@@ -41,5 +53,13 @@ public final class CwAdifFileWriter {
             writer.write(CwAdifExporter.buildAdifFile(logs, programVersion));
         }
         return targetFile;
+    }
+
+    private static String normalizeLabel(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim().toLowerCase(Locale.US).replaceAll("[^a-z0-9._-]+", "-");
+        return normalized.isEmpty() ? null : normalized;
     }
 }

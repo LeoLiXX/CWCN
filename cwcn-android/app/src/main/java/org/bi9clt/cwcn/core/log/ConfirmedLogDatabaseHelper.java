@@ -6,25 +6,33 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 public final class ConfirmedLogDatabaseHelper extends SQLiteOpenHelper {
     public static final String DATABASE_NAME = "cwcn_logs.db";
-    public static final int DATABASE_VERSION = 5;
+    public static final int DATABASE_VERSION = 6;
 
     public static final String TABLE_CONFIRMED_LOGS = "confirmed_logs";
     public static final String TABLE_ACTIVE_DRAFT = "active_draft";
     public static final String TABLE_FIXTURE_EVALUATIONS = "fixture_evaluations";
+
     public static final String COLUMN_ID = "_id";
     public static final String COLUMN_REMOTE_CALLSIGN = "remote_callsign";
-    public static final String COLUMN_QSO_DATE_UTC = "qso_date_utc";
-    public static final String COLUMN_TIME_ON_UTC = "time_on_utc";
-    public static final String COLUMN_MODE = "mode";
+    public static final String COLUMN_STATION_CALLSIGN = "station_callsign";
+    public static final String COLUMN_QSO_TIME_UTC_EPOCH_MS = "qso_time_utc_epoch_ms";
+    public static final String COLUMN_FREQUENCY_HZ = "frequency_hz";
     public static final String COLUMN_RST_SENT = "rst_sent";
     public static final String COLUMN_RST_RCVD = "rst_rcvd";
+    public static final String COLUMN_REMOTE_GRID = "remote_grid";
+    public static final String COLUMN_STATION_GRID = "station_grid";
     public static final String COLUMN_NAME = "name";
     public static final String COLUMN_QTH = "qth";
-    public static final String COLUMN_STATION_CALLSIGN = "station_callsign";
+    public static final String COLUMN_COMMENT = "comment";
+    public static final String COLUMN_MANUAL_CONFIRMED = "manual_confirmed";
+    public static final String COLUMN_MODE = "mode";
     public static final String COLUMN_PHASE = "phase";
     public static final String COLUMN_NORMALIZED_TEXT = "normalized_text";
     public static final String COLUMN_NEED_MANUAL_REVIEW = "need_manual_review";
     public static final String COLUMN_CONFIRMED_AT_EPOCH_MS = "confirmed_at_epoch_ms";
+    public static final String COLUMN_QSO_DATE_UTC = "qso_date_utc";
+    public static final String COLUMN_TIME_ON_UTC = "time_on_utc";
+
     public static final String COLUMN_STATION_CALLSIGN_USED = "station_callsign_used";
     public static final String COLUMN_REMOTE_CALLSIGN_CANDIDATE = "remote_callsign_candidate";
     public static final String COLUMN_RST_SENT_CANDIDATE = "rst_sent_candidate";
@@ -43,6 +51,7 @@ public final class ConfirmedLogDatabaseHelper extends SQLiteOpenHelper {
     public static final String COLUMN_LAST_EVENT_TIMESTAMP_MS = "last_event_timestamp_ms";
     public static final String COLUMN_LAST_EVENT_PHASE = "last_event_phase";
     public static final String COLUMN_LAST_EVENT_SUMMARY = "last_event_summary";
+
     public static final String COLUMN_SCENARIO_ID = "scenario_id";
     public static final String COLUMN_SCENARIO_DISPLAY_NAME = "scenario_display_name";
     public static final String COLUMN_EVALUATED_AT_EPOCH_MS = "evaluated_at_epoch_ms";
@@ -73,19 +82,26 @@ public final class ConfirmedLogDatabaseHelper extends SQLiteOpenHelper {
             "CREATE TABLE " + TABLE_CONFIRMED_LOGS + " ("
                     + COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
                     + COLUMN_REMOTE_CALLSIGN + " TEXT, "
-                    + COLUMN_QSO_DATE_UTC + " TEXT, "
-                    + COLUMN_TIME_ON_UTC + " TEXT, "
-                    + COLUMN_MODE + " TEXT, "
+                    + COLUMN_STATION_CALLSIGN + " TEXT, "
+                    + COLUMN_QSO_TIME_UTC_EPOCH_MS + " INTEGER NOT NULL DEFAULT 0, "
+                    + COLUMN_FREQUENCY_HZ + " INTEGER NOT NULL DEFAULT 0, "
                     + COLUMN_RST_SENT + " TEXT, "
                     + COLUMN_RST_RCVD + " TEXT, "
+                    + COLUMN_REMOTE_GRID + " TEXT, "
+                    + COLUMN_STATION_GRID + " TEXT, "
                     + COLUMN_NAME + " TEXT, "
                     + COLUMN_QTH + " TEXT, "
-                    + COLUMN_STATION_CALLSIGN + " TEXT, "
+                    + COLUMN_COMMENT + " TEXT, "
+                    + COLUMN_MANUAL_CONFIRMED + " INTEGER NOT NULL DEFAULT 0, "
+                    + COLUMN_MODE + " TEXT, "
                     + COLUMN_PHASE + " TEXT, "
                     + COLUMN_NORMALIZED_TEXT + " TEXT, "
                     + COLUMN_NEED_MANUAL_REVIEW + " INTEGER NOT NULL DEFAULT 0, "
-                    + COLUMN_CONFIRMED_AT_EPOCH_MS + " INTEGER NOT NULL DEFAULT 0"
+                    + COLUMN_CONFIRMED_AT_EPOCH_MS + " INTEGER NOT NULL DEFAULT 0, "
+                    + COLUMN_QSO_DATE_UTC + " TEXT, "
+                    + COLUMN_TIME_ON_UTC + " TEXT"
                     + ")";
+
     private static final String CREATE_ACTIVE_DRAFT_TABLE =
             "CREATE TABLE " + TABLE_ACTIVE_DRAFT + " ("
                     + COLUMN_ID + " INTEGER PRIMARY KEY, "
@@ -111,6 +127,7 @@ public final class ConfirmedLogDatabaseHelper extends SQLiteOpenHelper {
                     + COLUMN_LAST_EVENT_PHASE + " TEXT, "
                     + COLUMN_LAST_EVENT_SUMMARY + " TEXT"
                     + ")";
+
     private static final String CREATE_FIXTURE_EVALUATIONS_TABLE =
             "CREATE TABLE " + TABLE_FIXTURE_EVALUATIONS + " ("
                     + COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -179,6 +196,23 @@ public final class ConfirmedLogDatabaseHelper extends SQLiteOpenHelper {
                     + " ADD COLUMN " + COLUMN_EXPECTED_RST_RCVD + " TEXT");
             db.execSQL("ALTER TABLE " + TABLE_FIXTURE_EVALUATIONS
                     + " ADD COLUMN " + COLUMN_ACTUAL_RST_RCVD + " TEXT");
+        }
+        if (oldVersion < 6) {
+            db.execSQL("ALTER TABLE " + TABLE_CONFIRMED_LOGS
+                    + " ADD COLUMN " + COLUMN_QSO_TIME_UTC_EPOCH_MS + " INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE " + TABLE_CONFIRMED_LOGS
+                    + " ADD COLUMN " + COLUMN_FREQUENCY_HZ + " INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE " + TABLE_CONFIRMED_LOGS
+                    + " ADD COLUMN " + COLUMN_REMOTE_GRID + " TEXT");
+            db.execSQL("ALTER TABLE " + TABLE_CONFIRMED_LOGS
+                    + " ADD COLUMN " + COLUMN_STATION_GRID + " TEXT");
+            db.execSQL("ALTER TABLE " + TABLE_CONFIRMED_LOGS
+                    + " ADD COLUMN " + COLUMN_COMMENT + " TEXT");
+            db.execSQL("ALTER TABLE " + TABLE_CONFIRMED_LOGS
+                    + " ADD COLUMN " + COLUMN_MANUAL_CONFIRMED + " INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("UPDATE " + TABLE_CONFIRMED_LOGS
+                    + " SET " + COLUMN_QSO_TIME_UTC_EPOCH_MS + " = " + COLUMN_CONFIRMED_AT_EPOCH_MS
+                    + " WHERE " + COLUMN_QSO_TIME_UTC_EPOCH_MS + " = 0");
         }
     }
 }

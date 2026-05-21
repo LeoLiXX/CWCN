@@ -137,18 +137,42 @@
                 android:textColor="@color/cwcn_body"
                 android:textColorHint="@color/cwcn_subtitle" />
 
-            <EditText
-                android:id="@+id/maidenheadGridEditText"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:background="@drawable/bootstrap_field_background"
-                android:hint="梅登海格网格，例如 PM01"
-                android:inputType="textCapCharacters"
-                android:padding="8dp"
-                android:singleLine="true"
-                android:textColor="@color/cwcn_body"
-                android:textColorHint="@color/cwcn_subtitle" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/maidenheadGridEditText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/bootstrap_field_background"
+                    android:hint="梅登海格网格，例如 PM01"
+                    android:inputType="textCapCharacters"
+                    android:padding="8dp"
+                    android:singleLine="true"
+                    android:textColor="@color/cwcn_body"
+                    android:textColorHint="@color/cwcn_subtitle" />
+
+                <Button
+                    android:id="@+id/gridAutoDetectButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/operate_chip_background"
+                    android:minHeight="0dp"
+                    android:paddingStart="12dp"
+                    android:paddingTop="7dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="7dp"
+                    android:text="定位"
+                    android:textAllCaps="false"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="10sp" />
+            </LinearLayout>
 
             <EditText
                 android:id="@+id/rigDescriptionEditText"

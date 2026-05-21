@@ -69,6 +69,33 @@ final class SocketHamlibRigctldSession implements HamlibRigctldSession {
     }
 
     @Override
+    public String transact(String command) throws IOException {
+        if (command == null || command.trim().isEmpty()) {
+            throw new IOException("rigctld command is empty.");
+        }
+        writer.write(command.trim());
+        writer.write('\n');
+        writer.flush();
+
+        StringBuilder builder = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (line.startsWith(RESPONSE_PREFIX)) {
+                if (parseRigctldStatus(line) != 0) {
+                    return null;
+                }
+                String response = builder.toString().trim();
+                return response.isEmpty() ? null : response;
+            }
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            builder.append(line);
+        }
+        throw new IOException("rigctld closed the connection before returning response for command: " + command);
+    }
+
+    @Override
     public void close() throws IOException {
         socket.close();
     }

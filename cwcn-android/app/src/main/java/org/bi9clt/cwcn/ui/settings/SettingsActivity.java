@@ -1,10 +1,14 @@
 package org.bi9clt.cwcn.ui.settings;
 
+import android.Manifest;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.hardware.usb.UsbManager;
+import android.location.Location;
+import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
@@ -20,6 +24,7 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import org.bi9clt.cwcn.BuildConfig;
@@ -31,6 +36,7 @@ import org.bi9clt.cwcn.core.app.TxTemplateStore;
 import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
 import org.bi9clt.cwcn.core.log.ConfirmedQsoLog;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
+import org.bi9clt.cwcn.core.log.MaidenheadGridUtil;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.rig.CatProtocolFamily;
 import org.bi9clt.cwcn.core.rig.RigCapability;
@@ -54,6 +60,7 @@ import java.util.List;
 public final class SettingsActivity extends AppCompatActivity {
     private static final String ACTION_USB_KEYER_PERMISSION =
             "org.bi9clt.cwcn.action.SETTINGS_USB_KEYER_PERMISSION";
+    private static final int REQUEST_LOCATION_PERMISSION = 2001;
 
     private enum FixedToneLearningWindowPreset {
         TIGHT("人工锁频: 紧锁 ±30Hz", "紧锁", 30),
@@ -458,6 +465,7 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.backButton.setOnClickListener(view -> finish());
         binding.openRigSetupButton.setOnClickListener(view ->
                 startActivity(new Intent(this, RigSetupActivity.class)));
+        binding.gridAutoDetectButton.setOnClickListener(view -> requestGridAutoDetect());
         binding.toggleDeveloperModeButton.setOnClickListener(view -> {
             developerModeStore.toggle();
             refreshUi();
@@ -471,6 +479,7 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.stationInfoButton.setOnClickListener(view -> showInfoDialog(
                 "台站资料",
                 "这里保存正式使用的台站信息。呼号、姓名、QTH、梅登海格网格，以及 <RIG> / <ANT> / <WX> 这类模板变量都从这里取值，不再需要单独点保存。"
+                        + "梅登海格网格支持通过定位按钮读取系统最近位置并自动换算为 4 位网格。"
         ));
         binding.radioRouteInfoButton.setOnClickListener(view -> showInfoDialog(
                 "电台链路",
@@ -506,6 +515,28 @@ public final class SettingsActivity extends AppCompatActivity {
                 .setMessage(message)
                 .setPositiveButton("OK", null)
                 .show();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @androidx.annotation.NonNull String[] permissions, @androidx.annotation.NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != REQUEST_LOCATION_PERMISSION) {
+            return;
+        }
+        boolean granted = false;
+        for (int grantResult : grantResults) {
+            if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                granted = true;
+                break;
+            }
+        }
+        if (!granted) {
+            stationProfileStatusMessage = "没有定位权限，无法自动获取网格。";
+            refreshUi();
+            Toast.makeText(this, "Location permission is required to detect grid.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        detectGridFromLastKnownLocation();
     }
 
     private void refreshUi() {
@@ -830,6 +861,107 @@ public final class SettingsActivity extends AppCompatActivity {
                 ? "台站资料已清空，正在回退到草稿/日志推断。"
                 : "台站资料已自动保存。";
         refreshUi();
+    }
+
+    private void requestGridAutoDetect() {
+        if (hasLocationPermission()) {
+            detectGridFromLastKnownLocation();
+            return;
+        }
+        ActivityCompat.requestPermissions(
+                this,
+                new String[]{
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                },
+                REQUEST_LOCATION_PERMISSION
+        );
+    }
+
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void detectGridFromLastKnownLocation() {
+        LocationManager locationManager = getSystemService(LocationManager.class);
+        if (locationManager == null) {
+            stationProfileStatusMessage = "系统没有可用的定位服务。";
+            refreshUi();
+            Toast.makeText(this, "Location service is unavailable.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Location bestLocation = null;
+        try {
+            List<String> providers = locationManager.getProviders(true);
+            if (providers == null || providers.isEmpty()) {
+                providers = locationManager.getAllProviders();
+            }
+            if (providers != null) {
+                for (String provider : providers) {
+                    Location candidate = locationManager.getLastKnownLocation(provider);
+                    bestLocation = pickBetterLocation(bestLocation, candidate);
+                }
+            }
+        } catch (SecurityException exception) {
+            stationProfileStatusMessage = "没有定位权限，无法自动获取网格。";
+            refreshUi();
+            Toast.makeText(this, "Location permission is required to detect grid.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (bestLocation == null) {
+            stationProfileStatusMessage = "没有可用的最近位置，暂时无法自动获取网格。";
+            refreshUi();
+            Toast.makeText(this, "No last known location is available yet.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String grid = MaidenheadGridUtil.fromLatLon(bestLocation.getLatitude(), bestLocation.getLongitude());
+        if (!MaidenheadGridUtil.isValid(grid)) {
+            stationProfileStatusMessage = "最近位置无法换算成有效网格。";
+            refreshUi();
+            Toast.makeText(this, "Unable to convert location into a Maidenhead grid.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        syncingEditors = true;
+        binding.maidenheadGridEditText.setText(grid);
+        syncingEditors = false;
+        stationProfileDirty = true;
+        saveStationProfile();
+        stationProfileStatusMessage = "已根据最近位置自动填写网格 " + grid + "。";
+        refreshUi();
+    }
+
+    @Nullable
+    private Location pickBetterLocation(@Nullable Location currentBest, @Nullable Location candidate) {
+        if (candidate == null) {
+            return currentBest;
+        }
+        if (currentBest == null) {
+            return candidate;
+        }
+        boolean candidateHasAccuracy = candidate.hasAccuracy();
+        boolean currentHasAccuracy = currentBest.hasAccuracy();
+        if (candidateHasAccuracy && !currentHasAccuracy) {
+            return candidate;
+        }
+        if (!candidateHasAccuracy && currentHasAccuracy) {
+            return currentBest;
+        }
+        if (candidateHasAccuracy && currentHasAccuracy) {
+            float accuracyDelta = candidate.getAccuracy() - currentBest.getAccuracy();
+            if (accuracyDelta < 0f) {
+                return candidate;
+            }
+            if (accuracyDelta > 0f) {
+                return currentBest;
+            }
+        }
+        return candidate.getTime() >= currentBest.getTime() ? candidate : currentBest;
     }
 
     private void saveCwDefaults() {

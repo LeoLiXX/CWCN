@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="确认状态"
+            android:textColor="@color/cwcn_title"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/confirmationRadioGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+
+            <RadioButton
+                android:id="@+id/confirmationAllRadio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="全部"
+                android:textColor="@color/cwcn_body" />
+
+            <RadioButton
+                android:id="@+id/confirmationUnconfirmedRadio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="未确认"
+                android:textColor="@color/cwcn_body" />
+
+            <RadioButton
+                android:id="@+id/confirmationConfirmedRadio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="已确认"
+                android:textColor="@color/cwcn_body" />
+        </RadioGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="时间范围"
+            android:textColor="@color/cwcn_title"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/timeRangeRadioGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+
+            <RadioButton
+                android:id="@+id/timeRangeAllRadio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="全部"
+                android:textColor="@color/cwcn_body" />
+
+            <RadioButton
+                android:id="@+id/timeRangeTodayRadio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="今天"
+                android:textColor="@color/cwcn_body" />
+
+            <RadioButton
+                android:id="@+id/timeRangeMonthRadio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="本月"
+                android:textColor="@color/cwcn_body" />
+        </RadioGroup>
+    </LinearLayout>
+
+</ScrollView>

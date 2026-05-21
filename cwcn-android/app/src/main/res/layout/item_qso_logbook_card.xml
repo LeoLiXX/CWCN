@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/cardRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="1dp"
+    android:layout_marginBottom="1dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
+    android:orientation="vertical"
+    android:paddingStart="6dp"
+    android:paddingTop="4dp"
+    android:paddingEnd="6dp"
+    android:paddingBottom="4dp">
+
+    <LinearLayout
+        android:id="@+id/detailedGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.78"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/detailCallsignText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/cwcn_title"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/detailRemoteGridText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="10sp" />
+
+                <TextView
+                    android:id="@+id/detailStationCallsignText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/detailStationGridText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/cwcn_body"
+                    android:textSize="10sp" />
+
+                <TextView
+                    android:id="@+id/detailConfirmationText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="2.22"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:baselineAligned="false"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1.18"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/detailTimeText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:textColor="@color/cwcn_body"
+                            android:textSize="10sp" />
+
+                        <TextView
+                            android:id="@+id/detailMetaText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:textColor="@color/cwcn_accent"
+                            android:textSize="9sp" />
+
+                        <TextView
+                            android:id="@+id/detailRstText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:textColor="@color/cwcn_body"
+                            android:textSize="10sp" />
+
+                        <TextView
+                            android:id="@+id/detailModeText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:textColor="@color/cwcn_body"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1.04"
+                        android:gravity="end"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/detailBandText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:gravity="end"
+                            android:maxLines="1"
+                            android:textAlignment="viewEnd"
+                            android:textColor="@color/cwcn_body"
+                            android:textSize="10sp" />
+
+                        <TextView
+                            android:id="@+id/detailFrequencyText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:gravity="end"
+                            android:maxLines="1"
+                            android:textAlignment="viewEnd"
+                            android:textColor="@color/cwcn_body"
+                            android:textSize="10sp" />
+
+                        <TextView
+                            android:id="@+id/detailCountryText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:gravity="end"
+                            android:maxLines="1"
+                            android:textAlignment="viewEnd"
+                            android:textColor="@color/cwcn_subtitle"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/detailCommentText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:gravity="top"
+                    android:includeFontPadding="false"
+                    android:maxLines="2"
+                    android:minLines="2"
+                    android:textColor="@color/cwcn_subtitle"
+                    android:textSize="10sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/compactGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:baselineAligned="false"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.82"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/compactCallsignText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/cwcn_title"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/compactConfirmationText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1.12"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/compactRecentTimeText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/compactModeText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/compactMetaText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/cwcn_accent"
+                android:textSize="9sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1.06"
+            android:gravity="end"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/compactBandFrequencyText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="end"
+                android:maxLines="1"
+                android:textAlignment="viewEnd"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/compactGridDistanceText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:gravity="end"
+                android:maxLines="1"
+                android:textAlignment="viewEnd"
+                android:textColor="@color/cwcn_body"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/compactCountryText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:gravity="end"
+                android:maxLines="1"
+                android:textAlignment="viewEnd"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

@@ -6,6 +6,8 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
+import org.bi9clt.cwcn.core.adif.CwAdifExporter;
+import org.bi9clt.cwcn.core.app.StationProfileStore;
 import org.bi9clt.cwcn.core.eval.CwFixtureEvaluationResult;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoPhase;
@@ -28,11 +30,13 @@ public final class LocalLogRepository {
 
     private final SharedPreferences preferences;
     private final ConfirmedLogDatabaseHelper databaseHelper;
+    private final StationProfileStore stationProfileStore;
 
     public LocalLogRepository(Context context) {
         Context appContext = context.getApplicationContext();
         preferences = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         databaseHelper = new ConfirmedLogDatabaseHelper(appContext);
+        stationProfileStore = new StationProfileStore(appContext);
         migrateLegacyConfirmedLogsIfNeeded();
         migrateLegacyDraftIfNeeded();
     }
@@ -80,9 +84,23 @@ public final class LocalLogRepository {
     }
 
     public synchronized ConfirmedQsoLog confirmDraft(QsoDraftSnapshot snapshot, long confirmedAtEpochMs) {
-        ConfirmedQsoLog log = ConfirmedQsoLog.fromDraft(snapshot, confirmedAtEpochMs);
+        ConfirmedQsoLog log = ConfirmedQsoLog.fromDraft(
+                snapshot,
+                confirmedAtEpochMs,
+                stationProfileStore.maidenheadGrid(),
+                0L,
+                defaultLogComment(null, stationProfileStore.maidenheadGrid(), null)
+        );
         long id = insertConfirmedLog(log);
-        return withId(log, id);
+        return log.withId(id);
+    }
+
+    public synchronized ConfirmedQsoLog saveConfirmedLog(ConfirmedQsoLog log) {
+        if (log == null) {
+            return null;
+        }
+        long id = insertConfirmedLog(log);
+        return log.withId(id);
     }
 
     public synchronized List<ConfirmedQsoLog> loadConfirmedLogs() {
@@ -136,12 +154,26 @@ public final class LocalLogRepository {
     public synchronized AppOverviewSnapshot loadOverview() {
         QsoDraftSnapshot activeDraft = loadDraft();
         List<ConfirmedQsoLog> latestLogs = queryConfirmedLogs(
-                new ConfirmedLogQuery(null, null, null, null, ConfirmedLogQuery.SortOrder.CONFIRMED_AT_DESC)
+                new ConfirmedLogQuery(
+                        null,
+                        null,
+                        null,
+                        null,
+                        ConfirmedLogQuery.ConfirmationFilter.ALL,
+                        ConfirmedLogQuery.SortOrder.QSO_TIME_DESC
+                )
         );
         ConfirmedQsoLog latestConfirmedLog = latestLogs.isEmpty() ? null : latestLogs.get(0);
         int confirmedLogCount = countConfirmedLogs();
-        int manualReviewLogCount = countConfirmedLogs(Boolean.TRUE);
-        return new AppOverviewSnapshot(activeDraft, confirmedLogCount, manualReviewLogCount, latestConfirmedLog);
+        int reviewQueueCount = countReviewQueueLogs();
+        int manuallyConfirmedCount = countManualConfirmedLogs(Boolean.TRUE);
+        return new AppOverviewSnapshot(
+                activeDraft,
+                confirmedLogCount,
+                reviewQueueCount,
+                manuallyConfirmedCount,
+                latestConfirmedLog
+        );
     }
 
     public synchronized boolean updateConfirmedLog(long id, ConfirmedQsoLog updatedLog) {
@@ -216,16 +248,24 @@ public final class LocalLogRepository {
     }
 
     private int countConfirmedLogs() {
-        return countConfirmedLogs(null);
+        return countBooleanColumn(null, null);
     }
 
-    private int countConfirmedLogs(Boolean reviewOnly) {
+    private int countReviewQueueLogs() {
+        return countBooleanColumn(ConfirmedLogDatabaseHelper.COLUMN_NEED_MANUAL_REVIEW, Boolean.TRUE);
+    }
+
+    private int countManualConfirmedLogs(Boolean manualConfirmed) {
+        return countBooleanColumn(ConfirmedLogDatabaseHelper.COLUMN_MANUAL_CONFIRMED, manualConfirmed);
+    }
+
+    private int countBooleanColumn(String columnName, Boolean value) {
         SQLiteDatabase db = databaseHelper.getReadableDatabase();
         String sql = "SELECT COUNT(*) FROM " + ConfirmedLogDatabaseHelper.TABLE_CONFIRMED_LOGS;
         String[] args = null;
-        if (reviewOnly != null) {
-            sql += " WHERE " + ConfirmedLogDatabaseHelper.COLUMN_NEED_MANUAL_REVIEW + " = ?";
-            args = new String[]{reviewOnly ? "1" : "0"};
+        if (columnName != null && value != null) {
+            sql += " WHERE " + columnName + " = ?";
+            args = new String[]{value ? "1" : "0"};
         }
         try (Cursor cursor = db.rawQuery(sql, args)) {
             if (cursor.moveToFirst()) {
@@ -241,18 +281,24 @@ public final class LocalLogRepository {
             values.put(ConfirmedLogDatabaseHelper.COLUMN_ID, log.id());
         }
         values.put(ConfirmedLogDatabaseHelper.COLUMN_REMOTE_CALLSIGN, log.remoteCallsign());
-        values.put(ConfirmedLogDatabaseHelper.COLUMN_QSO_DATE_UTC, log.qsoDateUtc());
-        values.put(ConfirmedLogDatabaseHelper.COLUMN_TIME_ON_UTC, log.timeOnUtc());
+        values.put(ConfirmedLogDatabaseHelper.COLUMN_STATION_CALLSIGN, log.stationCallsign());
+        values.put(ConfirmedLogDatabaseHelper.COLUMN_QSO_TIME_UTC_EPOCH_MS, log.qsoTimeUtcEpochMs());
+        values.put(ConfirmedLogDatabaseHelper.COLUMN_FREQUENCY_HZ, log.frequencyHz());
         values.put(ConfirmedLogDatabaseHelper.COLUMN_MODE, log.mode());
         values.put(ConfirmedLogDatabaseHelper.COLUMN_RST_SENT, log.rstSent());
         values.put(ConfirmedLogDatabaseHelper.COLUMN_RST_RCVD, log.rstRcvd());
+        values.put(ConfirmedLogDatabaseHelper.COLUMN_REMOTE_GRID, log.remoteGrid());
+        values.put(ConfirmedLogDatabaseHelper.COLUMN_STATION_GRID, log.stationGrid());
         values.put(ConfirmedLogDatabaseHelper.COLUMN_NAME, log.name());
         values.put(ConfirmedLogDatabaseHelper.COLUMN_QTH, log.qth());
-        values.put(ConfirmedLogDatabaseHelper.COLUMN_STATION_CALLSIGN, log.stationCallsign());
+        values.put(ConfirmedLogDatabaseHelper.COLUMN_COMMENT, log.comment());
+        values.put(ConfirmedLogDatabaseHelper.COLUMN_MANUAL_CONFIRMED, log.manualConfirmed() ? 1 : 0);
         values.put(ConfirmedLogDatabaseHelper.COLUMN_PHASE, log.phase());
         values.put(ConfirmedLogDatabaseHelper.COLUMN_NORMALIZED_TEXT, log.normalizedText());
         values.put(ConfirmedLogDatabaseHelper.COLUMN_NEED_MANUAL_REVIEW, log.needManualReview() ? 1 : 0);
         values.put(ConfirmedLogDatabaseHelper.COLUMN_CONFIRMED_AT_EPOCH_MS, log.confirmedAtEpochMs());
+        values.put(ConfirmedLogDatabaseHelper.COLUMN_QSO_DATE_UTC, log.qsoDateUtc());
+        values.put(ConfirmedLogDatabaseHelper.COLUMN_TIME_ON_UTC, log.timeOnUtc());
         return values;
     }
 
@@ -354,17 +400,30 @@ public final class LocalLogRepository {
     }
 
     private ConfirmedQsoLog readConfirmedLog(Cursor cursor) {
+        long qsoTimeUtcEpochMs = cursor.getLong(
+                cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_QSO_TIME_UTC_EPOCH_MS)
+        );
+        if (qsoTimeUtcEpochMs <= 0L) {
+            qsoTimeUtcEpochMs = LogDisplayFormatter.parseUtcDateTimeMillis(
+                    cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_QSO_DATE_UTC)),
+                    cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_TIME_ON_UTC))
+            );
+        }
         return new ConfirmedQsoLog(
                 cursor.getLong(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_ID)),
                 emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_REMOTE_CALLSIGN))),
-                emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_QSO_DATE_UTC))),
-                emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_TIME_ON_UTC))),
-                emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_MODE))),
+                emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_STATION_CALLSIGN))),
+                qsoTimeUtcEpochMs,
+                cursor.getLong(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_FREQUENCY_HZ)),
                 emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_RST_SENT))),
                 emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_RST_RCVD))),
+                emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_REMOTE_GRID))),
+                emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_STATION_GRID))),
                 emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_NAME))),
                 emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_QTH))),
-                emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_STATION_CALLSIGN))),
+                emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_COMMENT))),
+                cursor.getInt(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_MANUAL_CONFIRMED)) != 0,
+                emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_MODE))),
                 emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_PHASE))),
                 emptyToNull(cursor.getString(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_NORMALIZED_TEXT))),
                 cursor.getInt(cursor.getColumnIndexOrThrow(ConfirmedLogDatabaseHelper.COLUMN_NEED_MANUAL_REVIEW)) != 0,
@@ -517,17 +576,28 @@ public final class LocalLogRepository {
     }
 
     private ConfirmedQsoLog deserializeLegacyLog(JSONObject object) {
+        long qsoTimeUtcEpochMs = object.optLong("qsoTimeUtcEpochMs", 0L);
+        if (qsoTimeUtcEpochMs <= 0L) {
+            qsoTimeUtcEpochMs = LogDisplayFormatter.parseUtcDateTimeMillis(
+                    emptyToNull(object.optString("qsoDateUtc", null)),
+                    emptyToNull(object.optString("timeOnUtc", null))
+            );
+        }
         return new ConfirmedQsoLog(
                 0L,
                 emptyToNull(object.optString("remoteCallsign", null)),
-                emptyToNull(object.optString("qsoDateUtc", null)),
-                emptyToNull(object.optString("timeOnUtc", null)),
-                emptyToNull(object.optString("mode", "CW")),
+                emptyToNull(object.optString("stationCallsign", null)),
+                qsoTimeUtcEpochMs,
+                object.optLong("frequencyHz", 0L),
                 emptyToNull(object.optString("rstSent", null)),
                 emptyToNull(object.optString("rstRcvd", null)),
+                emptyToNull(object.optString("remoteGrid", null)),
+                emptyToNull(object.optString("stationGrid", null)),
                 emptyToNull(object.optString("name", null)),
                 emptyToNull(object.optString("qth", null)),
-                emptyToNull(object.optString("stationCallsign", null)),
+                emptyToNull(object.optString("comment", null)),
+                object.optBoolean("manualConfirmed", false),
+                emptyToNull(object.optString("mode", "CW")),
                 emptyToNull(object.optString("phase", null)),
                 emptyToNull(object.optString("normalizedText", null)),
                 object.optBoolean("needManualReview", false),
@@ -594,22 +664,7 @@ public final class LocalLogRepository {
     }
 
     private ConfirmedQsoLog withId(ConfirmedQsoLog log, long id) {
-        return new ConfirmedQsoLog(
-                id,
-                log.remoteCallsign(),
-                log.qsoDateUtc(),
-                log.timeOnUtc(),
-                log.mode(),
-                log.rstSent(),
-                log.rstRcvd(),
-                log.name(),
-                log.qth(),
-                log.stationCallsign(),
-                log.phase(),
-                log.normalizedText(),
-                log.needManualReview(),
-                log.confirmedAtEpochMs()
-        );
+        return log.withId(id);
     }
 
     private QueryParts buildConfirmedLogQueryParts(ConfirmedLogQuery query) {
@@ -625,6 +680,20 @@ public final class LocalLogRepository {
         if (query.reviewOnly() != null) {
             clauses.add(ConfirmedLogDatabaseHelper.COLUMN_NEED_MANUAL_REVIEW + " = ?");
             args.add(query.reviewOnly() ? "1" : "0");
+        }
+
+        switch (query.confirmationFilter()) {
+            case MANUALLY_CONFIRMED:
+                clauses.add(ConfirmedLogDatabaseHelper.COLUMN_MANUAL_CONFIRMED + " = ?");
+                args.add("1");
+                break;
+            case UNCONFIRMED:
+                clauses.add(ConfirmedLogDatabaseHelper.COLUMN_MANUAL_CONFIRMED + " = ?");
+                args.add("0");
+                break;
+            case ALL:
+            default:
+                break;
         }
 
         String fromQsoDateUtc = normalizeFilter(query.fromQsoDateUtc());
@@ -646,20 +715,22 @@ public final class LocalLogRepository {
 
     private String mapSortOrder(ConfirmedLogQuery.SortOrder sortOrder) {
         ConfirmedLogQuery.SortOrder safeSort = sortOrder == null
-                ? ConfirmedLogQuery.SortOrder.CONFIRMED_AT_DESC
+                ? ConfirmedLogQuery.SortOrder.QSO_TIME_DESC
                 : sortOrder;
         switch (safeSort) {
-            case CONFIRMED_AT_ASC:
-                return ConfirmedLogDatabaseHelper.COLUMN_CONFIRMED_AT_EPOCH_MS + " ASC";
+            case QSO_TIME_ASC:
+                return ConfirmedLogDatabaseHelper.COLUMN_QSO_TIME_UTC_EPOCH_MS + " ASC, "
+                        + ConfirmedLogDatabaseHelper.COLUMN_ID + " ASC";
             case CALLSIGN_ASC:
                 return ConfirmedLogDatabaseHelper.COLUMN_REMOTE_CALLSIGN + " COLLATE NOCASE ASC, "
-                        + ConfirmedLogDatabaseHelper.COLUMN_CONFIRMED_AT_EPOCH_MS + " DESC";
+                        + ConfirmedLogDatabaseHelper.COLUMN_QSO_TIME_UTC_EPOCH_MS + " DESC";
             case CALLSIGN_DESC:
                 return ConfirmedLogDatabaseHelper.COLUMN_REMOTE_CALLSIGN + " COLLATE NOCASE DESC, "
-                        + ConfirmedLogDatabaseHelper.COLUMN_CONFIRMED_AT_EPOCH_MS + " DESC";
-            case CONFIRMED_AT_DESC:
+                        + ConfirmedLogDatabaseHelper.COLUMN_QSO_TIME_UTC_EPOCH_MS + " DESC";
+            case QSO_TIME_DESC:
             default:
-                return ConfirmedLogDatabaseHelper.COLUMN_CONFIRMED_AT_EPOCH_MS + " DESC";
+                return ConfirmedLogDatabaseHelper.COLUMN_QSO_TIME_UTC_EPOCH_MS + " DESC, "
+                        + ConfirmedLogDatabaseHelper.COLUMN_ID + " DESC";
         }
     }
 
@@ -680,6 +751,18 @@ public final class LocalLogRepository {
 
     private String emptyToNullAsEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private String defaultLogComment(String remoteGrid, String stationGrid, String existingComment) {
+        String normalizedComment = emptyToNull(existingComment);
+        Double distanceKm = MaidenheadGridUtil.distanceKm(stationGrid, remoteGrid);
+        if (distanceKm != null && distanceKm > 0.0d) {
+            return "Distance: " + String.format("%.0f km, QSO by CWCN", distanceKm);
+        }
+        if (normalizedComment != null) {
+            return normalizedComment;
+        }
+        return "QSO by CWCN";
     }
 
     private QsoPhase safePhase(String raw) {

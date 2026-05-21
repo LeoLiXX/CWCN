@@ -83,6 +83,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:lines="1"
                 android:textColor="@color/cwcn_subtitle"
                 android:textSize="7sp" />
         </LinearLayout>

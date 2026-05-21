@@ -1,272 +1,145 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/cwcn_screen_background">
+    android:background="@color/cwcn_screen_background"
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp">
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="6dp"
+        android:paddingBottom="4dp">
 
-        <TextView
-            android:id="@+id/titleText"
-            android:layout_width="match_parent"
+        <ImageButton
+            android:id="@+id/exportButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/logbook_toolbar_button_background"
+            android:contentDescription="局域网导出"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_download"
+            android:tint="@color/cwcn_body" />
+
+        <ImageButton
+            android:id="@+id/shareButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/logbook_toolbar_button_background"
+            android:contentDescription="分享文本"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_share"
+            android:tint="@color/cwcn_body" />
+
+        <ImageButton
+            android:id="@+id/newButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/logbook_toolbar_button_background"
+            android:contentDescription="新建记录"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_add"
+            android:tint="@color/cwcn_body" />
+
+        <EditText
+            android:id="@+id/searchEditText"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="QSO Logbook"
-            android:textColor="@color/cwcn_title"
-            android:textSize="30sp"
-            android:textStyle="bold" />
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/logbook_search_field_background"
+            android:gravity="center_vertical"
+            android:hint="呼号搜索"
+            android:imeOptions="actionDone"
+            android:inputType="textCapCharacters"
+            android:maxLines="1"
+            android:minHeight="34dp"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="6dp"
+            android:textColor="@color/cwcn_body"
+            android:textColorHint="@color/cwcn_subtitle"
+            android:textSize="12sp" />
 
-        <TextView
-            android:id="@+id/subtitleText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Browse confirmed logs and load one back into the editor."
-            android:textColor="@color/cwcn_subtitle"
-            android:textSize="15sp" />
+        <ImageButton
+            android:id="@+id/viewModeButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/logbook_toolbar_button_background"
+            android:contentDescription="切换显示模式"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_view_compact"
+            android:tint="@color/cwcn_body" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/backButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Back" />
-
-            <Button
-                android:id="@+id/reloadButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:text="Reload Logs" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Filter &amp; Sort"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <EditText
-                android:id="@+id/callsignFilterEditText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bootstrap_field_background"
-                android:hint="Filter by callsign"
-                android:inputType="textCapCharacters"
-                android:padding="12dp"
-                android:singleLine="true"
-                android:textColor="@color/cwcn_body"
-                android:textColorHint="@color/cwcn_subtitle" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <EditText
-                    android:id="@+id/fromDateFilterEditText"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:background="@drawable/bootstrap_field_background"
-                    android:hint="From YYYYMMDD"
-                    android:inputType="date"
-                    android:padding="12dp"
-                    android:singleLine="true"
-                    android:textColor="@color/cwcn_body"
-                    android:textColorHint="@color/cwcn_subtitle" />
-
-                <EditText
-                    android:id="@+id/toDateFilterEditText"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bootstrap_field_background"
-                    android:hint="To YYYYMMDD"
-                    android:inputType="date"
-                    android:padding="12dp"
-                    android:singleLine="true"
-                    android:textColor="@color/cwcn_body"
-                    android:textColorHint="@color/cwcn_subtitle" />
-            </LinearLayout>
-
-            <CheckBox
-                android:id="@+id/reviewOnlyCheckBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="Review only"
-                android:textColor="@color/cwcn_body" />
-
-            <Spinner
-                android:id="@+id/sortOrderSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/bootstrap_field_background"
-                android:padding="12dp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/applyFilterButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Apply" />
-
-                <Button
-                    android:id="@+id/clearFilterButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_weight="1"
-                    android:text="Clear" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Log List"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/logSummaryText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
-
-            <LinearLayout
-                android:id="@+id/logButtonContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:orientation="vertical" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bootstrap_panel_background"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Selected Log Detail"
-                android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/selectedLogText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/selectedLogRawText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_subtitle"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/selectedLogReviewText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_body"
-                android:textSize="13sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/loadIntoEditorButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Re-edit" />
-
-                <Button
-                    android:id="@+id/toggleReviewButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_weight="1"
-                    android:text="Toggle Review" />
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/deleteLogButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Delete Selected Log" />
-
-            <TextView
-                android:id="@+id/actionStatusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/cwcn_subtitle"
-                android:textSize="13sp" />
-        </LinearLayout>
-
+        <ImageButton
+            android:id="@+id/filterButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/logbook_toolbar_button_background"
+            android:contentDescription="高级筛选"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_sliders"
+            android:tint="@color/cwcn_body" />
     </LinearLayout>
 
-</androidx.core.widget.NestedScrollView>
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/logRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="5dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="5dp"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:id="@+id/emptyStateText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:text="暂无 QSO 记录"
+            android:textColor="@color/cwcn_subtitle"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNavView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/formal_bottom_nav_background"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        app:itemBackground="@drawable/formal_bottom_nav_item_background"
+        app:itemIconSize="22dp"
+        app:itemIconTint="@color/formal_bottom_nav_item_colors"
+        app:itemRippleColor="@android:color/transparent"
+        app:itemTextAppearanceActive="@style/TextAppearance.CWCN.BottomNav.Active"
+        app:itemTextAppearanceInactive="@style/TextAppearance.CWCN.BottomNav.Inactive"
+        app:itemTextColor="@color/formal_bottom_nav_item_colors"
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/formal_bottom_nav_menu" />
+
+</LinearLayout>

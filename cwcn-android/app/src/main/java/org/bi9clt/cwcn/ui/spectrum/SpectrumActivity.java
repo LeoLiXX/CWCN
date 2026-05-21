@@ -82,6 +82,7 @@ public final class SpectrumActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        OperateActivity.requestSharedOperateRxResume();
         refreshUi();
         mainHandler.removeCallbacks(liveRefreshRunnable);
         mainHandler.postDelayed(liveRefreshRunnable, LIVE_SPECTRUM_REFRESH_INTERVAL_MS);

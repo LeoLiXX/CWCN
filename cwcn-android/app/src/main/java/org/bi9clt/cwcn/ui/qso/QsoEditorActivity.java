@@ -4,43 +4,48 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.widget.CompoundButton;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import org.bi9clt.cwcn.BuildConfig;
-import org.bi9clt.cwcn.core.adif.CwAdifFileWriter;
-import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
+import org.bi9clt.cwcn.core.app.StationProfileStore;
 import org.bi9clt.cwcn.core.log.ConfirmedQsoLog;
 import org.bi9clt.cwcn.core.log.LogDisplayFormatter;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.qso.QsoDraftFactory;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
-import org.bi9clt.cwcn.core.qso.QsoWorkflowSummaryFormatter;
+import org.bi9clt.cwcn.core.rig.RigFrequencyResolver;
 import org.bi9clt.cwcn.databinding.ActivityQsoEditorBinding;
 
-import java.io.File;
-import java.io.IOException;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
+import java.util.TimeZone;
 
 public final class QsoEditorActivity extends AppCompatActivity {
     public static final String EXTRA_CONFIRMED_LOG_ID =
             "org.bi9clt.cwcn.ui.qso.extra.CONFIRMED_LOG_ID";
+    public static final String EXTRA_START_FRESH =
+            "org.bi9clt.cwcn.ui.qso.extra.START_FRESH";
+    public static final String EXTRA_SEED_COMMENT =
+            "org.bi9clt.cwcn.ui.qso.extra.SEED_COMMENT";
+
+    private static final String LOCAL_TIME_PATTERN = "yyyy-MM-dd HH:mm:ss";
 
     private ActivityQsoEditorBinding binding;
     private LocalLogRepository localLogRepository;
+    private StationProfileStore stationProfileStore;
+    private RigFrequencyResolver rigFrequencyResolver;
     private QsoDraftSnapshot currentDraftSnapshot;
     private ConfirmedQsoLog currentConfirmedLog;
     private long currentConfirmedLogId;
-    private String actionStatusMessage = "";
-    private String editorStatusMessage = "";
     private boolean syncingEditor;
     private boolean editorDirty;
+    private String seedComment;
+    private String actionStatusMessage = "";
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -48,9 +53,11 @@ public final class QsoEditorActivity extends AppCompatActivity {
         binding = ActivityQsoEditorBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         localLogRepository = new LocalLogRepository(this);
-        setupEditorWatchers();
+        stationProfileStore = new StationProfileStore(this);
+        rigFrequencyResolver = new RigFrequencyResolver(this);
         setupActions();
-        reloadFromRepository();
+        setupEditorWatchers();
+        reloadFromRepository(true);
     }
 
     @Override
@@ -59,49 +66,47 @@ public final class QsoEditorActivity extends AppCompatActivity {
         reloadFromRepository(false);
     }
 
+    private void setupActions() {
+        binding.backButton.setOnClickListener(view -> finish());
+        binding.openLogbookButton.setOnClickListener(view ->
+                startActivity(new Intent(this, QsoLogbookActivity.class)));
+        binding.resetButton.setOnClickListener(view -> resetEditor());
+        binding.saveButton.setOnClickListener(view -> saveRecord());
+    }
+
     private void setupEditorWatchers() {
         TextWatcher watcher = new SimpleTextWatcher() {
             @Override
             public void afterTextChanged(Editable editable) {
-                if (!syncingEditor) {
-                    editorDirty = true;
-                    binding.editorStatusText.setText(renderEditorStatus());
-                }
+                onEditorChanged();
             }
         };
-        binding.stationCallsignEditText.addTextChangedListener(watcher);
+        binding.qsoTimeEditText.addTextChangedListener(watcher);
         binding.remoteCallsignEditText.addTextChangedListener(watcher);
+        binding.stationCallsignEditText.addTextChangedListener(watcher);
+        binding.frequencyEditText.addTextChangedListener(watcher);
         binding.rstSentEditText.addTextChangedListener(watcher);
         binding.rstRcvdEditText.addTextChangedListener(watcher);
         binding.nameEditText.addTextChangedListener(watcher);
         binding.qthEditText.addTextChangedListener(watcher);
-    }
-
-    private void setupActions() {
-        binding.backToDebugButton.setOnClickListener(view -> finish());
-        binding.openLogbookButton.setOnClickListener(view ->
-                startActivity(new Intent(this, QsoLogbookActivity.class)));
-        binding.reloadDraftButton.setOnClickListener(view -> {
-            reloadFromRepository(true);
-            editorStatusMessage = isEditingConfirmedLog()
-                    ? "Reloaded confirmed log from local storage."
-                    : "Reloaded draft from local storage.";
-            refreshUi();
-        });
-        binding.clearDraftButton.setOnClickListener(view -> clearEditorContext());
-        binding.saveDraftButton.setOnClickListener(view -> saveDraft());
-        binding.confirmLogButton.setOnClickListener(view -> {
-            if (isEditingConfirmedLog()) {
-                updateConfirmedLog();
-            } else {
-                confirmLog();
+        binding.remoteGridEditText.addTextChangedListener(watcher);
+        binding.stationGridEditText.addTextChangedListener(watcher);
+        binding.commentEditText.addTextChangedListener(watcher);
+        binding.manualConfirmedCheckBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                onEditorChanged();
             }
         });
-        binding.exportAdifButton.setOnClickListener(view -> exportAdif());
     }
 
-    private void reloadFromRepository() {
-        reloadFromRepository(true);
+    private void onEditorChanged() {
+        if (syncingEditor) {
+            return;
+        }
+        editorDirty = true;
+        refreshDerivedViews();
+        refreshStatusText();
     }
 
     private void reloadFromRepository(boolean discardUnsavedChanges) {
@@ -111,329 +116,441 @@ public final class QsoEditorActivity extends AppCompatActivity {
         }
 
         currentConfirmedLogId = resolveConfirmedLogIdExtra();
+        boolean startFresh = shouldStartFresh();
+        seedComment = normalizeIntentText(
+                getIntent() == null ? null : getIntent().getStringExtra(EXTRA_SEED_COMMENT)
+        );
         currentConfirmedLog = currentConfirmedLogId > 0L
                 ? localLogRepository.loadConfirmedLogById(currentConfirmedLogId)
                 : null;
         if (currentConfirmedLog != null) {
             currentDraftSnapshot = QsoDraftFactory.createDraftFromConfirmedLog(
                     currentConfirmedLog,
-                    System.currentTimeMillis(),
+                    currentConfirmedLog.qsoTimeUtcEpochMs() > 0L
+                            ? currentConfirmedLog.qsoTimeUtcEpochMs()
+                            : System.currentTimeMillis(),
                     "loaded from confirmed log"
             );
-        } else {
+        } else if (!startFresh) {
             currentDraftSnapshot = localLogRepository.loadDraft();
-        }
-        syncEditorFromSnapshot();
-        refreshUi();
-    }
-
-    private void saveDraft() {
-        QsoDraftSnapshot snapshot = buildSnapshotFromEditor();
-        if (!hasDraftContent(snapshot)) {
-            Toast.makeText(this, "No draft data to save.", Toast.LENGTH_SHORT).show();
-            return;
+        } else {
+            currentDraftSnapshot = null;
         }
 
-        localLogRepository.saveDraft(snapshot);
-        currentDraftSnapshot = snapshot;
-        editorDirty = false;
-        editorStatusMessage = "Saved draft from QSO editor.";
-        actionStatusMessage = "Draft saved.";
+        syncEditorFromSource();
+        actionStatusMessage = "";
         refreshUi();
+        tryPrefillFrequencyAsync();
     }
 
-    private void clearEditorContext() {
+    private void resetEditor() {
         if (isEditingConfirmedLog()) {
             if (currentConfirmedLog == null) {
                 Toast.makeText(this, "Confirmed log is no longer available.", Toast.LENGTH_SHORT).show();
                 return;
             }
+            syncEditorFromSource();
+            actionStatusMessage = "Restored the saved log.";
+            refreshUi();
+            return;
+        }
+
+        currentDraftSnapshot = localLogRepository.loadDraft();
+        syncEditorFromSource();
+        actionStatusMessage = currentDraftSnapshot == null
+                ? "Cleared editor back to blank/new state."
+                : "Restored the current draft seed.";
+        refreshUi();
+    }
+
+    private void saveRecord() {
+        String validationError = validateEditor();
+        if (validationError != null) {
+            Toast.makeText(this, validationError, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        ConfirmedQsoLog record = buildRecordFromEditor();
+        if (record == null) {
+            Toast.makeText(this, "Unable to build QSO record.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isEditingConfirmedLog()) {
+            boolean updated = localLogRepository.updateConfirmedLog(currentConfirmedLogId, record);
+            if (!updated) {
+                Toast.makeText(this, "Unable to update QSO record.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            currentConfirmedLog = localLogRepository.loadConfirmedLogById(currentConfirmedLogId);
+            currentDraftSnapshot = currentConfirmedLog == null
+                    ? null
+                    : QsoDraftFactory.createDraftFromConfirmedLog(
+                            currentConfirmedLog,
+                            currentConfirmedLog.qsoTimeUtcEpochMs(),
+                            "updated confirmed log"
+                    );
+            actionStatusMessage = "Updated QSO record: " + safeValue(record.remoteCallsign()) + ".";
+        } else {
+            ConfirmedQsoLog saved = localLogRepository.saveConfirmedLog(record);
+            if (saved == null) {
+                Toast.makeText(this, "Unable to save QSO record.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            localLogRepository.clearDraft();
+            currentConfirmedLogId = saved.id();
+            currentConfirmedLog = saved;
             currentDraftSnapshot = QsoDraftFactory.createDraftFromConfirmedLog(
-                    currentConfirmedLog,
-                    System.currentTimeMillis(),
-                    "reset to confirmed log"
+                    saved,
+                    saved.qsoTimeUtcEpochMs(),
+                    "saved from qso editor"
             );
-            actionStatusMessage = "Reset editor back to confirmed log.";
-            editorStatusMessage = "Discarded unsaved edits and restored the selected log.";
-            syncEditorFromSnapshot();
-            refreshUi();
-            return;
+            actionStatusMessage = "Saved QSO record: " + safeValue(saved.remoteCallsign()) + ".";
         }
 
-        if (!hasEditorContent() && currentDraftSnapshot == null) {
-            Toast.makeText(this, "No active draft to clear.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        localLogRepository.clearDraft();
-        currentDraftSnapshot = null;
-        actionStatusMessage = "Cleared active draft.";
-        editorStatusMessage = "Cleared stored draft and reset editor.";
-        syncEditorFromSnapshot();
+        syncEditorFromSource();
         refreshUi();
     }
 
-    private void updateConfirmedLog() {
-        if (currentConfirmedLog == null || currentConfirmedLogId <= 0L) {
-            Toast.makeText(this, "Confirmed log is no longer available.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        QsoDraftSnapshot snapshot = buildSnapshotFromEditor();
-        if (snapshot.remoteCallsignCandidate() == null || snapshot.remoteCallsignCandidate().isEmpty()) {
-            Toast.makeText(this, "Remote callsign is required before saving.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        ConfirmedQsoLog updatedLog = currentConfirmedLog.withDraftEdits(snapshot);
-        boolean updated = localLogRepository.updateConfirmedLog(currentConfirmedLogId, updatedLog);
-        if (!updated) {
-            Toast.makeText(this, "Unable to update confirmed log.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        currentConfirmedLog = localLogRepository.loadConfirmedLogById(currentConfirmedLogId);
-        currentDraftSnapshot = currentConfirmedLog == null
-                ? null
-                : QsoDraftFactory.createDraftFromConfirmedLog(
-                        currentConfirmedLog,
-                        System.currentTimeMillis(),
-                        "updated confirmed log"
-                );
+    private void syncEditorFromSource() {
+        syncingEditor = true;
+        long qsoTimeUtcEpochMs = resolveSeedQsoTimeUtcEpochMs();
+        binding.qsoTimeEditText.setText(formatLocalTime(qsoTimeUtcEpochMs));
+        binding.remoteCallsignEditText.setText(valueOrEmpty(resolveRemoteCallsign()));
+        binding.stationCallsignEditText.setText(valueOrEmpty(resolveStationCallsign()));
+        binding.frequencyEditText.setText(formatFrequencyValue(resolveFrequencyHz()));
+        binding.rstSentEditText.setText(valueOrEmpty(resolveRstSent()));
+        binding.rstRcvdEditText.setText(valueOrEmpty(resolveRstRcvd()));
+        binding.nameEditText.setText(valueOrEmpty(resolveName()));
+        binding.qthEditText.setText(valueOrEmpty(resolveQth()));
+        binding.remoteGridEditText.setText(valueOrEmpty(resolveRemoteGrid()));
+        binding.stationGridEditText.setText(valueOrEmpty(resolveStationGrid()));
+        binding.commentEditText.setText(valueOrEmpty(resolveComment()));
+        binding.manualConfirmedCheckBox.setChecked(resolveManualConfirmed());
+        syncingEditor = false;
         editorDirty = false;
-        editorStatusMessage = "Saved editor changes back into the confirmed log.";
-        actionStatusMessage = "Updated confirmed log: "
-                + safeValue(updatedLog.remoteCallsign())
-                + (updatedLog.needManualReview() ? " (review flag kept)" : "");
-        syncEditorFromSnapshot();
-        refreshUi();
+        refreshDerivedViews();
+        refreshStatusText();
     }
 
-    private void confirmLog() {
-        QsoDraftSnapshot snapshot = buildSnapshotFromEditor();
-        if (snapshot.remoteCallsignCandidate() == null || snapshot.remoteCallsignCandidate().isEmpty()) {
-            Toast.makeText(this, "Remote callsign is required before confirming.", Toast.LENGTH_SHORT).show();
+    private void tryPrefillFrequencyAsync() {
+        if (isEditingConfirmedLog()) {
             return;
         }
-
-        ConfirmedQsoLog log = localLogRepository.confirmDraft(snapshot, System.currentTimeMillis());
-        localLogRepository.clearDraft();
-        currentDraftSnapshot = null;
-        editorDirty = false;
-        editorStatusMessage = "Confirmed log and cleared active draft.";
-        actionStatusMessage = "Confirmed log: "
-                + log.remoteCallsign()
-                + (log.needManualReview() ? " (review flag kept)" : "");
-        syncEditorFromSnapshot();
-        refreshUi();
-    }
-
-    private void exportAdif() {
-        List<ConfirmedQsoLog> logs = localLogRepository.loadConfirmedLogs();
-        if (logs.isEmpty()) {
-            Toast.makeText(this, "No confirmed logs available for export.", Toast.LENGTH_SHORT).show();
+        if (parseFrequencyHz(binding.frequencyEditText.getText()) > 0L) {
             return;
         }
-
-        File targetFile;
-        try {
-            targetFile = CwAdifFileWriter.export(this, logs, BuildConfig.VERSION_NAME);
-        } catch (IOException exception) {
-            actionStatusMessage = "ADIF export failed: " + exception.getMessage();
-            Toast.makeText(this, "ADIF export failed.", Toast.LENGTH_SHORT).show();
-            refreshUi();
-            return;
-        }
-
-        actionStatusMessage = "Exported " + logs.size()
-                + " log(s) to "
-                + targetFile.getAbsolutePath();
-        refreshUi();
+        new Thread(() -> {
+            long detectedFrequencyHz = rigFrequencyResolver == null
+                    ? 0L
+                    : rigFrequencyResolver.readCurrentFrequencyHz();
+            if (detectedFrequencyHz <= 0L) {
+                return;
+            }
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                if (parseFrequencyHz(binding.frequencyEditText.getText()) > 0L) {
+                    return;
+                }
+                syncingEditor = true;
+                binding.frequencyEditText.setText(String.valueOf(detectedFrequencyHz));
+                syncingEditor = false;
+                actionStatusMessage = "Loaded current rig frequency into the QSO editor.";
+                refreshDerivedViews();
+                refreshStatusText();
+            });
+        }, "cwcn-qso-frequency-prefill").start();
     }
 
     private void refreshUi() {
-        AppOverviewSnapshot overview = localLogRepository.loadOverview();
-        QsoDraftSnapshot draftForDisplay = buildDisplaySnapshot();
-        binding.draftMetaText.setText(renderDraftMeta(draftForDisplay, overview));
-        binding.draftEvidenceText.setText(renderDraftEvidence(draftForDisplay));
-        binding.draftReviewText.setText(renderDraftReview(draftForDisplay));
-        binding.fieldOriginText.setText(QsoWorkflowSummaryFormatter.renderDraftFieldOriginSummary(draftForDisplay));
-        binding.editorStatusText.setText(renderEditorStatus());
-        binding.actionStatusText.setText(renderActionStatus());
-        binding.confirmedLogSummaryText.setText(renderConfirmedLogSummary(overview));
-        binding.confirmedLogListText.setText(renderConfirmedLogList());
-        binding.reloadDraftButton.setText(isEditingConfirmedLog() ? "Reload Log" : "Reload Draft");
-        binding.saveDraftButton.setText(isEditingConfirmedLog() ? "Save Draft Copy" : "Save Draft");
-        binding.clearDraftButton.setText(isEditingConfirmedLog() ? "Reset To Log" : "Clear Draft");
-        binding.saveDraftButton.setEnabled(editorDirty || hasEditorContent());
-        binding.confirmLogButton.setEnabled(hasRemoteCallsign());
-        binding.clearDraftButton.setEnabled(editorDirty || currentDraftSnapshot != null || hasEditorContent());
-        binding.confirmLogButton.setText(resolveConfirmButtonText(draftForDisplay));
-        binding.exportAdifButton.setEnabled(overview.confirmedLogCount() > 0);
+        binding.titleText.setText(isEditingConfirmedLog() ? "Edit QSO Record" : "New QSO Record");
+        binding.subtitleText.setText(isEditingConfirmedLog()
+                ? "Formal log entry editor"
+                : "Create a formal CW QSO record");
+        binding.editorModeChip.setText(isEditingConfirmedLog() ? "EDIT" : "NEW");
+        binding.saveButton.setText(isEditingConfirmedLog() ? "Update" : "Save");
+        binding.resetButton.setText(isEditingConfirmedLog() ? "Revert" : "Reset");
+        binding.seedSummaryText.setText(renderSeedSummary());
+        refreshDerivedViews();
+        refreshStatusText();
     }
 
-    private void syncEditorFromSnapshot() {
-        syncingEditor = true;
-        binding.stationCallsignEditText.setText(valueOrEmpty(currentValue(currentDraftSnapshot == null ? null : currentDraftSnapshot.stationCallsignUsed())));
-        binding.remoteCallsignEditText.setText(valueOrEmpty(currentValue(currentDraftSnapshot == null ? null : currentDraftSnapshot.remoteCallsignCandidate())));
-        binding.rstSentEditText.setText(valueOrEmpty(currentValue(currentDraftSnapshot == null ? null : currentDraftSnapshot.rstSentCandidate())));
-        binding.rstRcvdEditText.setText(valueOrEmpty(currentValue(currentDraftSnapshot == null ? null : currentDraftSnapshot.rstRcvdCandidate())));
-        binding.nameEditText.setText(valueOrEmpty(currentValue(currentDraftSnapshot == null ? null : currentDraftSnapshot.nameCandidate())));
-        binding.qthEditText.setText(valueOrEmpty(currentValue(currentDraftSnapshot == null ? null : currentDraftSnapshot.qthCandidate())));
-        syncingEditor = false;
-        editorDirty = false;
-    }
+    private void refreshDerivedViews() {
+        Long parsedQsoTime = parseLocalTimeMillis(binding.qsoTimeEditText.getText());
+        binding.qsoTimeHintText.setText(renderQsoTimeHint(parsedQsoTime));
 
-    private QsoDraftSnapshot buildSnapshotFromEditor() {
-        return QsoDraftFactory.createManualDraft(
-                currentDraftSnapshot,
-                normalizedEditorValue(binding.stationCallsignEditText.getText()),
-                normalizedEditorValue(binding.remoteCallsignEditText.getText()),
-                normalizedEditorValue(binding.rstSentEditText.getText()),
-                normalizedEditorValue(binding.rstRcvdEditText.getText()),
-                normalizedEditorValue(binding.nameEditText.getText()),
-                normalizedEditorValue(binding.qthEditText.getText()),
-                System.currentTimeMillis(),
-                "edited in QSO editor"
+        long frequencyHz = parseFrequencyHz(binding.frequencyEditText.getText());
+        String bandLabel = LogDisplayFormatter.formatBand(frequencyHz);
+        String frequencyLabel = LogDisplayFormatter.formatFrequency(frequencyHz);
+        binding.bandSummaryText.setText("Band: " + bandLabel + "  |  Frequency: " + frequencyLabel);
+
+        Double distanceKm = resolveDistanceKm(
+                normalizedEditorValue(binding.stationGridEditText.getText()),
+                normalizedEditorValue(binding.remoteGridEditText.getText())
         );
+        binding.distanceSummaryText.setText("Distance: " + LogDisplayFormatter.formatDistanceKm(distanceKm));
     }
 
-    private QsoDraftSnapshot buildDisplaySnapshot() {
-        if (!editorDirty) {
-            return currentDraftSnapshot;
+    private void refreshStatusText() {
+        StringBuilder statusBuilder = new StringBuilder();
+        statusBuilder.append(editorDirty ? "Unsaved changes." : "Saved state loaded.");
+        if (isEditingConfirmedLog()) {
+            statusBuilder.append("  Record #").append(currentConfirmedLogId).append(".");
+        } else if (currentDraftSnapshot != null) {
+            statusBuilder.append("  Draft seed available.");
+        } else {
+            statusBuilder.append("  Manual entry.");
         }
-        if (!hasEditorContent() && currentDraftSnapshot == null) {
+        binding.editorStatusText.setText(statusBuilder.toString());
+        binding.actionStatusText.setText(actionStatusMessage.isEmpty()
+                ? "Local input is stored as UTC internally and exported as ADIF UTC."
+                : actionStatusMessage);
+    }
+
+    @Nullable
+    private String validateEditor() {
+        if (normalizedEditorValue(binding.remoteCallsignEditText.getText()) == null) {
+            return "Remote callsign is required.";
+        }
+        if (normalizedEditorValue(binding.stationCallsignEditText.getText()) == null) {
+            return "My callsign is required.";
+        }
+        if (parseLocalTimeMillis(binding.qsoTimeEditText.getText()) == null) {
+            return "QSO time must be yyyy-MM-dd HH:mm:ss.";
+        }
+        return null;
+    }
+
+    @Nullable
+    private ConfirmedQsoLog buildRecordFromEditor() {
+        Long qsoTimeUtcEpochMs = parseLocalTimeMillis(binding.qsoTimeEditText.getText());
+        if (qsoTimeUtcEpochMs == null) {
             return null;
         }
-        return buildSnapshotFromEditor();
-    }
-
-    private String renderDraftMeta(QsoDraftSnapshot snapshot, AppOverviewSnapshot overview) {
-        if (snapshot == null) {
-            return "No active draft stored yet.";
-        }
-
-        String updatedAt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-                .format(new Date(snapshot.updatedAtEpochMs()));
-        return "Phase: " + snapshot.phase().displayName()
-                + "\nReady: " + yesNo(snapshot.readyForDraftConfirmation())
-                + "\nManual review: " + yesNo(snapshot.needManualReview())
-                + "\nReview queue: " + (overview == null ? 0 : overview.manualReviewLogCount())
-                + "\nSource: " + resolveDraftSourceLabel()
-                + "\nUpdated: " + updatedAt;
-    }
-
-    private String renderDraftEvidence(QsoDraftSnapshot snapshot) {
-        if (snapshot == null) {
-            return "No normalized text / hints available yet.";
-        }
-
-        String hints = snapshot.hints().isEmpty()
-                ? "(none)"
-                : String.join(" / ", snapshot.hints());
-        String normalizedText = snapshot.normalizedText().isEmpty()
-                ? "(none)"
-                : snapshot.normalizedText();
-        String lastEventSummary = snapshot.lastEvent() == null
-                ? "(none)"
-                : snapshot.lastEvent().summary();
-        return "Normalized: " + normalizedText
-                + "\nHints: " + hints
-                + "\nLast event: " + lastEventSummary;
-    }
-
-    private String renderDraftReview(QsoDraftSnapshot snapshot) {
-        return QsoWorkflowSummaryFormatter.renderDraftReviewSummary(snapshot)
-                + "\nNext step: " + QsoWorkflowSummaryFormatter.renderDraftNextStep(snapshot, editorDirty);
-    }
-
-    private String renderEditorStatus() {
-        StringBuilder builder = new StringBuilder();
-        builder.append(editorDirty ? "Editor has unsaved changes." : "Editor is in sync with stored draft.");
-        if (!editorStatusMessage.isEmpty()) {
-            builder.append("\nLast edit action: ").append(editorStatusMessage);
-        }
-        if (isEditingConfirmedLog()) {
-            builder.append("\nMode: editing confirmed log #").append(currentConfirmedLogId);
-        }
-        return builder.toString();
-    }
-
-    private String renderActionStatus() {
-        if (actionStatusMessage.isEmpty()) {
-            return "No save/confirm/export action yet.";
-        }
-        return actionStatusMessage;
-    }
-
-    private String renderConfirmedLogSummary(AppOverviewSnapshot overview) {
-        if (overview == null || overview.confirmedLogCount() == 0) {
-            return "Confirmed logs: 0\nReview queue: 0";
-        }
-        ConfirmedQsoLog latest = overview.latestConfirmedLog();
-        String latestLoggedAt = LogDisplayFormatter.formatUtcDateTime(
-                latest.qsoDateUtc(),
-                latest.timeOnUtc()
+        long confirmedAtEpochMs = isEditingConfirmedLog() && currentConfirmedLog != null
+                ? currentConfirmedLog.confirmedAtEpochMs()
+                : System.currentTimeMillis();
+        String remoteGrid = normalizedEditorValue(binding.remoteGridEditText.getText());
+        String stationGrid = normalizedEditorValue(binding.stationGridEditText.getText());
+        String remoteCallsign = normalizedEditorValue(binding.remoteCallsignEditText.getText());
+        String comment = buildComment(
+                normalizedEditorValue(binding.commentEditText.getText()),
+                stationGrid,
+                remoteGrid
         );
-        return "Confirmed logs: " + overview.confirmedLogCount()
-                + "\nReview queue: " + overview.manualReviewLogCount()
-                + "\nLatest: " + latest.remoteCallsign()
-                + "\nLogged at: " + latestLoggedAt
-                + " / "
-                + safeValue(latest.rstSent())
-                + " / "
-                + safeValue(latest.rstRcvd())
-                + (isEditingConfirmedLog() && currentConfirmedLog != null
-                ? "\nEditing: #" + currentConfirmedLog.id() + " " + safeValue(currentConfirmedLog.remoteCallsign())
-                : "");
+        return new ConfirmedQsoLog(
+                isEditingConfirmedLog() && currentConfirmedLog != null ? currentConfirmedLog.id() : 0L,
+                remoteCallsign,
+                normalizedEditorValue(binding.stationCallsignEditText.getText()),
+                qsoTimeUtcEpochMs,
+                parseFrequencyHz(binding.frequencyEditText.getText()),
+                normalizedEditorValue(binding.rstSentEditText.getText()),
+                normalizedEditorValue(binding.rstRcvdEditText.getText()),
+                remoteGrid,
+                stationGrid,
+                normalizedEditorValue(binding.nameEditText.getText()),
+                normalizedEditorValue(binding.qthEditText.getText()),
+                comment,
+                binding.manualConfirmedCheckBox.isChecked(),
+                "CW",
+                resolvePhaseForSave(),
+                currentDraftSnapshot == null ? "" : safeText(currentDraftSnapshot.normalizedText()),
+                remoteCallsign != null && remoteCallsign.contains("?"),
+                confirmedAtEpochMs
+        );
     }
 
-    private String renderConfirmedLogList() {
-        List<ConfirmedQsoLog> logs = localLogRepository.loadConfirmedLogs();
-        if (logs.isEmpty()) {
-            return "No confirmed logs yet.";
+    private String renderSeedSummary() {
+        if (isEditingConfirmedLog() && currentConfirmedLog != null) {
+            return "Editing saved QSO record for "
+                    + safeValue(currentConfirmedLog.remoteCallsign())
+                    + ".";
         }
-
-        ArrayList<String> lines = new ArrayList<>();
-        int start = Math.max(0, logs.size() - 10);
-        for (int i = logs.size() - 1; i >= start; i--) {
-            ConfirmedQsoLog log = logs.get(i);
-            String prefix = log.needManualReview() ? "[Review] " : "";
-            lines.add(prefix + LogDisplayFormatter.formatUtcDateTime(log.qsoDateUtc(), log.timeOnUtc())
-                    + "  "
-                    + safeValue(log.remoteCallsign())
-                    + "  "
-                    + safeValue(log.rstSent())
-                    + "/"
-                    + safeValue(log.rstRcvd()));
+        if (currentDraftSnapshot == null) {
+            return "No draft seed. You can create a fresh manual QSO record here.";
         }
-        return String.join("\n", lines);
+        return "Seeded from current RX/TX context. Callsign/time fields can be adjusted before saving.";
     }
 
-    private boolean hasEditorContent() {
-        return normalizedEditorValue(binding.stationCallsignEditText.getText()) != null
-                || normalizedEditorValue(binding.remoteCallsignEditText.getText()) != null
-                || normalizedEditorValue(binding.rstSentEditText.getText()) != null
-                || normalizedEditorValue(binding.rstRcvdEditText.getText()) != null
-                || normalizedEditorValue(binding.nameEditText.getText()) != null
-                || normalizedEditorValue(binding.qthEditText.getText()) != null;
+    private String renderQsoTimeHint(@Nullable Long qsoTimeUtcEpochMs) {
+        if (qsoTimeUtcEpochMs == null) {
+            return "Enter local time. CWCN will store UTC and export ADIF as UTC.";
+        }
+        return "UTC export: "
+                + CwTimeUtcFormatter.format(qsoTimeUtcEpochMs)
+                + "  |  Local display is editable.";
     }
 
-    private boolean hasRemoteCallsign() {
-        return normalizedEditorValue(binding.remoteCallsignEditText.getText()) != null;
+    @Nullable
+    private Long parseLocalTimeMillis(@Nullable Editable editable) {
+        String raw = normalizedEditorValue(editable);
+        if (raw == null) {
+            return null;
+        }
+        SimpleDateFormat format = new SimpleDateFormat(LOCAL_TIME_PATTERN, Locale.US);
+        format.setLenient(false);
+        format.setTimeZone(TimeZone.getDefault());
+        try {
+            Date parsed = format.parse(raw);
+            return parsed == null ? null : parsed.getTime();
+        } catch (ParseException exception) {
+            return null;
+        }
     }
 
-    private String resolveConfirmButtonText(QsoDraftSnapshot snapshot) {
-        if (isEditingConfirmedLog()) {
-            if (snapshot != null && snapshot.needManualReview()) {
-                return "Save To Log (Keep Review)";
-            }
-            return "Save To Log";
+    private String formatLocalTime(long epochMillis) {
+        if (epochMillis <= 0L) {
+            epochMillis = System.currentTimeMillis();
         }
-        if (snapshot != null && snapshot.needManualReview()) {
-            return "Confirm With Review Flag";
+        SimpleDateFormat format = new SimpleDateFormat(LOCAL_TIME_PATTERN, Locale.US);
+        format.setTimeZone(TimeZone.getDefault());
+        return format.format(new Date(epochMillis));
+    }
+
+    private long parseFrequencyHz(@Nullable Editable editable) {
+        String raw = normalizedEditorValue(editable);
+        if (raw == null) {
+            return 0L;
         }
-        return "Confirm Log";
+        try {
+            return Math.max(0L, Long.parseLong(raw));
+        } catch (NumberFormatException exception) {
+            return 0L;
+        }
+    }
+
+    private String formatFrequencyValue(long frequencyHz) {
+        return frequencyHz > 0L ? String.valueOf(frequencyHz) : "";
+    }
+
+    private long resolveSeedQsoTimeUtcEpochMs() {
+        if (currentConfirmedLog != null && currentConfirmedLog.qsoTimeUtcEpochMs() > 0L) {
+            return currentConfirmedLog.qsoTimeUtcEpochMs();
+        }
+        if (currentDraftSnapshot != null && currentDraftSnapshot.updatedAtEpochMs() > 0L) {
+            return currentDraftSnapshot.updatedAtEpochMs();
+        }
+        return System.currentTimeMillis();
+    }
+
+    private String resolveRemoteCallsign() {
+        if (currentConfirmedLog != null && currentConfirmedLog.remoteCallsign() != null) {
+            return currentConfirmedLog.remoteCallsign();
+        }
+        return currentDraftSnapshot == null ? null : currentDraftSnapshot.remoteCallsignCandidate();
+    }
+
+    private String resolveStationCallsign() {
+        if (currentConfirmedLog != null && currentConfirmedLog.stationCallsign() != null) {
+            return currentConfirmedLog.stationCallsign();
+        }
+        if (currentDraftSnapshot != null && currentDraftSnapshot.stationCallsignUsed() != null) {
+            return currentDraftSnapshot.stationCallsignUsed();
+        }
+        return stationProfileStore == null ? null : stationProfileStore.stationCallsign();
+    }
+
+    private long resolveFrequencyHz() {
+        return currentConfirmedLog == null ? 0L : currentConfirmedLog.frequencyHz();
+    }
+
+    private String resolveRstSent() {
+        if (currentConfirmedLog != null && currentConfirmedLog.rstSent() != null) {
+            return currentConfirmedLog.rstSent();
+        }
+        return currentDraftSnapshot == null ? null : currentDraftSnapshot.rstSentCandidate();
+    }
+
+    private String resolveRstRcvd() {
+        if (currentConfirmedLog != null && currentConfirmedLog.rstRcvd() != null) {
+            return currentConfirmedLog.rstRcvd();
+        }
+        return currentDraftSnapshot == null ? null : currentDraftSnapshot.rstRcvdCandidate();
+    }
+
+    private String resolveName() {
+        if (currentConfirmedLog != null && currentConfirmedLog.name() != null) {
+            return currentConfirmedLog.name();
+        }
+        return currentDraftSnapshot == null ? null : currentDraftSnapshot.nameCandidate();
+    }
+
+    private String resolveQth() {
+        if (currentConfirmedLog != null && currentConfirmedLog.qth() != null) {
+            return currentConfirmedLog.qth();
+        }
+        return currentDraftSnapshot == null ? null : currentDraftSnapshot.qthCandidate();
+    }
+
+    private String resolveRemoteGrid() {
+        return currentConfirmedLog == null ? null : currentConfirmedLog.remoteGrid();
+    }
+
+    private String resolveStationGrid() {
+        if (currentConfirmedLog != null && currentConfirmedLog.stationGrid() != null) {
+            return currentConfirmedLog.stationGrid();
+        }
+        return stationProfileStore == null ? null : stationProfileStore.maidenheadGrid();
+    }
+
+    private String resolveComment() {
+        if (currentConfirmedLog != null && currentConfirmedLog.comment() != null) {
+            return currentConfirmedLog.comment();
+        }
+        return seedComment;
+    }
+
+    private boolean resolveManualConfirmed() {
+        return currentConfirmedLog != null && currentConfirmedLog.manualConfirmed();
+    }
+
+    @Nullable
+    private String resolvePhaseForSave() {
+        if (currentConfirmedLog != null && currentConfirmedLog.phase() != null) {
+            return currentConfirmedLog.phase();
+        }
+        if (currentDraftSnapshot == null || currentDraftSnapshot.phase() == null) {
+            return null;
+        }
+        return currentDraftSnapshot.phase().displayName();
+    }
+
+    private String buildComment(String editorComment, String stationGrid, String remoteGrid) {
+        Double distanceKm = resolveDistanceKm(stationGrid, remoteGrid);
+        if (editorComment != null && !editorComment.isEmpty()) {
+            return editorComment;
+        }
+        if (distanceKm != null && distanceKm > 0.0d) {
+            return "Distance: " + String.format(Locale.US, "%.0f km, QSO by CWCN", distanceKm);
+        }
+        return "QSO by CWCN";
+    }
+
+    @Nullable
+    private Double resolveDistanceKm(String stationGrid, String remoteGrid) {
+        ConfirmedQsoLog probe = new ConfirmedQsoLog(
+                0L,
+                "N0CALL",
+                "N0CALL",
+                System.currentTimeMillis(),
+                0L,
+                null,
+                null,
+                remoteGrid,
+                stationGrid,
+                null,
+                null,
+                null,
+                false,
+                "CW",
+                null,
+                "",
+                false,
+                0L
+        );
+        return probe.distanceKm();
     }
 
     private boolean isEditingConfirmedLog() {
@@ -448,26 +565,13 @@ public final class QsoEditorActivity extends AppCompatActivity {
         return intent.getLongExtra(EXTRA_CONFIRMED_LOG_ID, -1L);
     }
 
-    private String resolveDraftSourceLabel() {
-        if (editorDirty) {
-            return "unsaved editor preview";
-        }
-        if (isEditingConfirmedLog()) {
-            return "confirmed log #" + currentConfirmedLogId;
-        }
-        return "stored active draft";
+    private boolean shouldStartFresh() {
+        Intent intent = getIntent();
+        return intent != null && intent.getBooleanExtra(EXTRA_START_FRESH, false);
     }
 
-    private boolean hasDraftContent(QsoDraftSnapshot snapshot) {
-        return snapshot.stationCallsignUsed() != null
-                || snapshot.remoteCallsignCandidate() != null
-                || snapshot.rstSentCandidate() != null
-                || snapshot.rstRcvdCandidate() != null
-                || snapshot.nameCandidate() != null
-                || snapshot.qthCandidate() != null;
-    }
-
-    private String normalizedEditorValue(Editable editable) {
+    @Nullable
+    private String normalizedEditorValue(@Nullable Editable editable) {
         if (editable == null) {
             return null;
         }
@@ -475,20 +579,25 @@ public final class QsoEditorActivity extends AppCompatActivity {
         return raw.isEmpty() ? null : raw;
     }
 
-    private String currentValue(String value) {
-        return value;
-    }
-
-    private String valueOrEmpty(String value) {
+    private String valueOrEmpty(@Nullable String value) {
         return value == null ? "" : value;
     }
 
-    private String safeValue(String value) {
-        return value == null || value.isEmpty() ? "-" : value;
+    @Nullable
+    private String normalizeIntentText(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private String yesNo(boolean value) {
-        return value ? "yes" : "no";
+    private String safeValue(@Nullable String value) {
+        return value == null || value.trim().isEmpty() ? "-" : value.trim();
+    }
+
+    private String safeText(@Nullable String value) {
+        return value == null ? "" : value;
     }
 
     private abstract static class SimpleTextWatcher implements TextWatcher {
@@ -498,6 +607,17 @@ public final class QsoEditorActivity extends AppCompatActivity {
 
         @Override
         public void onTextChanged(CharSequence s, int start, int before, int count) {
+        }
+    }
+
+    private static final class CwTimeUtcFormatter {
+        private CwTimeUtcFormatter() {
+        }
+
+        private static String format(long epochMillis) {
+            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss 'UTC'", Locale.US);
+            format.setTimeZone(TimeZone.getTimeZone("UTC"));
+            return format.format(new Date(epochMillis));
         }
     }
 }

@@ -13,6 +13,8 @@ public interface HamlibRigctldSession extends AutoCloseable {
 
     String getInfo() throws IOException;
 
+    String transact(String command) throws IOException;
+
     @Override
     void close() throws IOException;
 }

@@ -169,6 +169,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private static final String STATE_TRANSCRIPT_ENTRY_PROGRESS = "progress";
     private static final String STATE_TRANSCRIPT_ENTRY_ACTIVE = "active";
     private static final String STATE_TRANSCRIPT_ENTRY_CALLSIGNS = "callsigns";
+    private static final String STATE_TRANSCRIPT_ENTRY_TONE_HZ = "tone_hz";
+    private static final String STATE_TRANSCRIPT_ENTRY_WPM = "wpm";
     private static final String STATE_SELECTED_OPERATE_REMOTE_CALLSIGN =
             "selected_operate_remote_callsign";
     private static final String TEMPLATE_CQ = "CQ";
@@ -207,6 +209,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         private final boolean outgoing;
         private final boolean compact;
         private final boolean active;
+        private final String qsoCommentSeed;
 
         private StreamEntry(
                 String label,
@@ -217,7 +220,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 int labelColorRes,
                 boolean outgoing,
                 boolean compact,
-                boolean active
+                boolean active,
+                String qsoCommentSeed
         ) {
             this.label = label;
             this.headline = headline;
@@ -228,6 +232,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             this.outgoing = outgoing;
             this.compact = compact;
             this.active = active;
+            this.qsoCommentSeed = qsoCommentSeed;
         }
     }
 
@@ -242,6 +247,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         private ArrayList<String> callsignCandidates;
         private int progressIndex;
         private boolean active;
+        private int toneFrequencyHz;
+        private int wpm;
 
         private TranscriptEntry(
                 long id,
@@ -258,6 +265,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             this.callsignCandidates = new ArrayList<>();
             this.progressIndex = -1;
             this.active = true;
+            this.toneFrequencyHz = 0;
+            this.wpm = 0;
         }
     }
 
@@ -759,6 +768,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return settings.defaultWpm();
     }
 
+    private int resolveOperateToneFrequencyHz() {
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
+        return settings.defaultToneFrequencyHz();
+    }
+
     private void persistOperateWpm(int wpm) {
         RigProfile profile = rigSelectionStore.selectedProfile();
         RigProfileSettings existing = rigSelectionStore.loadSettings(profile);
@@ -1208,13 +1223,14 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             bodyView.setTag(new float[]{event.getX(), event.getY()});
             return false;
         });
-        bindTranscriptBodyInteractions(bodyView, entry.body);
+        bindTranscriptBodyInteractions(bodyView, entry);
         card.addView(bodyView);
 
         return card;
     }
 
-    private void bindTranscriptBodyInteractions(TextView bodyView, CharSequence bodyText) {
+    private void bindTranscriptBodyInteractions(TextView bodyView, StreamEntry entry) {
+        CharSequence bodyText = entry == null ? null : entry.body;
         if (!(bodyText instanceof Spanned)) {
             bodyView.setOnTouchListener(null);
             bodyView.setOnClickListener(null);
@@ -1236,7 +1252,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             if (!hasMeaningfulText(targetCallsign)) {
                 return;
             }
-            openQsoEditorForCallsign(targetCallsign.trim().toUpperCase(Locale.US));
+            openQsoEditorForCallsign(
+                    targetCallsign.trim().toUpperCase(Locale.US),
+                    entry == null ? null : entry.qsoCommentSeed
+            );
         });
         bodyView.setLongClickable(true);
         bodyView.setOnLongClickListener(view -> {
@@ -1244,7 +1263,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             if (!hasMeaningfulText(targetCallsign)) {
                 return false;
             }
-            openQsoEditorForCallsign(targetCallsign.trim().toUpperCase(Locale.US));
+            openQsoEditorForCallsign(
+                    targetCallsign.trim().toUpperCase(Locale.US),
+                    entry == null ? null : entry.qsoCommentSeed
+            );
             return true;
         });
     }
@@ -1951,6 +1973,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void openQsoEditorForCallsign(String callsign) {
+        openQsoEditorForCallsign(callsign, null);
+    }
+
+    private void openQsoEditorForCallsign(String callsign, @Nullable String commentSeed) {
         if (localLogRepository == null) {
             Toast.makeText(this, "日志仓库当前不可用。", Toast.LENGTH_SHORT).show();
             return;
@@ -1992,7 +2018,11 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         );
         localLogRepository.saveDraft(seededDraft);
         refreshUi();
-        startActivity(new Intent(this, QsoEditorActivity.class));
+        Intent intent = new Intent(this, QsoEditorActivity.class);
+        if (hasMeaningfulText(commentSeed)) {
+            intent.putExtra(QsoEditorActivity.EXTRA_SEED_COMMENT, commentSeed.trim());
+        }
+        startActivity(intent);
     }
 
     private void selectOperateRemoteCallsign(String callsign, boolean showToast) {
@@ -3493,6 +3523,15 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         activeInstance.clearOperateRxPresentationState();
     }
 
+    public static void requestSharedOperateRxResume() {
+        OperateActivity activeInstance = sharedActiveInstance.get();
+        if (activeInstance == null) {
+            return;
+        }
+        activeInstance.preserveRxAcrossSpectrumNavigation = true;
+        activeInstance.syncOperateRxEngine();
+    }
+
     public static void requestSharedOperatePreferredToneUpdate(int frequencyHz) {
         OperateActivity activeInstance = sharedActiveInstance.get();
         if (activeInstance == null || activeInstance.operateSignalProcessor == null) {
@@ -4038,6 +4077,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         );
         bundle.putInt(STATE_TRANSCRIPT_ENTRY_PROGRESS, transcriptEntry.progressIndex);
         bundle.putBoolean(STATE_TRANSCRIPT_ENTRY_ACTIVE, transcriptEntry.active);
+        bundle.putInt(STATE_TRANSCRIPT_ENTRY_TONE_HZ, transcriptEntry.toneFrequencyHz);
+        bundle.putInt(STATE_TRANSCRIPT_ENTRY_WPM, transcriptEntry.wpm);
         return bundle;
     }
 
@@ -4088,6 +4129,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 : new ArrayList<>(restoredCallsigns);
         entry.progressIndex = bundle.getInt(STATE_TRANSCRIPT_ENTRY_PROGRESS, -1);
         entry.active = false;
+        entry.toneFrequencyHz = bundle.getInt(STATE_TRANSCRIPT_ENTRY_TONE_HZ, 0);
+        entry.wpm = bundle.getInt(STATE_TRANSCRIPT_ENTRY_WPM, 0);
         return entry;
     }
 
@@ -4116,6 +4159,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             entry.sourceOrRouteLabel = lastRxSessionSnapshot.sourceLabel();
         }
         entry.callsignCandidates = new ArrayList<>(resolveUiFriendlyCallsignCandidates(lastRxSessionSnapshot));
+        applyRxTranscriptMetrics(entry, lastRxSessionSnapshot);
         markConversationDirty();
     }
 
@@ -4139,6 +4183,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         entry.stateLabel = snapshot.captureActive() ? "接收中" : "保持中";
         entry.sourceOrRouteLabel = snapshot.sourceLabel();
         entry.callsignCandidates = new ArrayList<>(resolveUiFriendlyCallsignCandidates(snapshot));
+        applyRxTranscriptMetrics(entry, snapshot);
         if (entry.bodyText.isEmpty()) {
             return;
         }
@@ -4169,6 +4214,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         entry.updatedAtEpochMs = finalizedAtEpochMs;
         entry.active = false;
         entry.stateLabel = "接收";
+        applyRxTranscriptMetrics(entry, lastRxSessionSnapshot);
         if (entry.bodyText.trim().isEmpty()) {
             operateTranscriptEntries.remove(entry);
         }
@@ -4212,6 +4258,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 ? -1
                 : activeTxPlaybackSnapshot.currentTextIndex();
         entry.active = txSendInProgress;
+        applyTxTranscriptMetrics(entry);
         if (!entry.bodyText.trim().isEmpty()) {
             markConversationDirty();
         }
@@ -4230,6 +4277,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         entry.stateLabel = safeValue(status);
         entry.progressIndex = -1;
         entry.active = false;
+        applyTxTranscriptMetrics(entry);
         activeTxTranscriptEntryId = -1L;
         markConversationDirty();
     }
@@ -4260,6 +4308,71 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     private void markConversationDirty() {
         conversationAutoScrollPending = true;
+    }
+
+    private void applyRxTranscriptMetrics(
+            @Nullable TranscriptEntry transcriptEntry,
+            @Nullable RxSessionSnapshot snapshot
+    ) {
+        if (transcriptEntry == null || snapshot == null) {
+            return;
+        }
+        transcriptEntry.toneFrequencyHz = Math.max(0, snapshot.effectiveToneFrequencyHz());
+        transcriptEntry.wpm = Math.max(0, resolveDisplayWpm(snapshot));
+    }
+
+    private void applyTxTranscriptMetrics(@Nullable TranscriptEntry transcriptEntry) {
+        if (transcriptEntry == null) {
+            return;
+        }
+        transcriptEntry.toneFrequencyHz = Math.max(0, resolveOperateToneFrequencyHz());
+        transcriptEntry.wpm = Math.max(0, resolveOperateWpm());
+    }
+
+    @Nullable
+    private String buildTranscriptQsoCommentSeed(@Nullable TranscriptEntry transcriptEntry) {
+        if (transcriptEntry == null) {
+            return null;
+        }
+        ArrayList<String> parts = new ArrayList<>();
+        String primarySegment = formatOperateMetricSegment(
+                transcriptEntry.type == TranscriptEntryType.TX ? "TX" : "RX",
+                transcriptEntry.wpm,
+                transcriptEntry.toneFrequencyHz
+        );
+        if (hasMeaningfulText(primarySegment)) {
+            parts.add(primarySegment);
+        }
+        if (transcriptEntry.type == TranscriptEntryType.RX) {
+            String txSegment = formatOperateMetricSegment(
+                    "TX",
+                    resolveOperateWpm(),
+                    resolveOperateToneFrequencyHz()
+            );
+            if (hasMeaningfulText(txSegment)) {
+                parts.add(txSegment);
+            }
+        }
+        if (parts.isEmpty()) {
+            return null;
+        }
+        parts.add("QSO by CWCN");
+        return String.join("; ", parts);
+    }
+
+    @Nullable
+    private String formatOperateMetricSegment(String label, int wpm, int toneFrequencyHz) {
+        ArrayList<String> parts = new ArrayList<>();
+        if (wpm > 0) {
+            parts.add(wpm + " WPM");
+        }
+        if (toneFrequencyHz > 0) {
+            parts.add(toneFrequencyHz + " Hz");
+        }
+        if (parts.isEmpty()) {
+            return null;
+        }
+        return label + " " + String.join(" / ", parts);
     }
 
     private String extractTurnTranscriptText(String baselineText, String fullOutputText) {
@@ -4327,7 +4440,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 outgoing ? R.color.cwcn_tx_line : R.color.cwcn_rx_line,
                 outgoing,
                 false,
-                transcriptEntry.active
+                transcriptEntry.active,
+                buildTranscriptQsoCommentSeed(transcriptEntry)
         );
     }
 
@@ -4510,7 +4624,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     R.color.cwcn_rx_line,
                     false,
                     false,
-                    false
+                    false,
+                    null
             ));
             return entries;
         }
@@ -4534,7 +4649,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     R.color.cwcn_rx_line,
                     false,
                     false,
-                    false
+                    false,
+                    null
             ));
         } else {
             String rawText = normalizedTextOrNull(snapshot.rawText());
@@ -4547,7 +4663,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     R.color.cwcn_rx_line,
                     false,
                     false,
-                    snapshot.captureActive()
+                    snapshot.captureActive(),
+                    null
             ));
         }
 
@@ -4561,7 +4678,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     R.color.cwcn_rx_line,
                     false,
                     false,
-                    false
+                    false,
+                    null
             ));
         }
         return entries;

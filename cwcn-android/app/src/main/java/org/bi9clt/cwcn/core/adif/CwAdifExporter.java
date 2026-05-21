@@ -1,6 +1,7 @@
 package org.bi9clt.cwcn.core.adif;
 
 import org.bi9clt.cwcn.core.log.ConfirmedQsoLog;
+import org.bi9clt.cwcn.core.log.LogbookExportSupport;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 
 import java.text.SimpleDateFormat;
@@ -146,6 +147,12 @@ public final class CwAdifExporter {
             fields.add(adifField("TIME_ON", log.timeOnUtc()));
         }
         fields.add(adifField("MODE", log.mode() == null ? "CW" : log.mode()));
+        if (log.frequencyHz() > 0L) {
+            fields.add(adifField("FREQ", formatFrequencyMhz(log.frequencyHz())));
+        }
+        if (log.bandLabel() != null) {
+            fields.add(adifField("BAND", log.bandLabel()));
+        }
         if (log.rstSent() != null) {
             fields.add(adifField("RST_SENT", log.rstSent()));
         }
@@ -161,23 +168,19 @@ public final class CwAdifExporter {
         if (log.stationCallsign() != null) {
             fields.add(adifField("STATION_CALLSIGN", log.stationCallsign()));
         }
+        if (log.remoteGrid() != null) {
+            fields.add(adifField("GRIDSQUARE", log.remoteGrid()));
+        }
+        if (log.stationGrid() != null) {
+            fields.add(adifField("MY_GRIDSQUARE", log.stationGrid()));
+        }
         fields.add(adifField("COMMENT", buildLogComment(log)));
         fields.add("<EOR>");
         return String.join(" ", fields);
     }
 
     private static String buildLogComment(ConfirmedQsoLog log) {
-        ArrayList<String> parts = new ArrayList<>();
-        if (log.phase() != null) {
-            parts.add("phase=" + log.phase());
-        }
-        if (log.needManualReview()) {
-            parts.add("review=true");
-        }
-        if (log.normalizedText() != null && !log.normalizedText().isEmpty()) {
-            parts.add("text=" + log.normalizedText());
-        }
-        return String.join("; ", parts);
+        return LogbookExportSupport.buildExportComment(log);
     }
 
     private static String adifField(String name, String value) {
@@ -189,5 +192,9 @@ public final class CwAdifExporter {
         SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.US);
         format.setTimeZone(TimeZone.getTimeZone("UTC"));
         return format.format(new Date(timestamp));
+    }
+
+    private static String formatFrequencyMhz(long frequencyHz) {
+        return String.format(Locale.US, "%.6f", frequencyHz / 1_000_000.0d);
     }
 }

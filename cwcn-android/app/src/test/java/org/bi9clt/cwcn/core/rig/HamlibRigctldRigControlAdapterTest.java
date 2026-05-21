@@ -224,6 +224,11 @@ public final class HamlibRigctldRigControlAdapterTest {
         }
 
         @Override
+        public String transact(String command) {
+            return "";
+        }
+
+        @Override
         public void close() {
             this.closed = true;
         }
