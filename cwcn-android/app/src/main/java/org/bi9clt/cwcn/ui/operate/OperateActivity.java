@@ -467,6 +467,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         mainHandler.removeCallbacks(txProgressRefreshRunnable);
         if (!preserveRxAcrossSpectrumNavigation) {
             stopOperateRxCapture(true);
+            clearOperateRxPresentationState();
         }
         stopImmediateTxForLifecycle();
         super.onPause();
@@ -1724,6 +1725,18 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         activeRxTranscriptBaselineText = "";
         transcriptRxSuppressedDuringTx = false;
         immediateTxPausedRxCapture = false;
+    }
+
+    private void clearOperateRxCarryoverForFreshTurn() {
+        if (rxSessionStore != null) {
+            rxSessionStore.clear();
+        }
+        if (operateCommittedOutputController != null) {
+            operateCommittedOutputController.reset();
+        }
+        lastRxSessionSnapshot = null;
+        lastOperateRxPublishAtElapsedMs = 0L;
+        activeRxTranscriptBaselineText = "";
     }
 
     private boolean isRxTranscriptSuppressed() {
@@ -3041,6 +3054,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         );
         if (observation.startedNewTurn()) {
             syncOperateRxToneMode(nowElapsedMs);
+            if (activeRxTranscriptEntryId != -1L) {
+                finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
+            }
+            clearOperateRxCarryoverForFreshTurn();
             beginActiveRxTranscriptTurn(System.currentTimeMillis());
             traceOperateMarker("turn-start", observation.reason(), nowElapsedMs);
         } else if (observation.endedTurn()) {
