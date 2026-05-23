@@ -9,9 +9,9 @@ public final class RigProfileCatalog {
     private static final List<RigProfile> PROFILES = Collections.unmodifiableList(Arrays.asList(
             new RigProfile(
                     "audio-vox-generic",
-                    "Generic Audio VOX",
-                    "Generic",
-                    "Any radio with reliable VOX trigger",
+                    "通用音频 VOX",
+                    "通用",
+                    "支持稳定 VOX 触发的任意电台",
                     RigTransport.TransportKind.AUDIO_VOX,
                     "audio-vox",
                     RigSupportLevel.BENCH_READY,
@@ -20,18 +20,18 @@ public final class RigProfileCatalog {
                             RigCapability.AUDIO_VOX,
                             RigCapability.LIVE_PROFILE_UPDATE
                     ),
-                    "Fastest path for speaker or wired-audio TX testing when no control cable is available.",
-                    "Route phone audio into the rig, set a conservative VOX delay, and confirm the radio keys cleanly on DIT and VVV patterns.",
+                    "当没有控制线时，这是最快进入扬声器或有线音频发射验证的路径。",
+                    "把手机音频接入电台，设置保守的 VOX 延迟，并先用 DIT 和 VVV 验证起键是否干净。",
                     Arrays.asList(
-                            "No frequency/mode/PTT feedback.",
-                            "Relies on radio VOX behavior and audio level discipline."
+                            "不提供频率、模式或 PTT 反馈。",
+                            "效果依赖电台 VOX 行为和音频电平控制。"
                     )
             ),
             new RigProfile(
                     "usb-serial-keyer-generic",
-                    "Generic USB Serial Keyer",
-                    "Generic",
-                    "CDC/ACM keyer or serial interface with RTS/DTR keying",
+                    "通用 USB 串口键控",
+                    "通用",
+                    "支持 RTS/DTR 键控的 CDC/ACM 键控器或串口接口",
                     RigTransport.TransportKind.USB_SERIAL,
                     "usb-serial-keyer",
                     RigSupportLevel.BENCH_READY,
@@ -42,18 +42,18 @@ public final class RigProfileCatalog {
                             RigCapability.USB_DEVICE_SELECTION,
                             RigCapability.LIVE_PROFILE_UPDATE
                     ),
-                    "Current best real-device control path for deterministic TX keying over USB host.",
-                    "Use a CDC/ACM-compatible device, confirm permission flow, choose RTS or DTR, then bench with DIT/VVV before longer traffic.",
+                    "这是当前最适合真实设备、可预测 USB Host 发射键控的正式路径。",
+                    "使用兼容 CDC/ACM 的设备，确认权限流程，选择 RTS 或 DTR，再先用 DIT / VVV 做短验证。",
                     Arrays.asList(
-                            "Assumes CDC/ACM-style control interface.",
-                            "Not yet a full CAT frequency/mode integration path."
+                            "默认前提是设备提供 CDC/ACM 风格控制接口。",
+                            "当前还不是完整的 CAT 频率 / 模式集成路径。"
                     )
             ),
             new RigProfile(
                     "usb-serial-keyer-mock",
-                    "Mock USB Serial Keyer",
+                    "模拟 USB 串口键控",
                     "CWCN",
-                    "Internal bench simulator",
+                    "内部台架模拟器",
                     RigTransport.TransportKind.USB_SERIAL,
                     "usb-serial-keyer-mock",
                     RigSupportLevel.DEBUG_ONLY,
@@ -64,15 +64,15 @@ public final class RigProfileCatalog {
                             RigCapability.USB_DEVICE_SELECTION,
                             RigCapability.LIVE_PROFILE_UPDATE
                     ),
-                    "Diagnostic route for USB flow, permission, and failure-stage testing without external hardware.",
-                    "Use only for bench and UI validation. It is not a substitute for hardware acceptance.",
-                    Collections.singletonList("Synthetic route only; no real rig is controlled.")
+                    "这是一个不依赖外部硬件的 USB 流程、权限和失败阶段诊断路径。",
+                    "仅用于台架和界面验证，不能替代真实硬件验收。",
+                    Collections.singletonList("这是一条纯模拟路径，不会控制真实电台。")
             ),
             new RigProfile(
                     "generic-cat-serial",
-                    "Generic Serial CAT / PTT",
-                    "Planned",
-                    "FT-8xx / IC-7xx / TS-4xx style serial rigs",
+                    "通用串口 CAT / PTT",
+                    "规划中",
+                    "FT-8xx / IC-7xx / TS-4xx 一类串口电台",
                     RigTransport.TransportKind.USB_SERIAL,
                     "generic-cat",
                     RigSupportLevel.PLANNED,
@@ -84,11 +84,11 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_READ,
                             RigCapability.MODE_SET
                     ),
-                    "Next-layer profile family for rigs that expose serial CAT plus explicit PTT/keying commands.",
-                    "Design target is a reusable command/profile layer rather than one-off per-model code.",
+                    "这是面向“串口 CAT 加显式 PTT / 键控指令”电台的下一层 profile 家族。",
+                    "设计目标是沉淀可复用的指令 / profile 层，而不是为每个机型单独写一次性代码。",
                     Arrays.asList(
-                            "Shared native serial CAT adapter now covers readiness/probe plumbing first.",
-                            "Use this only when the exact CAT family is still unknown; prefer a more specific CAT family when possible."
+                            "共享原生串口 CAT 适配器当前优先补齐就绪和探测链路。",
+                            "只有在具体 CAT 家族尚不明确时才使用它；条件允许时优先选择更具体的 CAT 家族。"
                     ),
                     new RigProfileSettings(
                             18,
@@ -106,9 +106,9 @@ public final class RigProfileCatalog {
             ),
             new RigProfile(
                     "yaesu-cat-serial-generic",
-                    "Generic Yaesu Serial CAT",
-                    "Yaesu-style",
-                    "FT-series and compatible serial CAT rigs",
+                    "通用 Yaesu 串口 CAT",
+                    "Yaesu 风格",
+                    "FT 系列及兼容串口 CAT 电台",
                     RigTransport.TransportKind.USB_SERIAL,
                     "generic-cat",
                     RigSupportLevel.BENCH_READY,
@@ -120,11 +120,11 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_READ,
                             RigCapability.MODE_SET
                     ),
-                    "Concrete CAT family placeholder for Yaesu-style serial command sets on top of the shared CAT schema.",
-                    "Start with the Yaesu-style CAT family in Rig Setup, then pin baud rate and serial port hints before model-specific validation.",
+                    "这是基于共享 CAT 骨架承接 Yaesu 风格串口命令族的具体 profile 占位。",
+                    "先在电台配置中选择 Yaesu 风格 CAT，再固定波特率和串口提示，最后做机型级验证。",
                     Arrays.asList(
-                            "Shared native serial CAT adapter is attached for readiness/probe workflows.",
-                            "Exact command dialect may still vary by radio generation."
+                            "共享原生串口 CAT 适配器已接入就绪和探测流程。",
+                            "不同代际电台的命令细节仍可能存在差异。"
                     ),
                     new RigProfileSettings(
                             18,
@@ -142,9 +142,9 @@ public final class RigProfileCatalog {
             ),
             new RigProfile(
                     "yaesu-rigctld-network-family",
-                    "Yaesu FT-Series via rigctld",
+                    "Yaesu FT 系列（rigctld）",
                     "Yaesu",
-                    "FT-710 / FT-891 / FT-991A and similar via rigctld",
+                    "FT-710 / FT-891 / FT-991A 等 rigctld 路径",
                     RigTransport.TransportKind.NETWORK_CAT,
                     "hamlib-rigctld",
                     RigSupportLevel.BENCH_READY,
@@ -156,12 +156,12 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_READ,
                             RigCapability.MODE_SET
                     ),
-                    "Current best formal Yaesu-family test path in CWCN: expose the radio through Hamlib rigctld first, then bench TX from the app.",
-                    "For FT-710 and nearby Yaesu FT models, start with rigctld host/port validation, then run a very short CW bench macro before longer traffic.",
+                    "这是当前 CWCN 中 Yaesu 家族最正式、最推荐的首条验证路径：先通过 Hamlib rigctld 暴露电台，再从 App 做发射联调。",
+                    "对 FT-710 及附近 Yaesu FT 机型，先验证 rigctld 主机 / 端口，再用极短 CW 台架报文验证后再进入长报文。",
                     Arrays.asList(
-                            "This is the recommended first test path for Yaesu family radios in CWCN today.",
-                            "Direct native Android Yaesu serial CAT is still not attached yet; use rigctld as the bridge for now.",
-                            "Actual frequency/mode/PTT coverage still depends on rigctld model support and local daemon configuration."
+                            "这是当前 CWCN 中 Yaesu 家族最推荐的首条正式测试路径。",
+                            "Android 原生 Yaesu 串口 CAT 还没有完全接入，当前先以 rigctld 作为桥接。",
+                            "实际频率、模式和 PTT 覆盖仍取决于 rigctld 的机型支持与本地守护进程配置。"
                     ),
                     new RigProfileSettings(
                             18,
@@ -179,9 +179,9 @@ public final class RigProfileCatalog {
             ),
             new RigProfile(
                     "icom-rigctld-network-family",
-                    "Icom Family via rigctld",
+                    "Icom 家族（rigctld）",
                     "Icom",
-                    "IC-705 / IC-7300 / IC-9700 and similar via rigctld",
+                    "IC-705 / IC-7300 / IC-9700 等 rigctld 路径",
                     RigTransport.TransportKind.NETWORK_CAT,
                     "hamlib-rigctld",
                     RigSupportLevel.BENCH_READY,
@@ -193,12 +193,12 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_READ,
                             RigCapability.MODE_SET
                     ),
-                    "Current best formal Icom-family test path in CWCN: expose the radio through Hamlib rigctld first, then bench TX from the app.",
-                    "For common Icom rigs, start with rigctld host/port validation, then run a short CW bench macro before longer traffic.",
+                    "这是当前 CWCN 中 Icom 家族最正式、最推荐的首条验证路径：先通过 Hamlib rigctld 暴露电台，再从 App 做发射联调。",
+                    "对常见 Icom 机型，先验证 rigctld 主机 / 端口，再用短 CW 台架报文验证后再进入长报文。",
                     Arrays.asList(
-                            "Recommended first formal test path for Icom-family radios in CWCN today.",
-                            "Direct native Android CI-V work is still pending; use rigctld as the bridge for now.",
-                            "Actual coverage still depends on rigctld model support and local daemon configuration."
+                            "这是当前 CWCN 中 Icom 家族最推荐的首条正式测试路径。",
+                            "Android 原生 CI-V 路径仍在补齐中，当前先以 rigctld 作为桥接。",
+                            "实际覆盖仍取决于 rigctld 的机型支持与本地守护进程配置。"
                     ),
                     new RigProfileSettings(
                             18,
@@ -216,9 +216,9 @@ public final class RigProfileCatalog {
             ),
             new RigProfile(
                     "icom-civ-serial-generic",
-                    "Generic Icom CI-V",
+                    "通用 Icom CI-V",
                     "Icom",
-                    "CI-V capable serial rigs and bridges",
+                    "支持 CI-V 的串口电台与桥接设备",
                     RigTransport.TransportKind.USB_SERIAL,
                     "generic-cat",
                     RigSupportLevel.BENCH_READY,
@@ -230,11 +230,11 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_READ,
                             RigCapability.MODE_SET
                     ),
-                    "Concrete CAT family placeholder for Icom CI-V style rigs so CI-V-specific setup can grow without disturbing other CAT families.",
-                    "Use the Icom CI-V CAT family when the rig or bridge speaks CI-V; radio address and transport specifics can be added later.",
+                    "这是承接 Icom CI-V 风格电台的具体 CAT 家族占位，便于后续独立扩展 CI-V 设置而不打扰其他 CAT 家族。",
+                    "当电台或桥接设备使用 CI-V 时选它；电台地址和传输层细节可以后续再补充。",
                     Arrays.asList(
-                            "Shared native serial CAT adapter is attached for readiness/probe workflows.",
-                            "Radio-address and bus-specific settings still need dedicated fields."
+                            "共享原生串口 CAT 适配器已接入就绪和探测流程。",
+                            "电台地址和总线专属设置后续仍需要独立字段。"
                     ),
                     new RigProfileSettings(
                             18,
@@ -252,9 +252,9 @@ public final class RigProfileCatalog {
             ),
             new RigProfile(
                     "kenwood-cat-serial-generic",
-                    "Generic Kenwood Serial CAT",
-                    "Kenwood-style",
-                    "TS-series and compatible serial CAT rigs",
+                    "通用 Kenwood 串口 CAT",
+                    "Kenwood 风格",
+                    "TS 系列及兼容串口 CAT 电台",
                     RigTransport.TransportKind.USB_SERIAL,
                     "generic-cat",
                     RigSupportLevel.BENCH_READY,
@@ -266,11 +266,11 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_READ,
                             RigCapability.MODE_SET
                     ),
-                    "Concrete CAT family placeholder for Kenwood-style ASCII CAT rigs and compatible bridges.",
-                    "Select the Kenwood-style CAT family when the rig or bridge follows TS-style ASCII CAT semantics.",
+                    "这是承接 Kenwood 风格 ASCII CAT 电台及兼容桥接设备的具体 CAT 家族占位。",
+                    "当电台或桥接设备遵循 TS 风格 ASCII CAT 语义时，选择这一家族。",
                     Arrays.asList(
-                            "Shared native serial CAT adapter is attached for readiness/probe workflows.",
-                            "Model quirks still need profile-specific validation."
+                            "共享原生串口 CAT 适配器已接入就绪和探测流程。",
+                            "机型差异仍需要 profile 级验证。"
                     ),
                     new RigProfileSettings(
                             18,
@@ -288,9 +288,9 @@ public final class RigProfileCatalog {
             ),
             new RigProfile(
                     "kenwood-rigctld-network-family",
-                    "Kenwood Family via rigctld",
+                    "Kenwood 家族（rigctld）",
                     "Kenwood",
-                    "TS-590 / TS-890 / TS-2000 and similar via rigctld",
+                    "TS-590 / TS-890 / TS-2000 等 rigctld 路径",
                     RigTransport.TransportKind.NETWORK_CAT,
                     "hamlib-rigctld",
                     RigSupportLevel.BENCH_READY,
@@ -302,12 +302,12 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_READ,
                             RigCapability.MODE_SET
                     ),
-                    "Current best formal Kenwood-family test path in CWCN: expose the radio through Hamlib rigctld first, then bench TX from the app.",
-                    "For common Kenwood rigs, start with rigctld reachability, then run a short CW bench macro before longer traffic.",
+                    "这是当前 CWCN 中 Kenwood 家族最正式、最推荐的首条验证路径：先通过 Hamlib rigctld 暴露电台，再从 App 做发射联调。",
+                    "对常见 Kenwood 机型，先验证 rigctld 可达性，再用短 CW 台架报文验证后再进入长报文。",
                     Arrays.asList(
-                            "Recommended first formal test path for Kenwood-family radios in CWCN today.",
-                            "Direct native Android Kenwood serial CAT is still pending; use rigctld as the bridge for now.",
-                            "Actual coverage still depends on rigctld model support and local daemon configuration."
+                            "这是当前 CWCN 中 Kenwood 家族最推荐的首条正式测试路径。",
+                            "Android 原生 Kenwood 串口 CAT 仍在补齐中，当前先以 rigctld 作为桥接。",
+                            "实际覆盖仍取决于 rigctld 的机型支持与本地守护进程配置。"
                     ),
                     new RigProfileSettings(
                             18,
@@ -325,9 +325,9 @@ public final class RigProfileCatalog {
             ),
             new RigProfile(
                     "generic-network-cat",
-                    "Generic Network CAT",
-                    "Planned",
-                    "LAN/Wi-Fi CAT bridges and networked rig servers",
+                    "通用网络 CAT",
+                    "规划中",
+                    "LAN / Wi-Fi CAT 桥接与网络电台服务",
                     RigTransport.TransportKind.NETWORK_CAT,
                     "generic-cat",
                     RigSupportLevel.PLANNED,
@@ -339,9 +339,9 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_READ,
                             RigCapability.MODE_SET
                     ),
-                    "Reserved for rigs or middleware that expose CAT over TCP/UDP rather than direct serial.",
-                    "Keep the same profile/capability shape as serial CAT so the UI can stay stable while the transport changes.",
-                    Collections.singletonList("No transport/session implementation attached yet."),
+                    "这是为通过 TCP / UDP 暴露 CAT 的电台或中间件预留的路径。",
+                    "它会尽量保持与串口 CAT 一致的 profile / capability 形态，让 UI 在传输层变化时仍保持稳定。",
+                    Collections.singletonList("当前还没有接入具体的传输层或会话实现。"),
                     new RigProfileSettings(
                             18,
                             650,
@@ -358,9 +358,9 @@ public final class RigProfileCatalog {
             ),
             new RigProfile(
                     "hamlib-rigctld-network-generic",
-                    "Generic Hamlib rigctld",
+                    "通用 Hamlib rigctld",
                     "Hamlib",
-                    "rigctld network bridge",
+                    "rigctld 网络桥接",
                     RigTransport.TransportKind.NETWORK_CAT,
                     "hamlib-rigctld",
                     RigSupportLevel.PLANNED,
@@ -372,11 +372,11 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_READ,
                             RigCapability.MODE_SET
                     ),
-                    "Concrete network CAT family placeholder for rigctld-compatible bridges and LAN-connected control stacks.",
-                    "Use host/port plus the Hamlib rigctld CAT family when a radio is exposed through rigctld or a compatible bridge.",
+                    "这是承接 rigctld 兼容桥接与局域网控制栈的具体网络 CAT 家族占位。",
+                    "当电台通过 rigctld 或兼容桥接暴露出来时，使用主机 / 端口加 Hamlib rigctld 协议族的组合。",
                     Arrays.asList(
-                            "No rigctld session backend is attached yet.",
-                            "Response parsing and capability discovery still need implementation."
+                            "当前还没有挂接完整的 rigctld 会话后端。",
+                            "响应解析与能力发现仍待继续实现。"
                     ),
                     new RigProfileSettings(
                             18,
@@ -394,9 +394,9 @@ public final class RigProfileCatalog {
             ),
             new RigProfile(
                     "generic-bluetooth-serial",
-                    "Generic Bluetooth Serial Rig",
-                    "Planned",
-                    "Bluetooth SPP bridges and wireless keyers",
+                    "通用蓝牙串口电台",
+                    "规划中",
+                    "蓝牙 SPP 桥接与无线键控器",
                     RigTransport.TransportKind.BLUETOOTH_SERIAL,
                     "generic-text-to-cw",
                     RigSupportLevel.PLANNED,
@@ -406,9 +406,9 @@ public final class RigProfileCatalog {
                             RigCapability.BLUETOOTH_SERIAL,
                             RigCapability.LIVE_PROFILE_UPDATE
                     ),
-                    "Future route for cable-light setups once Bluetooth pairing, discovery, and session stability are defined.",
-                    "UI and permission flow should be prepared now, but low-level implementation can wait until the wired routes stabilize.",
-                    Collections.singletonList("No production Bluetooth rig backend is attached yet.")
+                    "这是面向轻线缆场景的未来路径，等蓝牙配对、发现和会话稳定性策略明确后再接入。",
+                    "当前可以先把 UI 和权限流程准备好，底层实现则等有线路径稳定后再推进。",
+                    Collections.singletonList("当前还没有接入可用于生产的蓝牙电台后端。")
             )
     ));
 

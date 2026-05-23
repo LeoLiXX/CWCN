@@ -43,6 +43,11 @@ public final class RxTurnSessionFinalizer {
         return turnTailRepairController != null && turnTailRepairController.turnActive();
     }
 
+    public boolean currentTurnHasCommittedDecodeEvents() {
+        return turnTailRepairController != null
+                && turnTailRepairController.currentTurnHasCommittedDecodeEvents();
+    }
+
     public void noteToneEvent(@Nullable CwToneEvent toneEvent) {
         if (turnTailRepairController != null) {
             turnTailRepairController.noteToneEvent(toneEvent);

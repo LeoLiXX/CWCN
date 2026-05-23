@@ -22,7 +22,7 @@ final class AndroidUsbProbedSerialKeyerPort implements SerialKeyerPort {
         this.device = device;
         this.port = port;
         this.connection = connection;
-        this.driverLabel = driverLabel == null ? "USB serial" : driverLabel;
+        this.driverLabel = driverLabel == null ? "USB 串口" : driverLabel;
     }
 
     @Override
@@ -42,7 +42,7 @@ final class AndroidUsbProbedSerialKeyerPort implements SerialKeyerPort {
 
     @Override
     public String describeAvailability() {
-        return driverLabel + " keying port is open on " + displayName() + ".";
+        return driverLabel + " 键控口已打开：" + displayName() + "。";
     }
 
     @Override

@@ -50,7 +50,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
 
     @Override
     public String displayName() {
-        return "Local File Replay";
+        return "本地文件回放";
     }
 
     @Override
@@ -92,17 +92,17 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
 
     public synchronized String selectionSummary() {
         if (selectedFileUri == null) {
-            return "No local file selected. Recommended format: WAV PCM mono. M4A/AAC is accepted as a compatibility input.";
+            return "还没有选择本地音频文件。推荐格式：WAV PCM 单声道。M4A/AAC 可作为兼容输入。";
         }
         StringBuilder builder = new StringBuilder(selectedFileMetadataSummary);
         if (builder.length() == 0) {
-            builder.append("Selected file: ").append(selectedFileLabel())
+            builder.append("已选文件：").append(selectedFileLabel())
                     .append("\nUri: ").append(selectedFileUri);
         }
         if (!lastReplayFormatSummary.isEmpty()) {
-            builder.append("\nLast replay format: ").append(lastReplayFormatSummary);
+            builder.append("\n上次回放格式：").append(lastReplayFormatSummary);
         }
-        builder.append("\nPreferred: WAV PCM. Compatible: M4A/AAC through Android decoder.");
+        builder.append("\n优先：WAV PCM。兼容：通过 Android 解码器读取 M4A/AAC。");
         return builder.toString();
     }
 
@@ -112,11 +112,11 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
             return;
         }
         if (selectedFileUri == null) {
-            setErrorState("No local audio file selected yet.", null);
+            setErrorState("还没有选择本地音频文件。", null);
             return;
         }
         running = true;
-        updateState(State.STARTING, "Preparing local file replay: " + selectedFileLabel());
+        updateState(State.STARTING, "正在准备本地文件回放：" + selectedFileLabel());
         workerThread = new Thread(this::replayLoop, "cwcn-local-file-source");
         workerThread.start();
     }
@@ -127,10 +127,10 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
             return;
         }
         running = false;
-        updateState(State.STOPPING, "Stopping local file replay.");
+        updateState(State.STOPPING, "正在停止本地文件回放。");
         joinWorkerThread();
         if (state != State.ERROR) {
-            updateState(State.IDLE, "Local file replay stopped.");
+            updateState(State.IDLE, "本地文件回放已停止。");
         }
     }
 
@@ -147,12 +147,12 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
             activeLabel = selectedFileLabel();
         }
         if (activeUri == null) {
-            setErrorState("No local audio file selected yet.", null);
+            setErrorState("还没有选择本地音频文件。", null);
             return;
         }
 
         try {
-            updateState(State.RUNNING, "Replaying local file: " + activeLabel);
+            updateState(State.RUNNING, "正在回放本地文件：" + activeLabel);
             long startedAtMs = SystemClock.elapsedRealtime();
             FrameEmitter emitter = new FrameEmitter(startedAtMs);
             boolean decoded = decodeWithMediaCodec(activeUri, emitter);
@@ -162,10 +162,10 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
             emitter.flushPending();
         } catch (IOException | IllegalArgumentException exception) {
             if (!running) {
-                updateState(State.IDLE, "Local file replay stopped.");
+                updateState(State.IDLE, "本地文件回放已停止。");
                 return;
             }
-            setErrorState("Local file replay failed: " + exception.getMessage(), exception);
+            setErrorState("本地文件回放失败：" + exception.getMessage(), exception);
             return;
         } finally {
             running = false;
@@ -173,7 +173,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
         }
 
         if (state != State.ERROR) {
-            updateState(State.IDLE, "Local file replay completed.");
+            updateState(State.IDLE, "本地文件回放已完成。");
         }
     }
 
@@ -215,7 +215,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
                     if (inputBufferIndex >= 0) {
                         ByteBuffer inputBuffer = codec.getInputBuffer(inputBufferIndex);
                         if (inputBuffer == null) {
-                            throw new IOException("Decoder input buffer is unavailable.");
+                            throw new IOException("解码器输入缓冲区不可用。");
                         }
                         int sampleSize = extractor.readSampleData(inputBuffer, 0);
                         if (sampleSize < 0) {
@@ -289,7 +289,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
         try {
             inputStream = appContext.getContentResolver().openInputStream(fileUri);
             if (inputStream == null) {
-                throw new IOException("Unable to open the selected file.");
+                throw new IOException("无法打开所选文件。");
             }
             dataInputStream = new DataInputStream(inputStream);
             WaveFormat waveFormat = readWaveFormat(dataInputStream);
@@ -316,7 +316,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
         byte[] riffHeader = new byte[12];
         inputStream.readFully(riffHeader);
         if (!asciiEquals(riffHeader, 0, "RIFF") || !asciiEquals(riffHeader, 8, "WAVE")) {
-            throw new IOException("Selected WAV file header is invalid.");
+            throw new IOException("所选 WAV 文件头无效。");
         }
 
         Integer sampleRateHz = null;
@@ -350,10 +350,10 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
 
         if (sampleRateHz == null || channelCount == null || bitsPerSample == null
                 || audioFormat == null || dataSizeBytes == null) {
-            throw new IOException("Selected WAV file is missing required format chunks.");
+            throw new IOException("所选 WAV 文件缺少必要的格式区块。");
         }
         if (audioFormat != 1 || bitsPerSample != 16) {
-            throw new IOException("Only PCM16 WAV is supported in manual fallback mode.");
+            throw new IOException("手动兜底模式只支持 PCM16 WAV。");
         }
         return new WaveFormat(sampleRateHz, channelCount, dataSizeBytes);
     }
@@ -467,7 +467,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
         while (remaining > 0) {
             int skipped = inputStream.skipBytes(remaining);
             if (skipped <= 0) {
-                throw new IOException("Unexpected end of file while skipping WAV chunk.");
+                throw new IOException("跳过 WAV 区块时遇到意外文件结尾。");
             }
             remaining -= skipped;
         }
@@ -501,7 +501,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
 
     private synchronized void rememberReplayFormat(int sampleRateHz, int channelCount, int pcmEncoding) {
         lastReplayFormatSummary = sampleRateHz + " Hz, "
-                + channelCount + " ch, "
+                + channelCount + " 声道, "
                 + pcmEncodingLabel(pcmEncoding);
     }
 
@@ -517,32 +517,32 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
         ProbedAudioMetadata metadata = probeAudioMetadata(fileUri);
 
         StringBuilder builder = new StringBuilder();
-        builder.append("Selected file: ").append(resolvedLabel)
-                .append("\nMime: ").append(mimeType);
+        builder.append("已选文件：").append(resolvedLabel)
+                .append("\nMIME：").append(mimeType);
         if (fileSizeBytes > 0L) {
-            builder.append("\nSize: ").append(formatByteSize(fileSizeBytes));
+            builder.append("\n大小：").append(formatByteSize(fileSizeBytes));
         }
         builder.append("\nUri: ").append(fileUri);
         if (metadata != null) {
-            builder.append("\nProbe: ")
+            builder.append("\n探测：")
                     .append(metadata.summaryLabel());
         } else {
-            builder.append("\nProbe: metadata not available yet");
+            builder.append("\n探测：暂时无法获取元数据");
         }
-        builder.append("\nGuidance: ")
+        builder.append("\n建议：")
                 .append(isLikelyWave(mimeType, resolvedLabel)
-                        ? "WAV baseline path"
-                        : "compatibility path; prefer WAV if reproducibility matters");
+                        ? "WAV 基线路径"
+                        : "兼容路径；如需稳定复现，优先使用 WAV");
         return builder.toString();
     }
 
     private String safeMimeType(Uri fileUri) {
         if (fileUri == null) {
-            return "unknown";
+            return "未知";
         }
         String mimeType = appContext.getContentResolver().getType(fileUri);
         if (mimeType == null || mimeType.trim().isEmpty()) {
-            return "unknown";
+            return "未知";
         }
         return mimeType.trim();
     }
@@ -598,7 +598,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
                         waveFormat.sampleRateHz,
                         waveFormat.channelCount,
                         "PCM16 WAV",
-                        "WAV parser"
+                        "WAV 解析器"
                 );
             } finally {
                 closeQuietly(dataInputStream);
@@ -630,19 +630,19 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
             MediaFormat format = extractor.getTrackFormat(trackIndex);
             String mimeType = format.containsKey(MediaFormat.KEY_MIME)
                     ? format.getString(MediaFormat.KEY_MIME)
-                    : "unknown";
+                    : "未知";
             int sampleRateHz = format.containsKey(MediaFormat.KEY_SAMPLE_RATE)
                     ? format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                     : 0;
             int channelCount = format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)
                     ? format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                     : 0;
-            String codecLabel = mimeType == null ? "unknown" : mimeType;
+            String codecLabel = mimeType == null ? "未知" : mimeType;
             if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
                 codecLabel += ", " + pcmEncodingLabel(format.getInteger(MediaFormat.KEY_PCM_ENCODING));
             }
             return new ProbedAudioMetadata(
-                    mimeType == null ? "unknown" : mimeType,
+                    mimeType == null ? "未知" : mimeType,
                     sampleRateHz,
                     channelCount,
                     codecLabel,
@@ -681,7 +681,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
             case 3:
                 return "PCM8";
             case 4:
-                return "PCM float";
+                return "PCM 浮点";
             default:
                 return "PCM(" + pcmEncoding + ")";
         }
@@ -795,7 +795,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
             long frameDurationMs = Math.max(1L, Math.round(sampleCount * 1000.0d / Math.max(1, sampleRateHz)));
             SystemClock.sleep(frameDurationMs);
             if (!running) {
-                throw new IOException("Replay interrupted.");
+                throw new IOException("回放已中断。");
             }
         }
     }
@@ -826,11 +826,11 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
                 String codecLabel,
                 String sourceLabel
         ) {
-            this.mimeType = mimeType == null ? "unknown" : mimeType;
+            this.mimeType = mimeType == null ? "未知" : mimeType;
             this.sampleRateHz = Math.max(0, sampleRateHz);
             this.channelCount = Math.max(0, channelCount);
-            this.codecLabel = codecLabel == null ? "unknown" : codecLabel;
-            this.sourceLabel = sourceLabel == null ? "unknown" : sourceLabel;
+            this.codecLabel = codecLabel == null ? "未知" : codecLabel;
+            this.sourceLabel = sourceLabel == null ? "未知" : sourceLabel;
         }
 
         private String summaryLabel() {
@@ -840,7 +840,7 @@ public final class LocalFileRxAudioSource implements RxAudioSource {
                 builder.append(", ").append(sampleRateHz).append(" Hz");
             }
             if (channelCount > 0) {
-                builder.append(", ").append(channelCount).append(" ch");
+                builder.append(", ").append(channelCount).append(" 声道");
             }
             builder.append(" [").append(sourceLabel).append("]");
             return builder.toString();

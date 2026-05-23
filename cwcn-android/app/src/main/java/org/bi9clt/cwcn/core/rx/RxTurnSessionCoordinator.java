@@ -125,9 +125,18 @@ public final class RxTurnSessionCoordinator {
                 || timestampMs <= 0L) {
             return Observation.none();
         }
-        boolean turnActivity = turnController.phase() == RxTurnController.Phase.ACTIVE
-                ? RxTurnActivityDecider.isMeaningfulTurnContinuation(signalSnapshot)
-                : RxTurnActivityDecider.isMeaningfulTurnActivity(signalSnapshot);
+        boolean turnActivity;
+        if (turnController.phase() == RxTurnController.Phase.ACTIVE) {
+            boolean hasCommittedDecodeThisTurn = turnSessionFinalizer != null
+                    && turnSessionFinalizer.currentTurnHasCommittedDecodeEvents();
+            turnActivity = !hasCommittedDecodeThisTurn && !hasPendingCharacter
+                    ? RxTurnActivityDecider.isMeaningfulTurnBootstrapContinuation(signalSnapshot)
+                    : RxTurnActivityDecider.isMeaningfulTurnPostDecodeContinuation(signalSnapshot);
+        } else {
+            turnActivity = turnController.lastTurnEndedAtMs() > 0L
+                    ? RxTurnActivityDecider.isMeaningfulTurnRestartActivity(signalSnapshot)
+                    : RxTurnActivityDecider.isMeaningfulTurnActivity(signalSnapshot);
+        }
         RxTurnController.Transition transition = turnController.observe(
                 turnActivity,
                 hasPendingCharacter,

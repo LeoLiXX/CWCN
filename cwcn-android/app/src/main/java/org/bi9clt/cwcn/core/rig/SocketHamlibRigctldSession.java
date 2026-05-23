@@ -65,13 +65,13 @@ final class SocketHamlibRigctldSession implements HamlibRigctldSession {
             }
             builder.append(line);
         }
-        throw new IOException("rigctld closed the connection before returning info.");
+        throw new IOException("rigctld 在返回电台信息前关闭了连接。");
     }
 
     @Override
     public String transact(String command) throws IOException {
         if (command == null || command.trim().isEmpty()) {
-            throw new IOException("rigctld command is empty.");
+            throw new IOException("rigctld 指令为空。");
         }
         writer.write(command.trim());
         writer.write('\n');
@@ -92,7 +92,7 @@ final class SocketHamlibRigctldSession implements HamlibRigctldSession {
             }
             builder.append(line);
         }
-        throw new IOException("rigctld closed the connection before returning response for command: " + command);
+        throw new IOException("rigctld 在返回指令响应前关闭了连接：" + command);
     }
 
     @Override
@@ -111,14 +111,14 @@ final class SocketHamlibRigctldSession implements HamlibRigctldSession {
                 return parseRigctldStatus(line) == 0;
             }
         }
-        throw new IOException("rigctld closed the connection before returning status for command: " + command);
+        throw new IOException("rigctld 在返回指令状态前关闭了连接：" + command);
     }
 
     private int parseRigctldStatus(String line) throws IOException {
         try {
             return Integer.parseInt(line.substring(RESPONSE_PREFIX.length()).trim());
         } catch (RuntimeException exception) {
-            throw new IOException("Unexpected rigctld status line: " + line, exception);
+            throw new IOException("收到异常的 rigctld 状态行：" + line, exception);
         }
     }
 }

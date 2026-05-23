@@ -83,7 +83,7 @@ public final class RigRouteStatusFormatter {
             return adapter.isReady() ? "串口 CAT | RX 未接入" : "串口 CAT | 待配置";
         }
         if (adapter instanceof AudioVoxRigControlAdapter) {
-            return "Audio VOX | 待命";
+            return "音频 VOX | 待命";
         }
         return adapter.isReady() ? "当前路由 | RX 未接入" : "当前路由 | 待就绪";
     }
@@ -157,7 +157,7 @@ public final class RigRouteStatusFormatter {
                     + fallback(safeSettings.usbPreferredDeviceName(), "自动 / 首个可用设备");
         }
         if (profile.hasCapability(RigCapability.AUDIO_VOX)) {
-            return "Audio VOX 已启用。\nCAT / 线控键控: -";
+            return "音频 VOX 已启用。\nCAT / 线控键控: -";
         }
         return "当前路由暂未提供更细的 CAT / 键控摘要。";
     }
@@ -252,11 +252,11 @@ public final class RigRouteStatusFormatter {
 
     public static String describeAudioVoxReadiness(@Nullable AudioVoxRigControlAdapter adapter) {
         if (adapter == null) {
-            return "Audio VOX 适配器尚未挂接。";
+            return "音频 VOX 适配器尚未挂接。";
         }
         return adapter.isReady()
-                ? "Audio VOX 已就绪，请确认音频线、VOX 门限和电台侧 VOX 设置。"
-                : fallback(adapter.describeAvailability(), "Audio VOX 尚未就绪。");
+                ? "音频 VOX 已就绪，请确认音频线、VOX 门限和电台侧 VOX 设置。"
+                : fallback(adapter.describeAvailability(), "音频 VOX 尚未就绪。");
     }
 
     public static String describeSerialCatReadiness(
@@ -311,7 +311,7 @@ public final class RigRouteStatusFormatter {
             case NETWORK_CAT:
                 return "网络 CAT";
             case AUDIO_VOX:
-                return "Audio VOX";
+                return "音频 VOX";
             default:
                 return profile.transportKind().name();
         }

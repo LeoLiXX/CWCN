@@ -3,33 +3,40 @@ package org.bi9clt.cwcn.core.app;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import androidx.annotation.StringRes;
+
+import org.bi9clt.cwcn.R;
+
 public final class RouteFallbackStore {
     private static final String PREFS_NAME = "cwcn_route_fallback";
     private static final String KEY_MODE = "route_fallback_mode";
 
     public enum Mode {
-        AUTO_PHONE_FALLBACK("Auto: Mic / Audio", "When no radio is pinned, use the phone microphone for RX and phone audio for TX."),
-        RADIO_ONLY("Radio only", "Do not use the phone fallback route when no rig is pinned.");
+        AUTO_PHONE_FALLBACK(
+                R.string.settings_route_fallback_mode_auto_phone_fallback,
+                R.string.settings_route_fallback_mode_auto_phone_fallback_description
+        ),
+        RADIO_ONLY(
+                R.string.settings_route_fallback_mode_radio_only,
+                R.string.settings_route_fallback_mode_radio_only_description
+        );
 
-        private final String displayName;
-        private final String description;
+        private final int displayNameResId;
+        private final int descriptionResId;
 
-        Mode(String displayName, String description) {
-            this.displayName = displayName;
-            this.description = description;
+        Mode(@StringRes int displayNameResId, @StringRes int descriptionResId) {
+            this.displayNameResId = displayNameResId;
+            this.descriptionResId = descriptionResId;
         }
 
-        public String displayName() {
-            return displayName;
+        @StringRes
+        public int displayNameResId() {
+            return displayNameResId;
         }
 
-        public String description() {
-            return description;
-        }
-
-        @Override
-        public String toString() {
-            return displayName;
+        @StringRes
+        public int descriptionResId() {
+            return descriptionResId;
         }
     }
 

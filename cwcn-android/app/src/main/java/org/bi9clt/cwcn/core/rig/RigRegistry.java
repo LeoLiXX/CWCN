@@ -30,8 +30,8 @@ public final class RigRegistry {
                 ),
                 new UsbSerialKeyerRigControlAdapter(
                         "usb-serial-keyer-mock",
-                        "Mock USB Serial Keyer Adapter",
-                        "Simulate a USB serial keyer route and toggle the %s control line without external hardware.",
+                        "模拟 USB 串口键控适配器",
+                        "模拟 USB 串口键控路径，在没有外接硬件时切换 %s 控制线。",
                         new MockUsbSerialKeyerPortFactory(),
                         SerialKeyerTxOutput.KeyLine.RTS,
                         18,
@@ -40,8 +40,8 @@ public final class RigRegistry {
                 new SerialCatRigControlAdapter(appContext),
                 new PlaceholderAdapter(
                         "generic-text-to-cw",
-                        "Generic Text-to-CW Adapter",
-                        "Reserved for external text-to-CW backends such as RTS/DTR or a hardware keyer.",
+                        "通用文本转 CW 适配器",
+                        "为外部文本转 CW 后端预留，例如 RTS/DTR 或硬件键控器。",
                         true,
                         true
                 )
@@ -73,7 +73,7 @@ public final class RigRegistry {
 
         @Override
         public String displayName() {
-            return "USB Host / Serial";
+            return "USB 主机 / 串口";
         }
 
         @Override
@@ -91,12 +91,12 @@ public final class RigRegistry {
             UsbManager manager = ContextCompat.getSystemService(context, UsbManager.class);
             int deviceCount = manager == null ? 0 : manager.getDeviceList().size();
             if (!isReady(context)) {
-                return "Device does not expose USB host capability.";
+                return "当前设备不具备 USB Host 能力。";
             }
             if (deviceCount > 0) {
-                return "USB host available, detected " + deviceCount + " attached USB device(s).";
+                return "USB 主机可用，已检测到 " + deviceCount + " 个连接中的 USB 设备。";
             }
-            return "USB host available, but no attached device is visible yet.";
+            return "USB 主机可用，但当前还没有看到已连接设备。";
         }
     }
 
@@ -108,7 +108,7 @@ public final class RigRegistry {
 
         @Override
         public String displayName() {
-            return "Bluetooth Serial";
+            return "蓝牙串口";
         }
 
         @Override
@@ -124,23 +124,23 @@ public final class RigRegistry {
         @Override
         public String describeAvailability(Context context) {
             if (!isReady(context)) {
-                return "Device does not expose Bluetooth capability.";
+                return "当前设备不具备蓝牙能力。";
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                     && ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
                     != PackageManager.PERMISSION_GRANTED) {
-                return "Bluetooth exists, but BLUETOOTH_CONNECT permission is still missing.";
+                return "设备具备蓝牙能力，但还缺少 BLUETOOTH_CONNECT 权限。";
             }
 
             BluetoothManager manager = ContextCompat.getSystemService(context, BluetoothManager.class);
             BluetoothAdapter adapter = manager == null ? null : manager.getAdapter();
             if (adapter == null) {
-                return "Bluetooth service is unavailable.";
+                return "当前无法获取蓝牙服务。";
             }
             return adapter.isEnabled()
-                    ? "Bluetooth adapter is available and enabled."
-                    : "Bluetooth adapter exists but is currently disabled.";
+                    ? "蓝牙适配器可用，且已经开启。"
+                    : "蓝牙适配器存在，但当前处于关闭状态。";
         }
     }
 
@@ -152,7 +152,7 @@ public final class RigRegistry {
 
         @Override
         public String displayName() {
-            return "Network CAT";
+            return "网络 CAT";
         }
 
         @Override
@@ -167,7 +167,7 @@ public final class RigRegistry {
 
         @Override
         public String describeAvailability(Context context) {
-            return "Software route reserved for later TCP/UDP/CAT integration.";
+            return "这是为后续 TCP/UDP/CAT 集成预留的软件链路。";
         }
     }
 
@@ -179,7 +179,7 @@ public final class RigRegistry {
 
         @Override
         public String displayName() {
-            return "Audio VOX";
+            return "音频 VOX";
         }
 
         @Override
@@ -194,7 +194,7 @@ public final class RigRegistry {
 
         @Override
         public String describeAvailability(Context context) {
-            return "Compatibility route reserved for later audio-output plus VOX integration.";
+            return "这是为后续音频输出加 VOX 联动预留的兼容链路。";
         }
     }
 
@@ -236,7 +236,7 @@ public final class RigRegistry {
 
         @Override
         public String describeAvailability() {
-            return "Adapter contract is present, but no real rig implementation is attached yet.";
+            return "适配器接口已经预留，但当前还没有接入真正的电台实现。";
         }
 
         @Override

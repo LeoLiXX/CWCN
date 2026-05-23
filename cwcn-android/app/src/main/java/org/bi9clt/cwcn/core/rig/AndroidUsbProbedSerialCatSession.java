@@ -14,7 +14,7 @@ final class AndroidUsbProbedSerialCatSession implements SerialCatSession {
     AndroidUsbProbedSerialCatSession(UsbDevice device, UsbSerialPort port, String driverName) {
         this.device = device;
         this.port = port;
-        this.driverName = driverName == null ? "USB serial" : driverName;
+        this.driverName = driverName == null ? "USB 串口" : driverName;
     }
 
     @Override
@@ -25,20 +25,20 @@ final class AndroidUsbProbedSerialCatSession implements SerialCatSession {
     @Override
     public String describeAvailability() {
         return driverName
-                + " serial CAT session is open on "
+                + " 串口 CAT 会话已打开："
                 + device.getDeviceName()
-                + " port "
+                + " 端口 "
                 + port.getPortNumber()
-                + ".";
+                + "。";
     }
 
     @Override
     public void send(byte[] command, int timeoutMs) throws IOException {
         if (!isOpen()) {
-            throw new IOException("Serial CAT session is already closed.");
+            throw new IOException("串口 CAT 会话已经关闭。");
         }
         if (command == null || command.length == 0) {
-            throw new IOException("Serial CAT command is empty.");
+            throw new IOException("串口 CAT 指令为空。");
         }
         port.write(command, Math.max(500, timeoutMs));
     }

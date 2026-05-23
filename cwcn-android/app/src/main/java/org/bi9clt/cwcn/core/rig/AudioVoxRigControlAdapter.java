@@ -37,17 +37,17 @@ public final class AudioVoxRigControlAdapter implements RigControlAdapter {
 
     @Override
     public String displayName() {
-        return "Audio VOX Text Adapter";
+        return "音频 VOX 发射适配器";
     }
 
     @Override
     public String describeCapabilities() {
-        return "Generate CW audio locally so a radio or external keyer can be driven through VOX/audio input.";
+        return "在本地生成 CW 音频，通过 VOX 或音频输入驱动电台或外部键控器。";
     }
 
     @Override
     public String describeAvailability() {
-        return "Ready for audio VOX. Connect phone audio to the rig/keyer audio path and enable VOX on the target device.";
+        return "音频 VOX 已可用。请将手机音频接入电台或键控器的音频路径，并在目标设备上开启 VOX。";
     }
 
     @Override

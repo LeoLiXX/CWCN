@@ -10,8 +10,8 @@ public interface SerialCatSession extends AutoCloseable {
     void send(byte[] command, int timeoutMs) throws IOException;
 
     default void send(String command, int timeoutMs) throws IOException {
-        if (command == null) {
-            throw new IOException("Serial CAT command is empty.");
+        if (command == null || command.trim().isEmpty()) {
+            throw new IOException("串口 CAT 指令为空。");
         }
         send(command.getBytes(java.nio.charset.StandardCharsets.US_ASCII), timeoutMs);
     }

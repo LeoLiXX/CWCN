@@ -18,8 +18,6 @@ import org.bi9clt.cwcn.databinding.ItemQsoLogbookCardBinding;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-
 final class QsoLogbookAdapter extends RecyclerView.Adapter<QsoLogbookAdapter.LogViewHolder> {
     interface Callbacks {
         void onLogClicked(ConfirmedQsoLog log);
@@ -105,18 +103,40 @@ final class QsoLogbookAdapter extends RecyclerView.Adapter<QsoLogbookAdapter.Log
 
         private void bindDetailed(ConfirmedQsoLog log, CallsignMetadata metadata) {
             binding.detailCallsignText.setText(safeText(log.remoteCallsign()));
-            binding.detailRemoteGridText.setText("网格: " + safeField(log.remoteGrid()));
+            binding.detailRemoteGridText.setText(binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_grid,
+                    safeField(log.remoteGrid())
+            ));
             binding.detailStationCallsignText.setText(safeText(log.stationCallsign()));
-            binding.detailStationGridText.setText("网格: " + safeField(log.stationGrid()));
+            binding.detailStationGridText.setText(binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_grid,
+                    safeField(log.stationGrid())
+            ));
             bindConfirmation(binding.detailConfirmationText, log.manualConfirmed());
 
-            binding.detailTimeText.setText("时间:" + safeDateTime(log.qsoTimeUtcEpochMs()));
+            binding.detailTimeText.setText(binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_time,
+                    safeDateTime(log.qsoTimeUtcEpochMs())
+            ));
             binding.detailMetaText.setText(renderDetailedMeta(metadata));
-            binding.detailRstText.setText("接收 " + safeField(log.rstRcvd()) + " 发送 " + safeField(log.rstSent()));
-            binding.detailModeText.setText("模式: " + safeField(log.mode()));
+            binding.detailRstText.setText(binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_rst,
+                    safeField(log.rstRcvd()),
+                    safeField(log.rstSent())
+            ));
+            binding.detailModeText.setText(binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_mode,
+                    safeField(log.mode())
+            ));
 
-            binding.detailBandText.setText("波段: " + safeBand(log.frequencyHz()));
-            binding.detailFrequencyText.setText("频率: " + safeFrequencyNoSpace(log.frequencyHz()));
+            binding.detailBandText.setText(binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_band,
+                    safeBand(log.frequencyHz())
+            ));
+            binding.detailFrequencyText.setText(binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_frequency,
+                    safeFrequencyNoSpace(log.frequencyHz())
+            ));
             binding.detailCountryText.setText(renderLocation(metadata, log.qth()));
             binding.detailCommentText.setText(renderDetailedComment(log));
         }
@@ -125,8 +145,14 @@ final class QsoLogbookAdapter extends RecyclerView.Adapter<QsoLogbookAdapter.Log
             binding.compactCallsignText.setText(safeText(log.remoteCallsign()));
             bindConfirmation(binding.compactConfirmationText, log.manualConfirmed());
 
-            binding.compactRecentTimeText.setText("最近通联:" + renderCompactDate(log.qsoTimeUtcEpochMs()));
-            binding.compactModeText.setText("模式:" + safeField(log.mode()));
+            binding.compactRecentTimeText.setText(binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_recent_time,
+                    renderCompactDate(log.qsoTimeUtcEpochMs())
+            ));
+            binding.compactModeText.setText(binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_mode_compact,
+                    safeField(log.mode())
+            ));
             binding.compactMetaText.setText(renderCompactMeta(metadata));
 
             binding.compactBandFrequencyText.setText(renderCompactBandFrequency(log.frequencyHz()));
@@ -135,7 +161,9 @@ final class QsoLogbookAdapter extends RecyclerView.Adapter<QsoLogbookAdapter.Log
         }
 
         private void bindConfirmation(TextView target, boolean confirmed) {
-            target.setText(confirmed ? "已确认" : "未确认");
+            target.setText(confirmed
+                    ? R.string.qso_logbook_card_confirmed
+                    : R.string.qso_logbook_card_unconfirmed);
             target.setTextColor(ContextCompat.getColor(
                     binding.getRoot().getContext(),
                     confirmed ? R.color.cwcn_accent : R.color.cwcn_warning
@@ -146,14 +174,24 @@ final class QsoLogbookAdapter extends RecyclerView.Adapter<QsoLogbookAdapter.Log
             String dxcc = metadata == null ? "-" : safeField(metadata.dxccPrefix());
             String itu = metadata != null && metadata.ituZone() > 0 ? String.valueOf(metadata.ituZone()) : "-";
             String cq = metadata != null && metadata.cqZone() > 0 ? String.valueOf(metadata.cqZone()) : "-";
-            return "DXCC " + dxcc + " ITU " + itu + " CQ " + cq;
+            return binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_meta_detailed,
+                    dxcc,
+                    itu,
+                    cq
+            );
         }
 
         private String renderCompactMeta(CallsignMetadata metadata) {
             String dxcc = metadata == null ? "-" : safeField(metadata.dxccPrefix());
             String itu = metadata != null && metadata.ituZone() > 0 ? String.valueOf(metadata.ituZone()) : "-";
             String cq = metadata != null && metadata.cqZone() > 0 ? String.valueOf(metadata.cqZone()) : "-";
-            return "DXCC:" + dxcc + ", ITU:" + itu + ", CQ:" + cq;
+            return binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_card_meta_compact,
+                    dxcc,
+                    itu,
+                    cq
+            );
         }
 
         private String renderCompactBandFrequency(long frequencyHz) {
@@ -175,15 +213,22 @@ final class QsoLogbookAdapter extends RecyclerView.Adapter<QsoLogbookAdapter.Log
             String grid = trimToNull(log.remoteGrid());
             String distance = trimToNull(renderDistanceZh(log.distanceKm()));
             if (grid != null && distance != null) {
-                return "网格:" + grid + " " + distance;
+                return binding.getRoot().getContext().getString(
+                        R.string.qso_logbook_card_grid_distance,
+                        grid,
+                        distance
+                );
             }
             if (grid != null) {
-                return "网格:" + grid;
+                return binding.getRoot().getContext().getString(
+                        R.string.qso_logbook_card_grid_only,
+                        grid
+                );
             }
             if (distance != null) {
                 return distance;
             }
-            return "网格:-";
+            return binding.getRoot().getContext().getString(R.string.qso_logbook_card_grid_empty);
         }
 
         private String renderLocation(CallsignMetadata metadata, String qthRaw) {
@@ -254,14 +299,20 @@ final class QsoLogbookAdapter extends RecyclerView.Adapter<QsoLogbookAdapter.Log
             if (distanceKm == null || distanceKm <= 0.0d) {
                 return "-";
             }
-            return String.format(Locale.US, "%.0f公里", distanceKm);
+            return binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_distance_km,
+                    distanceKm
+            );
         }
 
         private String renderDistanceComment(Double distanceKm) {
             if (distanceKm == null || distanceKm <= 0.0d) {
                 return null;
             }
-            return String.format(Locale.US, "Distance:%.0fkm, QSO by CWCN", distanceKm);
+            return binding.getRoot().getContext().getString(
+                    R.string.qso_logbook_distance_comment,
+                    distanceKm
+            );
         }
 
         private String safeDateTime(long epochMs) {

@@ -19,4 +19,20 @@ public enum QsoPhase {
     public String displayName() {
         return displayName;
     }
+
+    public String stableId() {
+        return displayName;
+    }
+
+    public static QsoPhase fromPersistedValue(String rawPhase) {
+        if (rawPhase == null || rawPhase.isEmpty()) {
+            return IDLE;
+        }
+        for (QsoPhase phase : values()) {
+            if (rawPhase.equals(phase.name()) || rawPhase.equals(phase.stableId())) {
+                return phase;
+            }
+        }
+        return IDLE;
+    }
 }

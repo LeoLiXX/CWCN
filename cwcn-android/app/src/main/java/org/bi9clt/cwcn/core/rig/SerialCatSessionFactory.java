@@ -5,7 +5,15 @@ import android.app.PendingIntent;
 import java.io.IOException;
 
 public interface SerialCatSessionFactory {
-    String describeAvailability(String portHint);
+    PortAvailability availability(String portHint);
+
+    default String describeAvailability(String portHint) {
+        return availability(portHint).message();
+    }
+
+    default boolean isReady(String portHint) {
+        return availability(portHint).isReady();
+    }
 
     boolean requestPermission(String portHint, PendingIntent pendingIntent);
 

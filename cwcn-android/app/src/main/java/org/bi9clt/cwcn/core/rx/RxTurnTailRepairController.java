@@ -44,6 +44,10 @@ public final class RxTurnTailRepairController {
         return turnActive;
     }
 
+    public boolean currentTurnHasCommittedDecodeEvents() {
+        return turnActive && sessionCommittedDecodeEvents.size() > currentTurnDecodeStartIndex;
+    }
+
     public void noteToneEvent(@Nullable CwToneEvent toneEvent) {
         if (!turnActive || toneEvent == null) {
             return;

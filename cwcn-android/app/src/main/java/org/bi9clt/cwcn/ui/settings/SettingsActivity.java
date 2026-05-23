@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
 import android.widget.EditText;
@@ -27,11 +28,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.BuildConfig;
 import org.bi9clt.cwcn.core.app.DeveloperModeStore;
 import org.bi9clt.cwcn.core.app.RouteFallbackStore;
 import org.bi9clt.cwcn.core.app.RxInputSettingsStore;
 import org.bi9clt.cwcn.core.app.StationProfileStore;
+import org.bi9clt.cwcn.core.app.TxTemplateEntry;
 import org.bi9clt.cwcn.core.app.TxTemplateStore;
 import org.bi9clt.cwcn.core.log.AppOverviewSnapshot;
 import org.bi9clt.cwcn.core.log.ConfirmedQsoLog;
@@ -53,6 +56,8 @@ import org.bi9clt.cwcn.core.rig.UsbSerialKeyerRigControlAdapter;
 import org.bi9clt.cwcn.databinding.ActivitySettingsBinding;
 import org.bi9clt.cwcn.ui.developer.DeveloperToolsActivity;
 import org.bi9clt.cwcn.ui.rig.RigSetupActivity;
+import org.bi9clt.cwcn.ui.rig.RigUiLabels;
+import org.bi9clt.cwcn.ui.tx.TxTemplateListActivity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,19 +68,35 @@ public final class SettingsActivity extends AppCompatActivity {
     private static final int REQUEST_LOCATION_PERMISSION = 2001;
 
     private enum FixedToneLearningWindowPreset {
-        TIGHT("人工锁频: 紧锁 ±30Hz", "紧锁", 30),
-        STANDARD("人工锁频: 标准 ±50Hz", "标准", 50),
-        WIDE("人工锁频: 宽松 ±70Hz", "宽松", 70),
-        CUSTOM("人工锁频: 自定义", "自定义", null);
+        TIGHT(
+                R.string.settings_fixed_tone_preset_tight_display,
+                R.string.settings_fixed_tone_preset_tight_short,
+                30
+        ),
+        STANDARD(
+                R.string.settings_fixed_tone_preset_standard_display,
+                R.string.settings_fixed_tone_preset_standard_short,
+                50
+        ),
+        WIDE(
+                R.string.settings_fixed_tone_preset_wide_display,
+                R.string.settings_fixed_tone_preset_wide_short,
+                70
+        ),
+        CUSTOM(
+                R.string.settings_fixed_tone_preset_custom_display,
+                R.string.settings_fixed_tone_preset_custom_short,
+                null
+        );
 
-        private final String displayName;
-        private final String shortLabel;
+        private final int displayNameResId;
+        private final int shortLabelResId;
         @Nullable
         private final Integer windowHz;
 
-        FixedToneLearningWindowPreset(String displayName, String shortLabel, @Nullable Integer windowHz) {
-            this.displayName = displayName;
-            this.shortLabel = shortLabel;
+        FixedToneLearningWindowPreset(int displayNameResId, int shortLabelResId, @Nullable Integer windowHz) {
+            this.displayNameResId = displayNameResId;
+            this.shortLabelResId = shortLabelResId;
             this.windowHz = windowHz;
         }
 
@@ -84,8 +105,12 @@ public final class SettingsActivity extends AppCompatActivity {
             return windowHz;
         }
 
-        String shortLabel() {
-            return shortLabel;
+        int displayNameResId() {
+            return displayNameResId;
+        }
+
+        int shortLabelResId() {
+            return shortLabelResId;
         }
 
         static FixedToneLearningWindowPreset fromWindowHz(int windowHz) {
@@ -99,7 +124,7 @@ public final class SettingsActivity extends AppCompatActivity {
 
         @Override
         public String toString() {
-            return displayName;
+            return name();
         }
     }
 
@@ -115,12 +140,10 @@ public final class SettingsActivity extends AppCompatActivity {
     private boolean autoSaveEnabled;
     private boolean stationProfileDirty;
     private boolean cwDefaultsDirty;
-    private boolean txTemplatesDirty;
     private boolean routeSettingsDirty;
     private boolean routeFallbackDirty;
     private String stationProfileStatusMessage = "";
     private String cwDefaultsStatusMessage = "";
-    private String txTemplatesStatusMessage = "";
     private String routeSettingsStatusMessage = "";
     private String routeFallbackStatusMessage = "";
     private BroadcastReceiver usbPermissionReceiver;
@@ -141,7 +164,7 @@ public final class SettingsActivity extends AppCompatActivity {
         txTemplateStore = new TxTemplateStore(this);
         localLogRepository = new LocalLogRepository(this);
         registerUsbPermissionReceiver();
-        binding.versionText.setText("设置 " + BuildConfig.VERSION_NAME);
+        binding.versionText.setText(getString(R.string.settings_version, BuildConfig.VERSION_NAME));
         setupEditorWatchers();
         setupRouteEditorControls();
         setupRouteFallbackControls();
@@ -192,15 +215,6 @@ public final class SettingsActivity extends AppCompatActivity {
                 }
             }
         };
-        TextWatcher txTemplatesWatcher = new SimpleTextWatcher() {
-            @Override
-            public void afterTextChanged(Editable editable) {
-                if (!syncingEditors && autoSaveEnabled) {
-                    txTemplatesDirty = true;
-                    binding.txTemplatesStatusText.setText(renderTxTemplatesEditorStatus());
-                }
-            }
-        };
         binding.stationCallsignEditText.addTextChangedListener(stationWatcher);
         binding.operatorNameEditText.addTextChangedListener(stationWatcher);
         binding.qthEditText.addTextChangedListener(stationWatcher);
@@ -211,10 +225,6 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.defaultWpmEditText.addTextChangedListener(cwDefaultsWatcher);
         binding.defaultToneEditText.addTextChangedListener(cwDefaultsWatcher);
         binding.fixedToneLearningWindowEditText.addTextChangedListener(cwDefaultsWatcher);
-        binding.templateCqEditText.addTextChangedListener(txTemplatesWatcher);
-        binding.templateCqDxEditText.addTextChangedListener(txTemplatesWatcher);
-        binding.templateQrzEditText.addTextChangedListener(txTemplatesWatcher);
-        binding.templateTu73EditText.addTextChangedListener(txTemplatesWatcher);
         TextWatcher routeWatcher = new SimpleTextWatcher() {
             @Override
             public void afterTextChanged(Editable editable) {
@@ -242,10 +252,6 @@ public final class SettingsActivity extends AppCompatActivity {
         attachAutoSaveOnFocusLoss(binding.defaultWpmEditText, this::saveCwDefaults);
         attachAutoSaveOnFocusLoss(binding.defaultToneEditText, this::saveCwDefaults);
         attachAutoSaveOnFocusLoss(binding.fixedToneLearningWindowEditText, this::saveCwDefaults);
-        attachAutoSaveOnFocusLoss(binding.templateCqEditText, this::saveTxTemplates);
-        attachAutoSaveOnFocusLoss(binding.templateCqDxEditText, this::saveTxTemplates);
-        attachAutoSaveOnFocusLoss(binding.templateQrzEditText, this::saveTxTemplates);
-        attachAutoSaveOnFocusLoss(binding.templateTu73EditText, this::saveTxTemplates);
         attachAutoSaveOnFocusLoss(binding.serialCatPortHintEditText, this::saveRouteSettings);
         attachAutoSaveOnFocusLoss(binding.serialCatBaudRateEditText, this::saveRouteSettings);
         attachAutoSaveOnFocusLoss(binding.serialCatKeyingPortHintEditText, this::saveRouteSettings);
@@ -260,7 +266,21 @@ public final class SettingsActivity extends AppCompatActivity {
                 this,
                 android.R.layout.simple_spinner_item,
                 RxInputSettingsStore.RxInputMode.values()
-        );
+        ) {
+            @Override
+            public View getView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                bindRxInputModeLabel(view, getItem(position));
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                bindRxInputModeLabel(view, getItem(position));
+                return view;
+            }
+        };
         inputModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         binding.rxInputModeSpinner.setAdapter(inputModeAdapter);
 
@@ -268,7 +288,21 @@ public final class SettingsActivity extends AppCompatActivity {
                 this,
                 android.R.layout.simple_spinner_item,
                 RxInputSettingsStore.MicSourceMode.values()
-        );
+        ) {
+            @Override
+            public View getView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                bindMicSourceModeLabel(view, getItem(position));
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                bindMicSourceModeLabel(view, getItem(position));
+                return view;
+            }
+        };
         micSourceAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         binding.rxMicSourceModeSpinner.setAdapter(micSourceAdapter);
 
@@ -276,7 +310,21 @@ public final class SettingsActivity extends AppCompatActivity {
                 this,
                 android.R.layout.simple_spinner_item,
                 RxInputSettingsStore.RxToneMode.values()
-        );
+        ) {
+            @Override
+            public View getView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                bindRxToneModeLabel(view, getItem(position));
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                bindRxToneModeLabel(view, getItem(position));
+                return view;
+            }
+        };
         toneModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         binding.rxToneModeSpinner.setAdapter(toneModeAdapter);
 
@@ -284,7 +332,21 @@ public final class SettingsActivity extends AppCompatActivity {
                 this,
                 android.R.layout.simple_spinner_item,
                 FixedToneLearningWindowPreset.values()
-        );
+        ) {
+            @Override
+            public View getView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                bindFixedTonePresetLabel(view, getItem(position));
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                bindFixedTonePresetLabel(view, getItem(position));
+                return view;
+            }
+        };
         fixedToneWindowPresetAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         binding.fixedToneLearningWindowPresetSpinner.setAdapter(fixedToneWindowPresetAdapter);
 
@@ -330,6 +392,34 @@ public final class SettingsActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> parent) {
             }
         });
+    }
+
+    private void bindFixedTonePresetLabel(View view, @Nullable FixedToneLearningWindowPreset preset) {
+        if (!(view instanceof TextView)) {
+            return;
+        }
+        ((TextView) view).setText(preset == null ? "" : getString(preset.displayNameResId()));
+    }
+
+    private void bindRxInputModeLabel(View view, @Nullable RxInputSettingsStore.RxInputMode mode) {
+        if (!(view instanceof TextView)) {
+            return;
+        }
+        ((TextView) view).setText(mode == null ? "" : getString(mode.displayNameResId()));
+    }
+
+    private void bindMicSourceModeLabel(View view, @Nullable RxInputSettingsStore.MicSourceMode mode) {
+        if (!(view instanceof TextView)) {
+            return;
+        }
+        ((TextView) view).setText(mode == null ? "" : getString(mode.displayNameResId()));
+    }
+
+    private void bindRxToneModeLabel(View view, @Nullable RxInputSettingsStore.RxToneMode mode) {
+        if (!(view instanceof TextView)) {
+            return;
+        }
+        ((TextView) view).setText(mode == null ? "" : getString(mode.displayNameResId()));
     }
 
     private void setupRouteEditorControls() {
@@ -442,7 +532,21 @@ public final class SettingsActivity extends AppCompatActivity {
                 this,
                 android.R.layout.simple_spinner_item,
                 RouteFallbackStore.Mode.values()
-        );
+        ) {
+            @Override
+            public View getView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                bindRouteFallbackModeLabel(view, getItem(position));
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                bindRouteFallbackModeLabel(view, getItem(position));
+                return view;
+            }
+        };
         fallbackModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         binding.routeFallbackModeSpinner.setAdapter(fallbackModeAdapter);
         binding.routeFallbackModeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -461,6 +565,13 @@ public final class SettingsActivity extends AppCompatActivity {
         });
     }
 
+    private void bindRouteFallbackModeLabel(View view, @Nullable RouteFallbackStore.Mode mode) {
+        if (!(view instanceof TextView)) {
+            return;
+        }
+        ((TextView) view).setText(mode == null ? "" : getString(mode.displayNameResId()));
+    }
+
     private void setupActions() {
         binding.backButton.setOnClickListener(view -> finish());
         binding.openRigSetupButton.setOnClickListener(view ->
@@ -473,39 +584,38 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.openDeveloperToolsButton.setOnClickListener(view ->
                 startActivity(new Intent(this, DeveloperToolsActivity.class)));
         binding.requestUsbKeyerPermissionButton.setOnClickListener(view -> requestUsbKeyerPermission());
+        binding.openTxTemplateLibraryButton.setOnClickListener(view ->
+                startActivity(new Intent(this, TxTemplateListActivity.class)));
     }
 
     private void setupInfoButtons() {
         binding.stationInfoButton.setOnClickListener(view -> showInfoDialog(
-                "台站资料",
-                "这里保存正式使用的台站信息。呼号、姓名、QTH、梅登海格网格，以及 <RIG> / <ANT> / <WX> 这类模板变量都从这里取值，不再需要单独点保存。"
-                        + "梅登海格网格支持通过定位按钮读取系统最近位置并自动换算为 4 位网格。"
+                getString(R.string.settings_info_station_title),
+                getString(R.string.settings_info_station_message)
         ));
         binding.radioRouteInfoButton.setOnClickListener(view -> showInfoDialog(
-                "电台链路",
-                "这里查看当前正式路由，真正的电台选择和探测仍在 Rig Setup 完成。如果没有固定路由，是否回落到手机麦克风和手机音频，由“无电台兜底”决定。"
+                getString(R.string.settings_info_radio_route_title),
+                getString(R.string.settings_info_radio_route_message)
         ));
         binding.routeFallbackInfoButton.setOnClickListener(view -> showInfoDialog(
-                "无电台兜底",
-                "自动模式下，没有固定电台时，RX 可回落到手机麦克风，TX 可回落到手机音频。仅电台模式则完全禁止这种兜底。"
+                getString(R.string.settings_info_route_fallback_title),
+                getString(R.string.settings_info_route_fallback_message)
         ));
         binding.catKeyingInfoButton.setOnClickListener(view -> showInfoDialog(
-                "CAT 与键控",
-                "这里保存当前固定路由的 CAT、网络、USB 键控参数。Rig Setup 负责探测和诊断，这里负责日常使用时的正式参数。"
+                getString(R.string.settings_info_cat_keying_title),
+                getString(R.string.settings_info_cat_keying_message)
         ));
         binding.cwDefaultsInfoButton.setOnClickListener(view -> showInfoDialog(
-                "CW 默认值",
-                "这里配置默认 WPM、固定音调、人工锁频学习窗口和 RX 输入策略。"
-                        + "普通情况建议保持“标准 ±50Hz”；样本很脏且中心频率已知时，可尝试“紧锁 ±30Hz”；"
-                        + "如果担心收得过窄，也可以切到“宽松 ±70Hz”或直接自定义数值。"
+                getString(R.string.settings_info_cw_defaults_title),
+                getString(R.string.settings_info_cw_defaults_message)
         ));
         binding.txTemplatesInfoButton.setOnClickListener(view -> showInfoDialog(
-                "发送模板",
-                "这里定义 Operate 页的 4 个正式发送模板：呼叫、应答、设备信息、收尾。支持 <MYCALL>、<CALL>、<RST>、<RST_SENT>、<RST_RCVD>、<NAME>、<QTH>、<GRID>、<RIG>、<ANT>、<WX> 占位符，修改后会自动保存。\n\n其中：<RST> 与 <RST_SENT> 等价，表示我发给对方的信号报告，内容描述的是“对方信号到我这里的接收情况”；<RST_RCVD> 表示对方发给我的信号报告，内容描述的是“我的信号到对方那里的接收情况”。"
+                getString(R.string.settings_info_tx_templates_title),
+                getString(R.string.settings_info_tx_templates_message)
         ));
         binding.developerInfoButton.setOnClickListener(view -> showInfoDialog(
-                "高级 / 开发",
-                "只有开发者模式保留显式开关。打开后会显示 RX 调试、TX 调试台和链路诊断工具，正常操作时建议保持关闭。"
+                getString(R.string.settings_info_developer_title),
+                getString(R.string.settings_info_developer_message)
         ));
     }
 
@@ -513,7 +623,7 @@ public final class SettingsActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle(title)
                 .setMessage(message)
-                .setPositiveButton("OK", null)
+                .setPositiveButton(R.string.common_acknowledged, null)
                 .show();
     }
 
@@ -531,9 +641,9 @@ public final class SettingsActivity extends AppCompatActivity {
             }
         }
         if (!granted) {
-            stationProfileStatusMessage = "没有定位权限，无法自动获取网格。";
+            stationProfileStatusMessage = getString(R.string.settings_status_location_permission_denied);
             refreshUi();
-            Toast.makeText(this, "Location permission is required to detect grid.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.settings_toast_location_permission_required, Toast.LENGTH_SHORT).show();
             return;
         }
         detectGridFromLastKnownLocation();
@@ -545,7 +655,6 @@ public final class SettingsActivity extends AppCompatActivity {
         String catKeyingHint = renderCatKeyingHintText();
         syncStationProfileEditors(overview);
         syncCwDefaultsEditors();
-        syncTxTemplateEditors();
         syncRouteEditors();
         syncRouteFallbackEditor();
         updateRoutePanelVisibility();
@@ -571,12 +680,12 @@ public final class SettingsActivity extends AppCompatActivity {
         setVisibleWhenHasText(binding.routeFallbackStatusText);
         binding.developerModeStatusText.setText(renderDeveloperModeStatus(developerModeEnabled));
         binding.toggleDeveloperModeButton.setText(developerModeEnabled
-                ? "关闭开发者模式"
-                : "启用开发者模式");
+                ? R.string.settings_toggle_developer_hide
+                : R.string.settings_toggle_developer_show);
         binding.developerToolsPanel.setVisibility(developerModeEnabled ? View.VISIBLE : View.GONE);
         binding.developerToolsNoteText.setText(developerModeEnabled
-                ? "RX 观察 / TX 调试台 / 电台诊断"
-                : "开发工具已隐藏");
+                ? R.string.settings_developer_tools_note_visible
+                : R.string.settings_developer_tools_note_hidden);
         syncUsbRouteState();
     }
 
@@ -598,22 +707,19 @@ public final class SettingsActivity extends AppCompatActivity {
         String wx = stationProfileStore.weatherDescription();
         RigProfile profile = rigSelectionStore.selectedProfile();
         RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
-        return "网格 " + safeValue(grid)
-                + "  |  RIG " + safeValue(rig)
-                + "\nANT " + safeValue(ant)
-                + "  |  WX " + safeValue(wx)
-                + "\nCW "
-                + settings.defaultWpm()
-                + " WPM / "
-                + settings.defaultToneFrequencyHz()
-                + " Hz / "
-                + renderFixedToneLearningWindowSummary(rxInputSettingsStore.fixedToneLearningWindowHz())
-                + "\nRX "
-                + rxInputSettingsStore.rxInputMode().displayName()
-                + " / "
-                + rxInputSettingsStore.rxToneMode().displayName()
-                + " / "
-                + rxInputSettingsStore.micSourceMode().displayName();
+        return getString(
+                R.string.settings_operating_defaults_summary,
+                safeValue(grid),
+                safeValue(rig),
+                safeValue(ant),
+                safeValue(wx),
+                settings.defaultWpm(),
+                settings.defaultToneFrequencyHz(),
+                renderFixedToneLearningWindowSummary(rxInputSettingsStore.fixedToneLearningWindowHz()),
+                renderRxInputModeLabel(rxInputSettingsStore.rxInputMode()),
+                renderRxToneModeLabel(rxInputSettingsStore.rxToneMode()),
+                renderMicSourceModeLabel(rxInputSettingsStore.micSourceMode())
+        );
     }
 
     private String renderRadioRouteText() {
@@ -638,9 +744,17 @@ public final class SettingsActivity extends AppCompatActivity {
 
     private String renderRouteFallbackText() {
         RouteFallbackStore.Mode mode = routeFallbackStore.mode();
-        return "模式: " + mode.displayName()
-                + "\nRX " + (routeFallbackStore.usePhoneFallback() ? "手机麦克风" : "关闭")
-                + "  |  TX " + (routeFallbackStore.usePhoneFallback() ? "手机音频" : "关闭");
+        boolean usePhoneFallback = routeFallbackStore.usePhoneFallback();
+        return getString(
+                R.string.settings_route_fallback_text,
+                renderRouteFallbackModeLabel(mode),
+                usePhoneFallback
+                        ? getString(R.string.settings_route_fallback_rx_phone_mic)
+                        : getString(R.string.settings_route_fallback_disabled),
+                usePhoneFallback
+                        ? getString(R.string.settings_route_fallback_tx_phone_audio)
+                        : getString(R.string.settings_route_fallback_disabled)
+        );
     }
 
     private String renderRouteFallbackSummary() {
@@ -663,46 +777,52 @@ public final class SettingsActivity extends AppCompatActivity {
     private String renderCwDefaultsText() {
         RigProfile profile = rigSelectionStore.selectedProfile();
         RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
-        return settings.defaultWpm() + " WPM"
-                + "  |  "
-                + settings.defaultToneFrequencyHz() + " Hz"
-                + "  |  "
-                + renderFixedToneLearningWindowSummary(rxInputSettingsStore.fixedToneLearningWindowHz())
-                + "\n"
-                + rxInputSettingsStore.rxInputMode().displayName()
-                + "  |  "
-                + rxInputSettingsStore.rxToneMode().displayName()
-                + "  |  "
-                + rxInputSettingsStore.micSourceMode().displayName();
+        return getString(
+                R.string.settings_cw_defaults_summary,
+                settings.defaultWpm(),
+                settings.defaultToneFrequencyHz(),
+                renderFixedToneLearningWindowSummary(rxInputSettingsStore.fixedToneLearningWindowHz()),
+                renderRxInputModeLabel(rxInputSettingsStore.rxInputMode()),
+                renderRxToneModeLabel(rxInputSettingsStore.rxToneMode()),
+                renderMicSourceModeLabel(rxInputSettingsStore.micSourceMode())
+        );
     }
 
     private String renderFixedToneLearningWindowSummary(int windowHz) {
         FixedToneLearningWindowPreset preset = FixedToneLearningWindowPreset.fromWindowHz(windowHz);
         if (preset == FixedToneLearningWindowPreset.CUSTOM) {
-            return "锁频 ±" + windowHz + " Hz（自定义）";
+            return getString(R.string.settings_fixed_tone_summary_custom, windowHz);
         }
-        return "锁频 ±" + windowHz + " Hz（" + preset.shortLabel() + "）";
+        return getString(
+                R.string.settings_fixed_tone_summary_preset,
+                windowHz,
+                getString(preset.shortLabelResId())
+        );
     }
 
     private String renderTxTemplatesSummary() {
-        return "宏定义说明:\n"
-                + "<MYCALL>  我的呼号\n"
-                + "<CALL>  对方呼号\n"
-                + "<RST>  我发给对方的信号报告（等同 <RST_SENT>）\n"
-                + "<RST_SENT>  我发给对方的信号报告，描述对方信号到我这里的情况\n"
-                + "<RST_RCVD>  对方发给我的信号报告，描述我的信号到对方那里的情况\n"
-                + "<NAME>  我的姓名\n"
-                + "<QTH>  我的 QTH\n"
-                + "<GRID>  我的梅登海格网格\n"
-                + "<RIG>  我的设备信息\n"
-                + "<ANT>  我的天线信息\n"
-                + "<WX>  我的天气/环境说明";
+        List<TxTemplateEntry> templates = txTemplateStore.loadTemplates();
+        ArrayList<String> names = new ArrayList<>();
+        for (TxTemplateEntry entry : templates) {
+            if (entry != null && hasMeaningfulText(entry.name())) {
+                names.add(entry.name().trim());
+            }
+        }
+        String namesSummary = names.isEmpty()
+                ? ""
+                : getString(R.string.settings_tx_templates_summary_names, String.join(" / ", names));
+        return getString(
+                R.string.settings_tx_templates_summary,
+                templates.size(),
+                namesSummary,
+                String.join(" ", txTemplateStore.supportedPlaceholders())
+        );
     }
 
     private String renderDeveloperModeStatus(boolean enabled) {
         return enabled
-                ? "当前已显示开发调试入口。"
-                : "当前为正式使用视图，开发调试入口已隐藏。";
+                ? getString(R.string.settings_status_developer_mode_on)
+                : getString(R.string.settings_status_developer_mode_off);
     }
 
     private String resolveStationCallsign(@Nullable AppOverviewSnapshot overview) {
@@ -788,18 +908,6 @@ public final class SettingsActivity extends AppCompatActivity {
         syncingEditors = false;
     }
 
-    private void syncTxTemplateEditors() {
-        if (txTemplatesDirty) {
-            return;
-        }
-        syncingEditors = true;
-        binding.templateCqEditText.setText(txTemplateStore.cqTemplate());
-        binding.templateCqDxEditText.setText(txTemplateStore.cqDxTemplate());
-        binding.templateQrzEditText.setText(txTemplateStore.qrzTemplate());
-        binding.templateTu73EditText.setText(txTemplateStore.tu73Template());
-        syncingEditors = false;
-    }
-
     private void syncRouteEditors() {
         if (routeSettingsDirty) {
             syncUsbDeviceEditorSelection(rigSelectionStore.selectedProfile(), readCurrentRouteEditorSettings());
@@ -858,8 +966,8 @@ public final class SettingsActivity extends AppCompatActivity {
                 antennaDescription,
                 weatherDescription
         )
-                ? "台站资料已清空，正在回退到草稿/日志推断。"
-                : "台站资料已自动保存。";
+                ? getString(R.string.settings_status_station_profile_cleared)
+                : getString(R.string.settings_status_station_profile_saved);
         refreshUi();
     }
 
@@ -888,9 +996,9 @@ public final class SettingsActivity extends AppCompatActivity {
     private void detectGridFromLastKnownLocation() {
         LocationManager locationManager = getSystemService(LocationManager.class);
         if (locationManager == null) {
-            stationProfileStatusMessage = "系统没有可用的定位服务。";
+            stationProfileStatusMessage = getString(R.string.settings_status_location_service_unavailable);
             refreshUi();
-            Toast.makeText(this, "Location service is unavailable.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.settings_toast_location_service_unavailable, Toast.LENGTH_SHORT).show();
             return;
         }
         Location bestLocation = null;
@@ -906,24 +1014,24 @@ public final class SettingsActivity extends AppCompatActivity {
                 }
             }
         } catch (SecurityException exception) {
-            stationProfileStatusMessage = "没有定位权限，无法自动获取网格。";
+            stationProfileStatusMessage = getString(R.string.settings_status_location_permission_denied);
             refreshUi();
-            Toast.makeText(this, "Location permission is required to detect grid.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.settings_toast_location_permission_required, Toast.LENGTH_SHORT).show();
             return;
         }
 
         if (bestLocation == null) {
-            stationProfileStatusMessage = "没有可用的最近位置，暂时无法自动获取网格。";
+            stationProfileStatusMessage = getString(R.string.settings_status_no_recent_location);
             refreshUi();
-            Toast.makeText(this, "No last known location is available yet.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.settings_toast_no_recent_location, Toast.LENGTH_SHORT).show();
             return;
         }
 
         String grid = MaidenheadGridUtil.fromLatLon(bestLocation.getLatitude(), bestLocation.getLongitude());
         if (!MaidenheadGridUtil.isValid(grid)) {
-            stationProfileStatusMessage = "最近位置无法换算成有效网格。";
+            stationProfileStatusMessage = getString(R.string.settings_status_invalid_grid);
             refreshUi();
-            Toast.makeText(this, "Unable to convert location into a Maidenhead grid.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.settings_toast_invalid_grid, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -932,7 +1040,7 @@ public final class SettingsActivity extends AppCompatActivity {
         syncingEditors = false;
         stationProfileDirty = true;
         saveStationProfile();
-        stationProfileStatusMessage = "已根据最近位置自动填写网格 " + grid + "。";
+        stationProfileStatusMessage = getString(R.string.settings_status_grid_filled, grid);
         refreshUi();
     }
 
@@ -972,10 +1080,10 @@ public final class SettingsActivity extends AppCompatActivity {
         Integer defaultWpm = parsePositiveInt(
                 binding.defaultWpmEditText.getText(),
                 binding.defaultWpmEditText,
-                "WPM 必须是整数。",
+                getString(R.string.settings_error_wpm_integer),
                 5,
                 80,
-                "WPM 建议保持在 5 到 80 之间。"
+                getString(R.string.settings_error_wpm_range)
         );
         if (defaultWpm == null) {
             return;
@@ -984,10 +1092,10 @@ public final class SettingsActivity extends AppCompatActivity {
         Integer defaultTone = parsePositiveInt(
                 binding.defaultToneEditText.getText(),
                 binding.defaultToneEditText,
-                "音调必须是整数。",
+                getString(R.string.settings_error_tone_integer),
                 200,
                 2000,
-                "音调建议保持在 200 到 2000 Hz 之间。"
+                getString(R.string.settings_error_tone_range)
         );
         if (defaultTone == null) {
             return;
@@ -996,14 +1104,14 @@ public final class SettingsActivity extends AppCompatActivity {
         Integer fixedToneLearningWindowHz = parsePositiveInt(
                 binding.fixedToneLearningWindowEditText.getText(),
                 binding.fixedToneLearningWindowEditText,
-                "锁频学习窗口必须是整数。",
+                getString(R.string.settings_error_fixed_tone_window_integer),
                 org.bi9clt.cwcn.core.signal.CwSignalProcessor.MIN_FIXED_TONE_LEARNING_WINDOW_HZ,
                 org.bi9clt.cwcn.core.signal.CwSignalProcessor.MAX_FIXED_TONE_LEARNING_WINDOW_HZ,
-                "锁频学习窗口建议保持在 "
-                        + org.bi9clt.cwcn.core.signal.CwSignalProcessor.MIN_FIXED_TONE_LEARNING_WINDOW_HZ
-                        + " 到 "
-                        + org.bi9clt.cwcn.core.signal.CwSignalProcessor.MAX_FIXED_TONE_LEARNING_WINDOW_HZ
-                        + " Hz 之间。"
+                getString(
+                        R.string.settings_error_fixed_tone_window_range,
+                        org.bi9clt.cwcn.core.signal.CwSignalProcessor.MIN_FIXED_TONE_LEARNING_WINDOW_HZ,
+                        org.bi9clt.cwcn.core.signal.CwSignalProcessor.MAX_FIXED_TONE_LEARNING_WINDOW_HZ
+                )
         );
         if (fixedToneLearningWindowHz == null) {
             return;
@@ -1045,26 +1153,17 @@ public final class SettingsActivity extends AppCompatActivity {
         ));
         rxInputSettingsStore.setFixedToneLearningWindowHz(fixedToneLearningWindowHz);
         cwDefaultsDirty = false;
-        cwDefaultsStatusMessage = "CW / RX 默认值已自动保存到 " + resolveCwDefaultsScope(profile) + "。";
-        refreshUi();
-    }
-
-    private void saveTxTemplates() {
-        txTemplateStore.save(
-                normalizedEditorValue(binding.templateCqEditText.getText()),
-                normalizedEditorValue(binding.templateCqDxEditText.getText()),
-                normalizedEditorValue(binding.templateQrzEditText.getText()),
-                normalizedEditorValue(binding.templateTu73EditText.getText())
+        cwDefaultsStatusMessage = getString(
+                R.string.settings_status_cw_defaults_saved,
+                resolveCwDefaultsScope(profile)
         );
-        txTemplatesDirty = false;
-        txTemplatesStatusMessage = "发送模板已自动保存。";
         refreshUi();
     }
 
     private void saveRouteSettings() {
         RigProfile profile = rigSelectionStore.selectedProfile();
         if (profile == null) {
-            routeSettingsStatusMessage = "当前还没有固定正式路由，请先到 Rig Setup 选择。";
+            routeSettingsStatusMessage = getString(R.string.settings_status_route_settings_missing_profile);
             refreshUi();
             return;
         }
@@ -1072,10 +1171,10 @@ public final class SettingsActivity extends AppCompatActivity {
         Integer serialBaud = parsePositiveInt(
                 binding.serialCatBaudRateEditText.getText(),
                 binding.serialCatBaudRateEditText,
-                "波特率必须是整数。",
+                getString(R.string.settings_error_baud_integer),
                 300,
                 921600,
-                "波特率建议保持在 300 到 921600 之间。"
+                getString(R.string.settings_error_baud_range)
         );
         if (serialBaud == null) {
             return;
@@ -1083,10 +1182,10 @@ public final class SettingsActivity extends AppCompatActivity {
         Integer networkPort = parsePositiveInt(
                 binding.networkPortEditText.getText(),
                 binding.networkPortEditText,
-                "端口必须是整数。",
+                getString(R.string.settings_error_port_integer),
                 1,
                 65535,
-                "端口建议保持在 1 到 65535 之间。"
+                getString(R.string.settings_error_port_range)
         );
         if (networkPort == null) {
             return;
@@ -1128,7 +1227,10 @@ public final class SettingsActivity extends AppCompatActivity {
         );
         rigSelectionStore.saveSettings(profile, updated);
         routeSettingsDirty = false;
-        routeSettingsStatusMessage = "链路参数已自动保存到 " + profile.displayName() + "。";
+        routeSettingsStatusMessage = getString(
+                R.string.settings_status_route_settings_saved,
+                profile.displayName()
+        );
         refreshUi();
     }
 
@@ -1139,50 +1241,77 @@ public final class SettingsActivity extends AppCompatActivity {
         );
         routeFallbackStore.setMode(selectedMode);
         routeFallbackDirty = false;
-        routeFallbackStatusMessage = "无电台兜底已自动保存为：" + routeFallbackStore.mode().displayName() + "。";
+        routeFallbackStatusMessage = getString(
+                R.string.settings_status_route_fallback_saved,
+                renderRouteFallbackModeLabel(routeFallbackStore.mode())
+        );
         refreshUi();
+    }
+
+    private String renderRxInputModeLabel(@Nullable RxInputSettingsStore.RxInputMode mode) {
+        return getString((mode == null
+                ? RxInputSettingsStore.RxInputMode.AUTO
+                : mode).displayNameResId());
+    }
+
+    private String renderMicSourceModeLabel(@Nullable RxInputSettingsStore.MicSourceMode mode) {
+        return getString((mode == null
+                ? RxInputSettingsStore.MicSourceMode.MIC
+                : mode).displayNameResId());
+    }
+
+    private String renderRxToneModeLabel(@Nullable RxInputSettingsStore.RxToneMode mode) {
+        return getString((mode == null
+                ? RxInputSettingsStore.RxToneMode.AUTO_TRACK
+                : mode).displayNameResId());
+    }
+
+    private String renderRouteFallbackModeLabel(@Nullable RouteFallbackStore.Mode mode) {
+        return getString((mode == null
+                ? RouteFallbackStore.Mode.AUTO_PHONE_FALLBACK
+                : mode).displayNameResId());
     }
 
     private String renderStationProfileEditorStatus() {
         if (stationProfileDirty) {
-            return "编辑中，离开输入框后自动保存";
+            return getString(R.string.settings_editor_autosave_pending);
         }
         return stationProfileStatusMessage;
     }
 
     private String renderCwDefaultsEditorStatus() {
         if (cwDefaultsDirty) {
-            return "编辑中，离开输入框后自动保存";
+            return getString(R.string.settings_editor_autosave_pending);
         }
         return cwDefaultsStatusMessage;
     }
 
     private String renderTxTemplatesEditorStatus() {
-        if (txTemplatesDirty) {
-            return "编辑中，离开输入框后自动保存";
-        }
-        return txTemplatesStatusMessage;
+        return getString(R.string.settings_status_tx_templates_external);
     }
 
     private String renderRouteSettingsScopeText() {
         RigProfile profile = rigSelectionStore.selectedProfile();
         if (profile == null) {
-            return "当前未固定正式路由";
+            return getString(R.string.settings_scope_no_pinned_route);
         }
-        return "当前编辑: " + profile.displayName()
-                + "\n传输: " + profile.transportKind().name();
+        return getString(
+                R.string.settings_scope_route_editing,
+                profile.displayName(),
+                RigUiLabels.transportKind(this, profile.transportKind())
+        );
     }
 
     private String renderRouteSettingsEditorStatus() {
         if (routeSettingsDirty) {
-            return "编辑中，离开输入框后自动保存";
+            return getString(R.string.settings_editor_autosave_pending);
         }
         return routeSettingsStatusMessage;
     }
 
     private String renderRouteFallbackEditorStatus() {
         if (routeFallbackDirty) {
-            return "正在切换，自动保存中";
+            return getString(R.string.settings_status_route_fallback_switching);
         }
         return routeFallbackStatusMessage;
     }
@@ -1196,14 +1325,14 @@ public final class SettingsActivity extends AppCompatActivity {
         boolean hasSavedAnt = hasMeaningfulText(stationProfileStore.antennaDescription());
         boolean hasSavedWx = hasMeaningfulText(stationProfileStore.weatherDescription());
         if (hasSavedCallsign && hasSavedName && hasSavedQth && hasSavedGrid) {
-            return "完整台站资料";
+            return getString(R.string.settings_profile_source_complete);
         }
         if (hasSavedCallsign || hasSavedName || hasSavedQth || hasSavedGrid || hasSavedRig || hasSavedAnt || hasSavedWx) {
-            return "部分台站资料，缺项继续回退";
+            return getString(R.string.settings_profile_source_partial);
         }
         return hasInferredStationProfile(overview)
-                ? "来自活动草稿 / 最近日志的推断"
-                : "还没有保存正式台站资料";
+                ? getString(R.string.settings_profile_source_inferred)
+                : getString(R.string.settings_profile_source_empty);
     }
 
     private boolean hasInferredStationProfile(@Nullable AppOverviewSnapshot overview) {
@@ -1218,7 +1347,9 @@ public final class SettingsActivity extends AppCompatActivity {
     }
 
     private String resolveCwDefaultsScope(@Nullable RigProfile profile) {
-        return profile == null ? "兜底链路默认值" : profile.displayName();
+        return profile == null
+                ? getString(R.string.settings_cw_defaults_scope_fallback)
+                : profile.displayName();
     }
 
     private void updateRoutePanelVisibility() {
@@ -1247,7 +1378,7 @@ public final class SettingsActivity extends AppCompatActivity {
         UsbSerialKeyerRigControlAdapter adapter = resolveUsbKeyerAdapter(profile, settings);
         if (adapter == null) {
             binding.requestUsbKeyerPermissionButton.setEnabled(false);
-            binding.usbRouteStatusText.setText("当前固定路由还没有接上 USB 键控适配器。");
+            binding.usbRouteStatusText.setText(R.string.settings_usb_adapter_missing);
             return;
         }
         List<UsbSerialDeviceOption> devices = refreshUsbDeviceSelection(adapter, settings.usbPreferredDeviceName());
@@ -1255,10 +1386,10 @@ public final class SettingsActivity extends AppCompatActivity {
         boolean ready = adapter.isReady();
         binding.requestUsbKeyerPermissionButton.setEnabled(hasTargetDevice && !ready);
         binding.requestUsbKeyerPermissionButton.setText(ready
-                ? "USB 权限已就绪"
+                ? getString(R.string.settings_usb_permission_ready)
                 : hasTargetDevice
-                ? "申请 USB 权限"
-                : "未检测到 USB 设备");
+                ? getString(R.string.settings_usb_permission_request)
+                : getString(R.string.settings_usb_permission_no_device));
         if (usbRouteStatusMessage != null && !usbRouteStatusMessage.trim().isEmpty()) {
             binding.usbRouteStatusText.setText(usbRouteStatusMessage);
             if (!hasTargetDevice || ready) {
@@ -1266,16 +1397,18 @@ public final class SettingsActivity extends AppCompatActivity {
             }
             return;
         }
-        StringBuilder builder = new StringBuilder();
-        builder.append("路由: ").append(adapter.displayName())
-                .append("\n状态: ").append(RigRouteStatusFormatter.describeUsbKeyerReadiness(adapter, null))
-                .append("\n键控线: ").append(settings.usbKeyLine())
-                .append("\n设备: ").append(hasRealUsbDeviceOption(devices)
-                        ? valueOrEmpty(settings.usbPreferredDeviceName()).isEmpty()
-                        ? "自动 / 首个可用设备"
-                        : settings.usbPreferredDeviceName()
-                        : "没有可用候选设备");
-        binding.usbRouteStatusText.setText(builder.toString());
+        String deviceSummary = hasRealUsbDeviceOption(devices)
+                ? valueOrEmpty(settings.usbPreferredDeviceName()).isEmpty()
+                ? getString(R.string.settings_usb_route_auto_device)
+                : settings.usbPreferredDeviceName()
+                : getString(R.string.settings_usb_route_no_candidates);
+        binding.usbRouteStatusText.setText(getString(
+                R.string.settings_usb_route_summary,
+                adapter.displayName(),
+                RigRouteStatusFormatter.describeUsbKeyerReadiness(adapter, null),
+                settings.usbKeyLine(),
+                deviceSummary
+        ));
     }
 
     private List<UsbSerialDeviceOption> refreshUsbDeviceSelection(
@@ -1364,48 +1497,48 @@ public final class SettingsActivity extends AppCompatActivity {
             RigProfileSettings settings
     ) {
         if (profile == null) {
-            return "下一步：先进入 Rig Setup 固定一个正式路由；如果暂时没有电台，可保留手机兜底。";
+            return getString(R.string.settings_route_action_hint_no_profile);
         }
         if (profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
             if (!(adapter instanceof UsbSerialKeyerRigControlAdapter)) {
-                return "下一步：当前 USB 键控适配器尚未挂接，请先回 Rig Setup 检查固定路由。";
+                return getString(R.string.settings_route_action_hint_usb_adapter_missing);
             }
             UsbSerialKeyerRigControlAdapter usbAdapter = (UsbSerialKeyerRigControlAdapter) adapter;
             if (usbAdapter.isReady()) {
-                return "下一步：USB 键控已经就绪，可以回 Operate 做真实发射联调。";
+                return getString(R.string.settings_route_action_hint_usb_ready);
             }
             if (!usbAdapter.hasTargetDevice()) {
-                return "下一步：插入 OTG / USB 线控设备，然后回到这里申请权限。";
+                return getString(R.string.settings_route_action_hint_usb_insert);
             }
-            return "下一步：先点“申请 USB 权限”，确认 Android 授权通过。";
+            return getString(R.string.settings_route_action_hint_usb_permission);
         }
         if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
             if (!hasMeaningfulText(settings.serialCatPortHint())
                     && !hasMeaningfulText(settings.serialCatKeyingPortHint())) {
-                return "下一步：补齐串口 CAT 端口，或填写独立键控端口，再保存设置。";
+                return getString(R.string.settings_route_action_hint_serial_fill_ports);
             }
             if (adapter != null && adapter.isReady()) {
-                return "下一步：串口 CAT 基础链路已具备，可开始 PTT / 键控联调。";
+                return getString(R.string.settings_route_action_hint_serial_ready);
             }
             if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
                     && !hasMeaningfulText(settings.serialCatCivAddressHex())) {
-                return "下一步：补充 CI-V 地址，再继续做串口 CAT 联调。";
+                return getString(R.string.settings_route_action_hint_serial_need_civ);
             }
-            return "下一步：检查串口权限、波特率和端口提示是否与实际电台一致。";
+            return getString(R.string.settings_route_action_hint_serial_check);
         }
         if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
             if (!hasMeaningfulText(settings.networkHost())) {
-                return "下一步：填写 rigctld 主机和端口，再保存设置。";
+                return getString(R.string.settings_route_action_hint_network_fill);
             }
             if (adapter != null && adapter.isReady()) {
-                return "下一步：网络 CAT 已具备基础配置，可开始验证 rigctld 连通和发射控制。";
+                return getString(R.string.settings_route_action_hint_network_ready);
             }
-            return "下一步：确认 rigctld 已在目标主机启动，并且手机当前网络可达。";
+            return getString(R.string.settings_route_action_hint_network_check);
         }
         if (profile.hasCapability(RigCapability.AUDIO_VOX)) {
-            return "下一步：连接音频线、校准 VOX 门限，然后回 Operate 做短报文发射验证。";
+            return getString(R.string.settings_route_action_hint_vox);
         }
-        return "下一步：先完成当前路由的基础配置，再回 Operate 验证正式链路。";
+        return getString(R.string.settings_route_action_hint_generic);
     }
 
     @Nullable
@@ -1488,10 +1621,16 @@ public final class SettingsActivity extends AppCompatActivity {
             );
             boolean requested = adapter.requestUsbPermission(pendingIntent);
             usbRouteStatusMessage = requested
-                    ? "USB 权限请求已发出，请在 Android 弹窗中允许后再返回这里。"
-                    : "当前无法发起 USB 权限请求。状态：" + adapter.describeAvailability();
+                    ? getString(R.string.settings_usb_permission_requested_status)
+                    : getString(
+                            R.string.settings_usb_permission_unavailable_status,
+                            adapter.describeAvailability()
+                    );
         } catch (RuntimeException exception) {
-            usbRouteStatusMessage = "USB 权限请求失败：" + safeThrowableMessage(exception);
+            usbRouteStatusMessage = getString(
+                    R.string.settings_usb_permission_failed_status,
+                    safeThrowableMessage(exception)
+            );
         }
         refreshUi();
     }
@@ -1505,8 +1644,8 @@ public final class SettingsActivity extends AppCompatActivity {
                 }
                 boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
                 usbRouteStatusMessage = granted
-                        ? "Android 已授予 USB 权限。"
-                        : "Android 拒绝了 USB 权限。";
+                        ? getString(R.string.settings_usb_permission_granted_status)
+                        : getString(R.string.settings_usb_permission_denied_status);
                 refreshUi();
             }
         };
@@ -1521,7 +1660,7 @@ public final class SettingsActivity extends AppCompatActivity {
 
     private String safeThrowableMessage(Throwable throwable) {
         if (throwable == null || throwable.getMessage() == null || throwable.getMessage().trim().isEmpty()) {
-            return throwable == null ? "unknown failure" : throwable.getClass().getSimpleName();
+            return throwable == null ? getString(R.string.settings_unknown_error) : throwable.getClass().getSimpleName();
         }
         return throwable.getMessage().trim();
     }
@@ -1558,9 +1697,6 @@ public final class SettingsActivity extends AppCompatActivity {
         }
         if (cwDefaultsDirty) {
             saveCwDefaults();
-        }
-        if (txTemplatesDirty) {
-            saveTxTemplates();
         }
         if (routeSettingsDirty) {
             saveRouteSettings();
@@ -1619,7 +1755,7 @@ public final class SettingsActivity extends AppCompatActivity {
         }
         if (normalized.length() != 2) {
             if (editText != null) {
-                editText.setError("CI-V address must be 1-2 hex digits.");
+                editText.setError(getString(R.string.settings_error_civ_address_hex));
             }
             return null;
         }
@@ -1628,7 +1764,7 @@ public final class SettingsActivity extends AppCompatActivity {
             boolean hex = (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F');
             if (!hex) {
                 if (editText != null) {
-                    editText.setError("CI-V address must be 1-2 hex digits.");
+                    editText.setError(getString(R.string.settings_error_civ_address_hex));
                 }
                 return null;
             }

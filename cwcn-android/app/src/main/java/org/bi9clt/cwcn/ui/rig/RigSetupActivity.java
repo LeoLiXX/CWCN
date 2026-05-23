@@ -16,6 +16,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
+import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.BuildConfig;
 import org.bi9clt.cwcn.core.app.DeveloperModeStore;
 import org.bi9clt.cwcn.core.rig.AndroidUsbProbedSerialKeyerPortFactory;
@@ -23,6 +24,7 @@ import org.bi9clt.cwcn.core.rig.AndroidUsbSerialCatSessionFactory;
 import org.bi9clt.cwcn.core.rig.CatProtocolFamily;
 import org.bi9clt.cwcn.core.rig.HamlibRigctldRigControlAdapter;
 import org.bi9clt.cwcn.core.rig.KeyingPolarity;
+import org.bi9clt.cwcn.core.rig.PortAvailability;
 import org.bi9clt.cwcn.core.rig.RigCapability;
 import org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatter;
 import org.bi9clt.cwcn.core.rig.RigProfile;
@@ -86,9 +88,6 @@ public final class RigSetupActivity extends AppCompatActivity {
     private boolean syncingSettingsEditor;
     private String currentEditorProfileId;
     private boolean openDeveloperLabs;
-    private static final String SERIAL_PORT_AUTO_OPTION = "Auto / first detected port";
-    private static final String SERIAL_PORT_MANUAL_PREFIX = "Manual: ";
-
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -96,7 +95,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
         rigSelectionStore = new RigSelectionStore(this);
         developerModeStore = new DeveloperModeStore(this);
-        binding.versionText.setText("Rig Setup " + BuildConfig.VERSION_NAME);
+        binding.versionText.setText(getString(R.string.rig_setup_version, BuildConfig.VERSION_NAME));
         consumeLaunchIntent(getIntent());
         registerUsbPermissionReceiver();
         setupProfileSelector();
@@ -297,12 +296,8 @@ public final class RigSetupActivity extends AppCompatActivity {
                 String selectedHint = selectedPosition >= 0 && selectedPosition < serialCatPortHints.size()
                         ? serialCatPortHints.get(selectedPosition)
                         : null;
-                if (SERIAL_PORT_AUTO_OPTION.equals(option) || selectedHint == null) {
+                if (selectedPosition <= 0 || selectedHint == null) {
                     binding.serialCatPortHintEditText.setText("");
-                    return;
-                }
-                if (option.startsWith(SERIAL_PORT_MANUAL_PREFIX)) {
-                    binding.serialCatPortHintEditText.setText(selectedHint);
                     return;
                 }
                 binding.serialCatPortHintEditText.setText(selectedHint);
@@ -391,7 +386,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             return;
         }
         rigSelectionStore.saveSelectedProfileId(profile.id());
-        configStatusMessage = "Pinned " + profile.displayName() + " as the primary rig path.";
+        configStatusMessage = getString(R.string.rig_setup_status_profile_selected, profile.displayName());
         configStatusProfileId = profile.id();
         refreshUi();
     }
@@ -402,8 +397,8 @@ public final class RigSetupActivity extends AppCompatActivity {
         rigSelectionStore.saveSettings(profile, settings);
         currentEditorProfileId = profile == null ? null : profile.id();
         configStatusMessage = profile == null
-                ? "Saved rig configuration defaults."
-                : "Saved configuration for " + profile.displayName() + ".";
+                ? getString(R.string.rig_setup_status_config_saved_generic)
+                : getString(R.string.rig_setup_status_config_saved_profile, profile.displayName());
         configStatusProfileId = profile == null ? null : profile.id();
         refreshSelectedProfileViews();
     }
@@ -415,7 +410,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         }
         rigSelectionStore.clearSettings(profile);
         currentEditorProfileId = null;
-        configStatusMessage = "Restored recommended defaults for " + profile.displayName() + ".";
+        configStatusMessage = getString(R.string.rig_setup_status_config_reset, profile.displayName());
         configStatusProfileId = profile.id();
         refreshSelectedProfileViews();
     }
@@ -425,7 +420,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         networkProbeInFlight = true;
         networkProbeProfileId = profile == null ? null : profile.id();
-        networkProbeMessage = "Testing rigctld connection...";
+        networkProbeMessage = getString(R.string.rig_setup_network_probe_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             HamlibRigctldRigControlAdapter.ProbeResult result =
@@ -433,7 +428,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 networkProbeInFlight = false;
                 networkProbeProfileId = profile == null ? null : profile.id();
-                networkProbeMessage = result.message();
+                networkProbeMessage = normalizeRigMessage(result.message());
                 refreshSelectedProfileViews();
             });
         }, "cwcn-rigctld-probe").start();
@@ -447,14 +442,13 @@ public final class RigSetupActivity extends AppCompatActivity {
         }
         serialProbeProfileId = profile.id();
         serialProbeInFlight = true;
-        serialProbeMessage = "Preparing USB serial CAT permission request...";
+        serialProbeMessage = getString(R.string.rig_setup_serial_cat_permission_preparing);
         refreshSelectedProfileViews();
         AndroidUsbSerialCatSessionFactory factory = new AndroidUsbSerialCatSessionFactory(this);
         try {
-            String availabilityBefore = factory.describeAvailability(settings.serialCatPortHint());
-            if (availabilityBefore != null
-                    && availabilityBefore.toLowerCase(java.util.Locale.US).contains("permission is available")) {
-                serialProbeMessage = "USB serial CAT permission is already available for the matched device.";
+            PortAvailability availabilityBefore = factory.availability(settings.serialCatPortHint());
+            if (availabilityBefore.isReady()) {
+                serialProbeMessage = getString(R.string.rig_setup_serial_cat_permission_ready);
             } else {
                 PendingIntent pendingIntent = PendingIntent.getBroadcast(
                         this,
@@ -466,19 +460,25 @@ public final class RigSetupActivity extends AppCompatActivity {
                 );
                 boolean requested = factory.requestPermission(settings.serialCatPortHint(), pendingIntent);
                 if (requested) {
-                    serialProbeMessage = "USB serial CAT permission request sent. If Android shows a system dialog, allow it and then retry the probe.";
+                    serialProbeMessage = getString(R.string.rig_setup_serial_cat_permission_requested);
                 } else {
-                    serialProbeMessage = "USB serial CAT permission could not be requested. Current USB status: "
-                            + factory.describeAvailability(settings.serialCatPortHint());
+                    serialProbeMessage = getString(
+                            R.string.rig_setup_serial_cat_permission_unavailable,
+                            normalizeRigMessage(factory.describeAvailability(settings.serialCatPortHint()))
+                    );
                 }
             }
         } catch (RuntimeException exception) {
-            serialProbeMessage = "USB serial CAT permission path failed before Android could show a dialog: "
-                    + exception.getMessage();
+            serialProbeMessage = getString(
+                    R.string.rig_setup_serial_cat_permission_failed_before,
+                    exception.getMessage()
+            );
         } catch (Throwable throwable) {
             Log.e(TAG, "Serial CAT permission request crashed", throwable);
-            serialProbeMessage = "USB serial CAT permission path crashed: "
-                    + safeThrowableMessage(throwable);
+            serialProbeMessage = getString(
+                    R.string.rig_setup_serial_cat_permission_crashed,
+                    safeThrowableMessage(throwable)
+            );
         }
         serialProbeInFlight = false;
         serialProbeProfileId = profile.id();
@@ -490,7 +490,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "Testing serial CAT connection...";
+        serialProbeMessage = getString(R.string.rig_setup_serial_cat_probe_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatProbe.ProbeResult result;
@@ -505,8 +505,10 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "Serial CAT probe crashed before completion: "
-                            + safeThrowableMessage(throwable);
+                    serialProbeMessage = getString(
+                            R.string.rig_setup_serial_cat_probe_crashed,
+                            safeThrowableMessage(throwable)
+                    );
                     refreshSelectedProfileViews();
                 });
                 return;
@@ -514,7 +516,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 serialProbeInFlight = false;
                 serialProbeProfileId = profile == null ? null : profile.id();
-                serialProbeMessage = result.message();
+                serialProbeMessage = normalizeRigMessage(result.message());
                 refreshSelectedProfileViews();
             });
         }, "cwcn-serial-cat-probe").start();
@@ -525,7 +527,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "正在运行旧版 CAT TX/PTT 脉冲验证...";
+        serialProbeMessage = getString(R.string.rig_setup_serial_cat_ptt_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -543,8 +545,10 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "旧版 CAT TX/PTT 脉冲验证在完成前异常退出："
-                            + safeThrowableMessage(throwable);
+                    serialProbeMessage = getString(
+                            R.string.rig_setup_serial_cat_ptt_crashed,
+                            safeThrowableMessage(throwable)
+                    );
                     refreshSelectedProfileViews();
                 });
                 return;
@@ -552,7 +556,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 serialProbeInFlight = false;
                 serialProbeProfileId = profile == null ? null : profile.id();
-                serialProbeMessage = result.message();
+                serialProbeMessage = normalizeRigMessage(result.message());
                 refreshSelectedProfileViews();
             });
         }, "cwcn-serial-cat-ptt").start();
@@ -563,7 +567,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "正在运行独立键控口脉冲验证...";
+        serialProbeMessage = getString(R.string.rig_setup_serial_keying_pulse_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -579,8 +583,10 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "独立键控口脉冲验证在完成前异常退出："
-                            + safeThrowableMessage(throwable);
+                    serialProbeMessage = getString(
+                            R.string.rig_setup_serial_keying_pulse_crashed,
+                            safeThrowableMessage(throwable)
+                    );
                     refreshSelectedProfileViews();
                 });
                 return;
@@ -588,7 +594,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 serialProbeInFlight = false;
                 serialProbeProfileId = profile == null ? null : profile.id();
-                serialProbeMessage = result.message();
+                serialProbeMessage = normalizeRigMessage(result.message());
                 refreshSelectedProfileViews();
             });
         }, "cwcn-serial-keying-pulse").start();
@@ -599,7 +605,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "正在运行独立键控保持验证。请观察 1.5 秒保持期间 TX 是否持续有效。";
+        serialProbeMessage = getString(R.string.rig_setup_serial_keying_hold_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -615,8 +621,10 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "独立键控保持验证在完成前异常退出："
-                            + safeThrowableMessage(throwable);
+                    serialProbeMessage = getString(
+                            R.string.rig_setup_serial_keying_hold_crashed,
+                            safeThrowableMessage(throwable)
+                    );
                     refreshSelectedProfileViews();
                 });
                 return;
@@ -624,7 +632,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 serialProbeInFlight = false;
                 serialProbeProfileId = profile == null ? null : profile.id();
-                serialProbeMessage = result.message();
+                serialProbeMessage = normalizeRigMessage(result.message());
                 refreshSelectedProfileViews();
             });
         }, "cwcn-serial-keying-hold").start();
@@ -635,7 +643,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "正在运行键控口开关验证。不主动切换 DTR/RTS，请观察打开或关闭时是否出现异常 TX 闪动。";
+        serialProbeMessage = getString(R.string.rig_setup_serial_keying_open_close_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -651,8 +659,10 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "键控口开关验证在完成前异常退出："
-                            + safeThrowableMessage(throwable);
+                    serialProbeMessage = getString(
+                            R.string.rig_setup_serial_keying_open_close_crashed,
+                            safeThrowableMessage(throwable)
+                    );
                     refreshSelectedProfileViews();
                 });
                 return;
@@ -660,7 +670,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 serialProbeInFlight = false;
                 serialProbeProfileId = profile == null ? null : profile.id();
-                serialProbeMessage = result.message();
+                serialProbeMessage = normalizeRigMessage(result.message());
                 refreshSelectedProfileViews();
             });
         }, "cwcn-serial-keying-open-close").start();
@@ -679,7 +689,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         );
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "正在运行 DTR 时序实验。请同时观察 TX、RF 功率和侧音；这条路径会先归一化控制线，再按顺序拉高、保持、释放。";
+        serialProbeMessage = getString(R.string.rig_setup_serial_keying_timing_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -695,8 +705,10 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "DTR 时序实验在完成前异常退出："
-                            + safeThrowableMessage(throwable);
+                    serialProbeMessage = getString(
+                            R.string.rig_setup_serial_keying_timing_crashed,
+                            safeThrowableMessage(throwable)
+                    );
                     refreshSelectedProfileViews();
                 });
                 return;
@@ -704,7 +716,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 serialProbeInFlight = false;
                 serialProbeProfileId = profile == null ? null : profile.id();
-                serialProbeMessage = result.message();
+                serialProbeMessage = normalizeRigMessage(result.message());
                 refreshSelectedProfileViews();
             });
         }, "cwcn-serial-keying-timing-lab").start();
@@ -726,7 +738,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         );
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "正在运行短脉冲实验。请重点观察边沿行为：TX 锁存、RF 输出、侧音，以及短元素之间是否会掉回 RX。";
+        serialProbeMessage = getString(R.string.rig_setup_serial_keying_short_pulse_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             final SerialCatRigControlAdapter.ControlResult result;
@@ -742,8 +754,10 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "短脉冲实验在完成前异常退出："
-                            + safeThrowableMessage(throwable);
+                    serialProbeMessage = getString(
+                            R.string.rig_setup_serial_keying_short_pulse_crashed,
+                            safeThrowableMessage(throwable)
+                    );
                     refreshSelectedProfileViews();
                 });
                 return;
@@ -751,7 +765,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 serialProbeInFlight = false;
                 serialProbeProfileId = profile == null ? null : profile.id();
-                serialProbeMessage = result.message();
+                serialProbeMessage = normalizeRigMessage(result.message());
                 refreshSelectedProfileViews();
             });
         }, "cwcn-serial-short-pulse-lab").start();
@@ -762,7 +776,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfileSettings settings = readSettingsFromEditor();
         serialProbeInFlight = true;
         serialProbeProfileId = profile == null ? null : profile.id();
-        serialProbeMessage = "Running keying sweep across all detected serial ports, lines, and polarities. Watch the radio and count the step that first triggers TX.";
+        serialProbeMessage = getString(R.string.rig_setup_serial_keying_sweep_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             try {
@@ -772,8 +786,10 @@ public final class RigSetupActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     serialProbeInFlight = false;
                     serialProbeProfileId = profile == null ? null : profile.id();
-                    serialProbeMessage = "Keying sweep crashed before completion: "
-                            + safeThrowableMessage(throwable);
+                    serialProbeMessage = getString(
+                            R.string.rig_setup_serial_keying_sweep_crashed,
+                            safeThrowableMessage(throwable)
+                    );
                     refreshSelectedProfileViews();
                 });
             }
@@ -796,7 +812,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 serialProbeInFlight = false;
                 serialProbeProfileId = profile == null ? null : profile.id();
-                serialProbeMessage = "Keying sweep blocked: no detected USB serial ports were available to test.";
+                serialProbeMessage = getString(R.string.rig_setup_serial_keying_sweep_no_ports);
                 refreshSelectedProfileViews();
             });
             return;
@@ -817,13 +833,12 @@ public final class RigSetupActivity extends AppCompatActivity {
             SweepStep step = steps.get(index);
             int stepNumber = index + 1;
             runOnUiThread(() -> {
-                serialProbeMessage = "Keying sweep step "
-                        + stepNumber
-                        + "/"
-                        + totalSteps
-                        + ": "
-                        + step.renderLabel()
-                        + ". Watch the radio now.";
+                serialProbeMessage = getString(
+                        R.string.rig_setup_serial_keying_sweep_step,
+                        stepNumber,
+                        totalSteps,
+                        step.renderLabel()
+                );
                 refreshSelectedProfileViews();
             });
             Thread.sleep(420);
@@ -834,15 +849,22 @@ public final class RigSetupActivity extends AppCompatActivity {
                     new AndroidUsbProbedSerialKeyerPortFactory(this),
                     220
             );
-            resultLines.add(stepNumber + ". " + step.renderLabel() + " -> " + result.message());
+            resultLines.add(getString(
+                    R.string.rig_setup_serial_keying_sweep_result_item,
+                    stepNumber,
+                    step.renderLabel(),
+                    normalizeRigMessage(result.message())
+            ));
             Thread.sleep(320);
         }
 
         runOnUiThread(() -> {
             serialProbeInFlight = false;
             serialProbeProfileId = profile == null ? null : profile.id();
-            serialProbeMessage = "Keying sweep completed. If the radio reacted, note the matching step below:\n"
-                    + String.join("\n", resultLines);
+            serialProbeMessage = getString(
+                    R.string.rig_setup_serial_keying_sweep_completed,
+                    String.join("\n", resultLines)
+            );
             refreshSelectedProfileViews();
         });
     }
@@ -906,8 +928,6 @@ public final class RigSetupActivity extends AppCompatActivity {
 
     private void syncSettingsEditor(RigProfileSettings settings) {
         syncingSettingsEditor = true;
-        binding.defaultWpmEditText.setText(String.valueOf(settings.defaultWpm()));
-        binding.defaultToneFrequencyEditText.setText(String.valueOf(settings.defaultToneFrequencyHz()));
         binding.usbKeyLineSpinner.setSelection(settings.usbKeyLine().ordinal());
         binding.usbPreferredDeviceNameEditText.setText(valueOrEmpty(settings.usbPreferredDeviceName()));
         binding.serialCatProtocolSpinner.setSelection(settings.serialCatProtocolFamily().ordinal());
@@ -1050,11 +1070,11 @@ public final class RigSetupActivity extends AppCompatActivity {
         serialCatKeyingPortOptions.clear();
         serialCatKeyingPortHints.clear();
         if (!serialCatVisible) {
-            serialCatPortOptions.add(SERIAL_PORT_AUTO_OPTION);
+            serialCatPortOptions.add(getString(R.string.rig_setup_serial_port_auto_option));
             serialCatPortHints.add(null);
             serialCatPortAdapter.notifyDataSetChanged();
             binding.serialCatPortSpinner.setSelection(0, false);
-            serialCatKeyingPortOptions.add(SERIAL_PORT_AUTO_OPTION);
+            serialCatKeyingPortOptions.add(getString(R.string.rig_setup_serial_port_auto_option));
             serialCatKeyingPortHints.add(null);
             serialCatKeyingPortAdapter.notifyDataSetChanged();
             binding.serialCatKeyingPortSpinner.setSelection(0, false);
@@ -1092,14 +1112,14 @@ public final class RigSetupActivity extends AppCompatActivity {
             List<String> detectedHints,
             String currentHint
     ) {
-        options.add(SERIAL_PORT_AUTO_OPTION);
+        options.add(getString(R.string.rig_setup_serial_port_auto_option));
         hints.add(null);
         for (String detectedHint : detectedHints) {
             options.add(renderSerialCatPortLabel(detectedHint));
             hints.add(detectedHint);
         }
         if (currentHint != null && !currentHint.isEmpty() && !detectedHints.contains(currentHint)) {
-            options.add(SERIAL_PORT_MANUAL_PREFIX + currentHint);
+            options.add(getString(R.string.rig_setup_serial_port_manual_option, currentHint));
             hints.add(currentHint);
         }
         adapter.notifyDataSetChanged();
@@ -1118,7 +1138,7 @@ public final class RigSetupActivity extends AppCompatActivity {
 
     private String renderSerialCatPortLabel(String portHint) {
         if (portHint == null || portHint.trim().isEmpty()) {
-            return "Detected serial port";
+            return getString(R.string.rig_setup_serial_port_detected_generic);
         }
         String trimmed = portHint.trim();
         int separator = trimmed.lastIndexOf('#');
@@ -1130,20 +1150,20 @@ public final class RigSetupActivity extends AppCompatActivity {
         String shortDevice = lastSlash >= 0 && lastSlash < devicePart.length() - 1
                 ? devicePart.substring(lastSlash + 1)
                 : devicePart;
-        return "USB " + shortDevice + " · Port " + portPart;
+        return getString(R.string.rig_setup_serial_port_detected_label, shortDevice, portPart);
     }
 
     private void syncProfileActionButton(RigProfile selectedProfile, RigProfile pinnedProfile) {
         if (selectedProfile == null) {
-            binding.saveSelectedProfileButton.setText("Use This Rig Path");
+            binding.saveSelectedProfileButton.setText(R.string.rig_setup_select_current_path);
             binding.saveSelectedProfileButton.setEnabled(false);
             return;
         }
         binding.saveSelectedProfileButton.setEnabled(true);
         if (pinnedProfile != null && pinnedProfile.id().equals(selectedProfile.id())) {
-            binding.saveSelectedProfileButton.setText("This Rig Path Is Active");
+            binding.saveSelectedProfileButton.setText(R.string.rig_setup_current_path_enabled);
         } else {
-            binding.saveSelectedProfileButton.setText("Use This Rig Path");
+            binding.saveSelectedProfileButton.setText(R.string.rig_setup_select_current_path);
         }
     }
 
@@ -1172,9 +1192,9 @@ public final class RigSetupActivity extends AppCompatActivity {
         }
         binding.networkCatProbeStatusText.setText(hamlibSelected
                 ? developerLabsVisible
-                        ? "Probe host/port reachability and ask rigctld for its rig info without starting TX."
-                        : "Use Test rigctld Connection to verify that the configured host/port is reachable."
-                : "Connection probe is currently available only when the network CAT family is set to Hamlib rigctld.");
+                        ? getString(R.string.rig_setup_network_probe_hint_labs)
+                        : getString(R.string.rig_setup_network_probe_hint_basic)
+                : getString(R.string.rig_setup_network_probe_hint_disabled));
     }
 
     private void syncSerialProbeState(RigProfile profile, RigProfileSettings settings, boolean developerModeEnabled) {
@@ -1243,33 +1263,33 @@ public final class RigSetupActivity extends AppCompatActivity {
         }
         List<String> detectedPorts = new AndroidUsbSerialCatSessionFactory(this).listDetectedPortHints();
         String pickerHint = detectedPorts.isEmpty()
-                ? "No serial CAT USB port is detected yet."
+                ? getString(R.string.rig_setup_serial_ports_none)
                 : detectedPorts.size() == 1
-                ? "Detected serial port: " + detectedPorts.get(0) + "."
-                : "Detected " + detectedPorts.size() + " serial CAT ports. Choose one from the port picker before testing.";
+                ? getString(R.string.rig_setup_serial_ports_one, detectedPorts.get(0))
+                : getString(R.string.rig_setup_serial_ports_many, detectedPorts.size());
         if (!developerLabsVisible) {
             binding.serialCatProbeStatusText.setText(yaesuSelected || icomSelected || kenwoodSelected
-                    ? pickerHint + " 现在只保留最小握手检查。更深入的控制线实验已移到开发工具入口。"
-                    : pickerHint + " 目前串口 CAT 连接验证已优先接到 Yaesu-style、Icom CI-V 和 Kenwood-style。");
+                    ? getString(R.string.rig_setup_serial_probe_basic_supported, pickerHint)
+                    : getString(R.string.rig_setup_serial_probe_basic_unsupported, pickerHint));
             return;
         }
         binding.serialCatProbeStatusText.setText(yaesuSelected
-                ? pickerHint + " Yaesu 说明：旧 CAT TX/PTT 脉冲仍在覆盖早期 TX1/TX0 路径；如果你要验证 DTR/RTS，请优先使用独立键控口脉冲。若问题集中在短 E/T/EEE/VVV 行为，请优先用短脉冲实验，而不是长保持验证。FT-710 当前经验是：当电台菜单设为 PC KEYING = DTR 时，RTS + DTR 仍是当前接受度最高的组合；仅 RTS 可能出现 TX/RF 但侧音不正常，仅 DTR 目前仍视作不可用。"
+                ? getString(R.string.rig_setup_serial_probe_yaesu, pickerHint)
                 : icomSelected
                         ? settings.serialCatCivAddressHex() == null
-                                ? pickerHint + " Icom CI-V 已可探测。先设置 CI-V 地址，再发起一次安全的收发机 ID 查询，之后再用短 CI-V PTT 脉冲做下一步冒烟验证。"
-                                : pickerHint + " Icom CI-V 已可探测。确认收发机 ID 查询正常后，再用短 CI-V PTT 脉冲做下一步冒烟验证。"
+                                ? getString(R.string.rig_setup_serial_probe_icom_without_civ, pickerHint)
+                                : getString(R.string.rig_setup_serial_probe_icom_with_civ, pickerHint)
                         : kenwoodSelected
-                                ? pickerHint + " Kenwood-style CAT 已可探测。建议先做 ID;/FA;/IF; 这类安全 ASCII 读操作，再进入 TX 侧验证。"
-                                : pickerHint + " 串口 CAT 探测目前优先接入 Yaesu-style、Icom CI-V 和 Kenwood-style。");
+                                ? getString(R.string.rig_setup_serial_probe_kenwood, pickerHint)
+                                : getString(R.string.rig_setup_serial_probe_generic, pickerHint));
     }
 
     private void syncDeveloperModeViews(boolean enabled) {
         boolean developerLabsVisible = enabled && openDeveloperLabs;
-        binding.titleText.setText(developerLabsVisible ? "电台开发实验" : "电台配置");
+        binding.titleText.setText(developerLabsVisible ? R.string.rig_setup_title_labs : R.string.rig_setup_title_config);
         binding.subtitleText.setText(developerLabsVisible
-                ? "扩展探测、控制线实验和时序验证都集中在这里，避免污染正式配置路径。"
-                : "在这里选择正式电台路径并保存连接默认值；更深入的诊断实验放到开发工具入口。");
+                ? R.string.rig_setup_subtitle_labs
+                : R.string.rig_setup_subtitle_config);
         int developerSummaryVisibility = developerLabsVisible ? View.VISIBLE : View.GONE;
         binding.readinessSummaryPanel.setVisibility(developerSummaryVisibility);
         binding.transportSummaryPanel.setVisibility(developerSummaryVisibility);
@@ -1283,42 +1303,44 @@ public final class RigSetupActivity extends AppCompatActivity {
             boolean developerModeEnabled
     ) {
         if (profile == null) {
-            return "1. Choose the radio family you plan to use.\n2. Save it as your pinned rig path.\n3. Then fill only the connection details that match your setup.";
+            return getString(R.string.rig_setup_connection_guide_empty);
         }
         StringBuilder builder = new StringBuilder();
-        builder.append("Selected rig: ")
+        builder.append(getString(R.string.rig_setup_connection_current_path))
                 .append(profile.displayName())
-                .append("\nWhat this path is for: ")
+                .append("\n")
+                .append(getString(R.string.rig_setup_connection_purpose))
                 .append(profile.summary())
-                .append("\nTransport you will use: ")
-                .append(profile.transportKind().name())
-                .append("\nRecommended setup note: ")
+                .append("\n")
+                .append(getString(R.string.rig_setup_connection_transport))
+                .append(renderTransportKind(profile.transportKind()))
+                .append("\n")
+                .append(getString(R.string.rig_setup_connection_notes))
                 .append(profile.setupNotes());
         if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            builder.append("\nNext: confirm baud rate");
+            builder.append(getString(R.string.rig_setup_connection_next_serial_prefix));
             if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
-                builder.append(" and the CI-V address");
+                builder.append(getString(R.string.rig_setup_connection_next_serial_civ));
             }
-            builder.append(", choose the CAT port");
-            builder.append(", then choose the CW keying line and keying port if the radio exposes a separate keying endpoint, then save this rig path.");
+            builder.append(getString(R.string.rig_setup_connection_next_serial_suffix));
             if (!developerModeEnabled) {
-                builder.append("\n更深入的协议验证在正常模式下会保持隐藏。");
+                builder.append(getString(R.string.rig_setup_connection_deep_hidden));
             } else if (!openDeveloperLabs) {
-                builder.append("\n更深入的协议验证已收纳到开发工具入口。");
+                builder.append(getString(R.string.rig_setup_connection_deep_entry));
             }
         } else if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
-            builder.append("\nNext: fill the host and port for the radio bridge, then save this rig path.");
+            builder.append(getString(R.string.rig_setup_connection_next_network));
             if (!developerModeEnabled) {
-                builder.append("\n连接探测在正常模式下会保持隐藏。");
+                builder.append(getString(R.string.rig_setup_connection_probe_hidden));
             } else if (!openDeveloperLabs) {
-                builder.append("\n连接探测已收纳到开发工具入口。");
+                builder.append(getString(R.string.rig_setup_connection_probe_entry));
             }
         } else if (profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
-            builder.append("\nNext: choose RTS or DTR, optionally lock the preferred USB device, request permission if Android asks for it, then save the profile defaults.");
+            builder.append(getString(R.string.rig_setup_connection_next_usb));
         } else if (profile.hasCapability(RigCapability.AUDIO_VOX)) {
-            builder.append("\nNext: save the audio defaults here, then tune VOX delay and gain on the radio.");
+            builder.append(getString(R.string.rig_setup_connection_next_vox));
         } else {
-            builder.append("\nNext: save the defaults here and continue with the matching operating screen.");
+            builder.append(getString(R.string.rig_setup_connection_next_generic));
         }
         return builder.toString();
     }
@@ -1330,25 +1352,23 @@ public final class RigSetupActivity extends AppCompatActivity {
             boolean hasSavedOverride
     ) {
         if (selectedProfile == null) {
-            return "No rig path pinned yet.\nChoose the family you expect to use most often so future RX/TX screens can default to it.";
+            return getString(R.string.rig_setup_selected_none);
         }
-        StringBuilder builder = new StringBuilder();
-        builder.append("Selected path preview:\n")
-                .append(RigProfileConfigurationFormatter.renderCompactSummary(selectedProfile, settings))
-                .append("\nConfiguration source: ")
-                .append(hasSavedOverride ? "Saved override for this profile" : "Recommended defaults for this profile")
-                .append("\nCapabilities: ")
-                .append(selectedProfile.capabilitySummary())
-                .append("\nNext setup note: ")
-                .append(selectedProfile.setupNotes());
+        StringBuilder builder = new StringBuilder(getString(
+                R.string.rig_setup_selected_preview,
+                RigProfileConfigurationFormatter.renderCompactSummary(selectedProfile, settings),
+                hasSavedOverride
+                        ? getString(R.string.rig_setup_selected_source_saved)
+                        : getString(R.string.rig_setup_selected_source_default),
+                RigUiLabels.capabilitySummary(this, selectedProfile),
+                selectedProfile.setupNotes()
+        ));
         if (pinnedProfile == null) {
-            builder.append("\nPinned default: none");
+            builder.append(getString(R.string.rig_setup_selected_pinned_none));
         } else if (pinnedProfile.id().equals(selectedProfile.id())) {
-            builder.append("\nPinned default: this rig path");
+            builder.append(getString(R.string.rig_setup_selected_pinned_same));
         } else {
-            builder.append("\nPinned default: ")
-                    .append(pinnedProfile.displayName())
-                    .append(" (press Use This Rig Path to replace it)");
+            builder.append(getString(R.string.rig_setup_selected_pinned_other, pinnedProfile.displayName()));
         }
         return builder.toString();
     }
@@ -1359,35 +1379,32 @@ public final class RigSetupActivity extends AppCompatActivity {
             boolean hasSavedOverride
     ) {
         if (profile == null) {
-            return "Choose a rig family to configure defaults and transport-specific hints.";
+            return getString(R.string.rig_setup_profile_config_none);
         }
-        StringBuilder builder = new StringBuilder();
-        builder.append("Editor snapshot:\n")
-                .append(RigProfileConfigurationFormatter.renderCompactSummary(profile, settings))
-                .append("\nProfile state: ")
-                .append(hasSavedOverride
-                        ? "Using your saved overrides for this profile."
-                        : "Using the recommended defaults defined by this profile family.");
+        StringBuilder builder = new StringBuilder(getString(
+                R.string.rig_setup_profile_config_summary,
+                RigProfileConfigurationFormatter.renderCompactSummary(profile, settings),
+                hasSavedOverride
+                        ? getString(R.string.rig_setup_profile_config_saved_override)
+                        : getString(R.string.rig_setup_profile_config_default)
+        ));
         if (!configStatusMessage.isEmpty()
                 && configStatusProfileId != null
                 && configStatusProfileId.equals(profile.id())) {
-            builder.append("\nLast action: ").append(configStatusMessage);
+            builder.append(getString(R.string.rig_setup_profile_config_recent, configStatusMessage));
         }
         return builder.toString();
     }
 
     private RigProfileSettings readSettingsFromEditor() {
+        RigProfileSettings existing = rigSelectionStore.loadSettings(selectedProfile());
         String serialPortHint = normalizedText(binding.serialCatPortHintEditText.getText() == null
                 ? null
                 : binding.serialCatPortHintEditText.getText().toString());
         String serialCatKeyingPortHint = selectedSerialCatKeyingPortHint();
         return new RigProfileSettings(
-                parsePositiveInt(binding.defaultWpmEditText.getText() == null
-                        ? null
-                        : binding.defaultWpmEditText.getText().toString(), 18),
-                parsePositiveInt(binding.defaultToneFrequencyEditText.getText() == null
-                        ? null
-                        : binding.defaultToneFrequencyEditText.getText().toString(), 650),
+                existing.defaultWpm(),
+                existing.defaultToneFrequencyHz(),
                 selectedUsbKeyLine(),
                 normalizedText(binding.usbPreferredDeviceNameEditText.getText() == null
                         ? null
@@ -1494,10 +1511,13 @@ public final class RigSetupActivity extends AppCompatActivity {
                 readyProfileCount += 1;
             }
         }
-        return "可用传输层：" + readyTransportCount + "/" + transports.size()
-                + "\n当前可验证路径：" + readyProfileCount + "/" + profiles.size()
-                + "\n当前策略：先把可复用的家族路径接稳，再逐步补具体机型。"
-                + "\n开发实验能力继续保留，但它们是辅助手段，不再和正式配置路径混在一起。";
+        return getString(
+                R.string.rig_setup_readiness_summary,
+                readyTransportCount,
+                transports.size(),
+                readyProfileCount,
+                profiles.size()
+        );
     }
 
     private String renderTransportSummary(List<RigTransport> transports) {
@@ -1506,14 +1526,13 @@ public final class RigSetupActivity extends AppCompatActivity {
             if (builder.length() > 0) {
                 builder.append("\n\n");
             }
-            builder.append(transport.displayName())
-                    .append(" [")
-                    .append(transport.kind().name())
-                    .append("]")
-                    .append("\nReady: ")
-                    .append(transport.isReady(this) ? "yes" : "no")
-                    .append("\n")
-                    .append(transport.describeAvailability(this));
+            builder.append(getString(
+                    R.string.rig_setup_transport_summary_item,
+                    transport.displayName(),
+                    renderTransportKind(transport.kind()),
+                    getString(transport.isReady(this) ? R.string.status_yes : R.string.status_no),
+                    normalizeRigMessage(transport.describeAvailability(this))
+            ));
         }
         return builder.toString();
     }
@@ -1524,27 +1543,23 @@ public final class RigSetupActivity extends AppCompatActivity {
             if (builder.length() > 0) {
                 builder.append("\n\n");
             }
-            builder.append(profile.displayName())
-                    .append(" [")
-                    .append(profile.supportLevel().displayName())
-                    .append("]")
-                    .append("\nVendor/Model: ")
-                    .append(profile.vendorLabel())
-                    .append(" / ")
-                    .append(profile.modelLabel())
-                    .append("\nTransport: ")
-                    .append(profile.transportKind().name())
-                    .append("\nAdapter: ")
-                    .append(profile.adapterId())
-                    .append("\nCapabilities: ")
-                    .append(profile.capabilitySummary())
-                    .append("\nSummary: ")
-                    .append(profile.summary())
-                    .append("\nSetup: ")
-                    .append(profile.setupNotes());
+            builder.append(getString(
+                    R.string.rig_setup_profile_summary_item,
+                    profile.displayName(),
+                    RigUiLabels.supportLevel(this, profile.supportLevel()),
+                    profile.vendorLabel(),
+                    profile.modelLabel(),
+                    RigUiLabels.transportKind(this, profile.transportKind()),
+                    profile.adapterId(),
+                    RigUiLabels.capabilitySummary(this, profile),
+                    profile.summary(),
+                    profile.setupNotes()
+            ));
             if (!profile.knownConstraints().isEmpty()) {
-                builder.append("\nConstraints: ")
-                        .append(String.join(" | ", profile.knownConstraints()));
+                builder.append(getString(
+                        R.string.rig_setup_profile_summary_constraints,
+                        String.join(" | ", profile.knownConstraints())
+                ));
             }
         }
         return builder.toString();
@@ -1572,36 +1587,28 @@ public final class RigSetupActivity extends AppCompatActivity {
                 kenwoodRigctldProfile = profile;
             }
         }
-        StringBuilder builder = new StringBuilder("Recommended build order:");
+        StringBuilder builder = new StringBuilder(getString(R.string.rig_setup_next_step_title));
         if (yaesuRigctldProfile != null) {
-            builder.append("\n1. 如果你当前要接 Yaesu FT 系列，优先从 ")
-                    .append(yaesuRigctldProfile.displayName())
-                    .append(" 开始，这样在原生串口 CAT 继续收口期间，CWCN 仍可先复用现有 rigctld TX 路径。");
+            builder.append(getString(R.string.rig_setup_next_step_yaesu, yaesuRigctldProfile.displayName()));
         }
         if (icomRigctldProfile != null) {
-            builder.append("\n2. Icom 家族当前优先选择 ")
-                    .append(icomRigctldProfile.displayName())
-                    .append(" 作为第一条正式路径。");
+            builder.append(getString(R.string.rig_setup_next_step_icom, icomRigctldProfile.displayName()));
         }
         if (kenwoodRigctldProfile != null) {
-            builder.append("\n3. Kenwood 家族当前优先选择 ")
-                    .append(kenwoodRigctldProfile.displayName())
-                    .append(" 作为第一条正式路径。");
+            builder.append(getString(R.string.rig_setup_next_step_kenwood, kenwoodRigctldProfile.displayName()));
         }
         if (usbProfile != null) {
-            builder.append("\n4. 把 ").append(usbProfile.displayName())
-                    .append(" 做稳，作为第一条真正可落地的有线控制路径。");
+            builder.append(getString(R.string.rig_setup_next_step_usb, usbProfile.displayName()));
         }
         if (voxProfile != null) {
-            builder.append("\n5. 保留 ").append(voxProfile.displayName())
-                    .append(" 作为兼容兜底路径。");
+            builder.append(getString(R.string.rig_setup_next_step_vox, voxProfile.displayName()));
         }
         if (catProfile != null) {
-            builder.append("\n6. 在继续接入更深的 Yaesu/Icom/Kenwood 原生机型逻辑之前，先保持可复用 CAT 结构稳定。");
+            builder.append(getString(R.string.rig_setup_next_step_cat));
         }
-        builder.append("\n7. Rig Setup 里已经具备 Yaesu-style、Icom CI-V 和 Kenwood-style 的原生串口 CAT 基础探测能力。");
-        builder.append("\n8. 开发实验能力继续保留，但它们应被视为辅助工程路径，而不是主用户流程。");
-        builder.append("\n9. 下一步原生工作重点不再是 schema，而是在共享探测/会话接缝之上，继续挂接可控的家族级串口 CAT 行为。");
+        builder.append(getString(R.string.rig_setup_next_step_7));
+        builder.append(getString(R.string.rig_setup_next_step_8));
+        builder.append(getString(R.string.rig_setup_next_step_9));
         return builder.toString();
     }
 
@@ -1646,7 +1653,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         usbKeyerPermissionInFlight = true;
         usbKeyerActionInFlight = true;
         usbKeyerStatusProfileId = profile == null ? null : profile.id();
-        usbKeyerStatusMessage = "Preparing USB keyer permission request...";
+        usbKeyerStatusMessage = getString(R.string.rig_setup_usb_keyer_permission_preparing);
         refreshSelectedProfileViews();
         try {
             PendingIntent pendingIntent = PendingIntent.getBroadcast(
@@ -1661,18 +1668,26 @@ public final class RigSetupActivity extends AppCompatActivity {
             usbKeyerPermissionInFlight = false;
             usbKeyerActionInFlight = false;
             usbKeyerStatusMessage = requested
-                    ? "USB keyer permission request sent. If Android shows a system dialog, allow it and then return here."
-                    : "USB keyer permission could not be requested. Current status: " + adapter.describeAvailability();
+                    ? getString(R.string.rig_setup_usb_keyer_permission_requested)
+                    : getString(
+                            R.string.rig_setup_usb_keyer_permission_unavailable,
+                            normalizeRigMessage(adapter.describeAvailability())
+                    );
         } catch (RuntimeException exception) {
             usbKeyerPermissionInFlight = false;
             usbKeyerActionInFlight = false;
-            usbKeyerStatusMessage = "USB keyer permission path failed before Android could show a dialog: "
-                    + safeThrowableMessage(exception);
+            usbKeyerStatusMessage = getString(
+                    R.string.rig_setup_usb_keyer_permission_failed_before,
+                    safeThrowableMessage(exception)
+            );
         } catch (Throwable throwable) {
             Log.e(TAG, "USB keyer permission request crashed", throwable);
             usbKeyerPermissionInFlight = false;
             usbKeyerActionInFlight = false;
-            usbKeyerStatusMessage = "USB keyer permission path crashed: " + safeThrowableMessage(throwable);
+            usbKeyerStatusMessage = getString(
+                    R.string.rig_setup_usb_keyer_permission_crashed,
+                    safeThrowableMessage(throwable)
+            );
         }
         refreshSelectedProfileViews();
     }
@@ -1686,7 +1701,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         }
         usbKeyerActionInFlight = true;
         usbKeyerStatusProfileId = profile == null ? null : profile.id();
-        usbKeyerStatusMessage = "Running USB key line pulse test...";
+        usbKeyerStatusMessage = getString(R.string.rig_setup_usb_keyer_pulse_running);
         refreshSelectedProfileViews();
         new Thread(() -> {
             final String resultMessage = runUsbKeyerPulse(adapter);
@@ -1709,7 +1724,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         usbKeyerActionInFlight = true;
         usbKeyerTransmissionInFlight = true;
         usbKeyerStatusProfileId = profile == null ? null : profile.id();
-        usbKeyerStatusMessage = "Sending USB test text 'VVV'...";
+        usbKeyerStatusMessage = getString(R.string.rig_setup_usb_keyer_text_running, "VVV");
         refreshSelectedProfileViews();
         new Thread(() -> {
             final String resultMessage = runUsbKeyerTestText(adapter, "VVV");
@@ -1733,8 +1748,8 @@ public final class RigSetupActivity extends AppCompatActivity {
         boolean stopped = adapter.stopTextTransmission();
         usbKeyerStatusProfileId = profile == null ? null : profile.id();
         usbKeyerStatusMessage = stopped
-                ? "Stop requested for the active USB keyer transmission..."
-                : "Stop request did not change the USB keyer state.";
+                ? getString(R.string.rig_setup_usb_keyer_stop_requested)
+                : getString(R.string.rig_setup_usb_keyer_stop_unchanged);
         refreshSelectedProfileViews();
     }
 
@@ -1742,8 +1757,10 @@ public final class RigSetupActivity extends AppCompatActivity {
         try {
             boolean keyDown = adapter.keyDown();
             if (!keyDown) {
-                return "USB key line pulse could not start. Current status: "
-                        + adapter.describeAvailability();
+                return getString(
+                        R.string.rig_setup_usb_keyer_pulse_unavailable,
+                        normalizeRigMessage(adapter.describeAvailability())
+                );
             }
             try {
                 Thread.sleep(250L);
@@ -1752,37 +1769,45 @@ public final class RigSetupActivity extends AppCompatActivity {
             }
             boolean keyUp = adapter.keyUp();
             return keyUp
-                    ? "USB key line pulse completed. Watch whether the rig actually keyed for a short burst."
-                    : "USB key line asserted, but release failed. Review the USB route before transmitting.";
+                    ? getString(R.string.rig_setup_usb_keyer_pulse_done)
+                    : getString(R.string.rig_setup_usb_keyer_pulse_release_failed);
         } catch (Throwable throwable) {
             Log.e(TAG, "USB key line pulse crashed", throwable);
-            return "USB key line pulse crashed before completion: "
-                    + safeThrowableMessage(throwable);
+            return getString(
+                    R.string.rig_setup_usb_keyer_pulse_crashed,
+                    safeThrowableMessage(throwable)
+            );
         }
     }
 
     private String runUsbKeyerTestText(UsbSerialKeyerRigControlAdapter adapter, String text) {
         try {
             if (!adapter.supportsTextToCw()) {
-                return "This USB keyer route does not support text-to-CW transmission.";
+                return getString(R.string.rig_setup_usb_keyer_text_unsupported);
             }
             boolean sent = adapter.sendText(text);
             org.bi9clt.cwcn.core.tx.CwTxPlaybackSnapshot snapshot = adapter.currentTxPlaybackSnapshot();
             if (sent) {
-                return "USB test text '" + text + "' completed. Watch whether the rig sent the full pattern cleanly.";
+                return getString(R.string.rig_setup_usb_keyer_text_done, text);
             }
             if (snapshot != null && snapshot.state() == org.bi9clt.cwcn.core.tx.CwTxState.STOPPED) {
-                return "USB test text '" + text + "' was stopped before completion.";
+                return getString(R.string.rig_setup_usb_keyer_text_stopped, text);
             }
             if (snapshot != null && snapshot.state() == org.bi9clt.cwcn.core.tx.CwTxState.ERROR) {
-                return "USB test text '" + text + "' ended with an error: " + snapshot.statusMessage();
+                return getString(R.string.rig_setup_usb_keyer_text_error, text, snapshot.statusMessage());
             }
-            return "USB test text '" + text + "' could not complete. Current status: "
-                    + adapter.describeAvailability();
+            return getString(
+                    R.string.rig_setup_usb_keyer_text_incomplete,
+                    text,
+                    normalizeRigMessage(adapter.describeAvailability())
+            );
         } catch (Throwable throwable) {
             Log.e(TAG, "USB keyer text test crashed", throwable);
-            return "USB test text '" + text + "' crashed before completion: "
-                    + safeThrowableMessage(throwable);
+            return getString(
+                    R.string.rig_setup_usb_keyer_text_crashed,
+                    text,
+                    safeThrowableMessage(throwable)
+            );
         }
     }
 
@@ -1797,17 +1822,17 @@ public final class RigSetupActivity extends AppCompatActivity {
             binding.testUsbKeyerPulseButton.setEnabled(false);
             binding.sendUsbKeyerTestTextButton.setEnabled(false);
             binding.stopUsbKeyerTextButton.setEnabled(false);
-            binding.usbKeyerStatusText.setText("USB keyer adapter is not attached to this profile yet.");
+            binding.usbKeyerStatusText.setText(R.string.rig_setup_usb_keyer_adapter_missing);
             return;
         }
         boolean hasTargetDevice = adapter.hasTargetDevice();
         boolean ready = adapter.isReady();
         boolean missingTarget = adapter.isPreferredDeviceMissing();
         String buttonLabel = ready
-                ? "USB Keyer Ready"
+                ? getString(R.string.rig_setup_usb_keyer_ready)
                 : hasTargetDevice
-                ? "Request USB Keyer Permission"
-                : "Refresh After Plug-in";
+                ? getString(R.string.rig_setup_usb_keyer_request_permission)
+                : getString(R.string.rig_setup_usb_keyer_insert_then_refresh);
         binding.requestUsbKeyerPermissionButton.setText(buttonLabel);
         binding.requestUsbKeyerPermissionButton.setEnabled(
                 hasTargetDevice && !ready && !usbKeyerActionInFlight
@@ -1829,28 +1854,26 @@ public final class RigSetupActivity extends AppCompatActivity {
             return;
         }
         StringBuilder builder = new StringBuilder();
-        builder.append("USB keyer route: ")
-                .append(adapter.displayName())
-                .append("\n状态: ")
-                .append(adapter.describeAvailability())
-                .append("\n控制线: ")
-                .append(settings.usbKeyLine())
-                .append("\n设备选择: ")
-                .append(hasRealUsbDeviceOption(adapter.availableDevices())
-                        ? adapter.availableDevices().size() + " 个候选设备"
-                        : "未发现候选设备")
-                .append("\n设备锁定: ")
-                .append(valueOrEmpty(settings.usbPreferredDeviceName()).isEmpty()
-                        ? "自动选择"
-                        : settings.usbPreferredDeviceName());
+        builder.append(getString(
+                R.string.rig_setup_usb_keyer_summary,
+                adapter.displayName(),
+                normalizeRigMessage(adapter.describeAvailability()),
+                settings.usbKeyLine(),
+                hasRealUsbDeviceOption(adapter.availableDevices())
+                        ? getString(R.string.rig_setup_usb_keyer_candidate_count, adapter.availableDevices().size())
+                        : getString(R.string.rig_setup_usb_keyer_candidate_none),
+                valueOrEmpty(settings.usbPreferredDeviceName()).isEmpty()
+                        ? getString(R.string.rig_setup_usb_keyer_lock_auto)
+                        : settings.usbPreferredDeviceName()
+        ));
         if (missingTarget) {
-            builder.append("\n提示: 已保存的目标设备当前没有连接。");
+            builder.append(getString(R.string.rig_setup_usb_keyer_hint_saved_missing));
         } else if (!hasTargetDevice) {
-            builder.append("\n提示: 还没有检测到可用的 USB serial keyer 设备。");
+            builder.append(getString(R.string.rig_setup_usb_keyer_hint_none));
         } else if (!ready) {
-            builder.append("\n提示: 设备已检测到，下一步请求 Android USB 权限。");
+            builder.append(getString(R.string.rig_setup_usb_keyer_hint_need_permission));
         } else {
-            builder.append("\n提示: 这条 USB keyer 路由已经可以用于发射。");
+            builder.append(getString(R.string.rig_setup_usb_keyer_hint_ready));
         }
         binding.usbKeyerStatusText.setText(builder.toString());
     }
@@ -1887,9 +1910,20 @@ public final class RigSetupActivity extends AppCompatActivity {
         return null;
     }
 
+    private String renderTransportKind(@Nullable RigTransport.TransportKind kind) {
+        return RigUiLabels.transportKind(this, kind);
+    }
+
+    private String normalizeRigMessage(@Nullable String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.trim();
+    }
+
     private String safeThrowableMessage(Throwable throwable) {
         if (throwable == null || throwable.getMessage() == null || throwable.getMessage().trim().isEmpty()) {
-            return throwable == null ? "unknown failure" : throwable.getClass().getSimpleName();
+            return throwable == null ? getString(R.string.rig_setup_unknown_error) : throwable.getClass().getSimpleName();
         }
         return throwable.getMessage().trim();
     }
@@ -1926,13 +1960,13 @@ public final class RigSetupActivity extends AppCompatActivity {
                     usbKeyerActionInFlight = false;
                     usbKeyerStatusProfileId = profile == null ? null : profile.id();
                     usbKeyerStatusMessage = granted
-                            ? "USB keyer permission granted by the system dialog."
-                            : "USB keyer permission was denied by the system dialog.";
+                            ? getString(R.string.rig_setup_usb_keyer_permission_granted)
+                            : getString(R.string.rig_setup_usb_keyer_permission_denied);
                 } else {
                     serialProbeProfileId = profile == null ? null : profile.id();
                     serialProbeMessage = granted
-                            ? "USB serial CAT permission granted by the system dialog."
-                            : "USB serial CAT permission was denied by the system dialog.";
+                            ? getString(R.string.rig_setup_serial_cat_permission_granted)
+                            : getString(R.string.rig_setup_serial_cat_permission_denied);
                 }
                 refreshSelectedProfileViews();
             }
@@ -1960,7 +1994,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         String deviceName = intent.getStringExtra(EXTRA_USB_DEVICE_NAME);
         int vendorId = intent.getIntExtra(EXTRA_USB_VENDOR_ID, -1);
         int productId = intent.getIntExtra(EXTRA_USB_PRODUCT_ID, -1);
-        StringBuilder builder = new StringBuilder("USB device attach detected");
+        StringBuilder builder = new StringBuilder(getString(R.string.rig_setup_launch_usb_attach));
         if (deviceName != null && !deviceName.trim().isEmpty()) {
             builder.append(": ").append(deviceName.trim());
         }
@@ -1977,7 +2011,7 @@ public final class RigSetupActivity extends AppCompatActivity {
             }
             builder.append(')');
         }
-        builder.append(". Next: pick the Serial CAT family, then press Request Serial CAT USB Permission.");
+        builder.append(getString(R.string.rig_setup_launch_next_step));
         launchStatusMessage = builder.toString();
     }
 }

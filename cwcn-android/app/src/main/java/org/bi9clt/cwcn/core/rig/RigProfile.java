@@ -132,7 +132,7 @@ public final class RigProfile {
 
     public String capabilitySummary() {
         if (capabilities.isEmpty()) {
-            return "(none)";
+            return "(无)";
         }
         ArrayList<String> labels = new ArrayList<>();
         for (RigCapability capability : capabilities) {

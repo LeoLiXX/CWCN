@@ -41,7 +41,7 @@ public final class UsbSerialDeviceOption {
 
     public String displayLabel() {
         if (auto) {
-            return "Auto / first available";
+            return "自动 / 第一个可用设备";
         }
         return deviceName
                 + " (VID:PID "

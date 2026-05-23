@@ -22,12 +22,12 @@ public final class RigKeyingTxBackend implements CwTxBackend {
 
     @Override
     public String displayName() {
-        return adapter.displayName() + " (Keyed CW)";
+        return adapter.displayName() + " (独立键控 CW)";
     }
 
     @Override
     public String describeRoute() {
-        return adapter.describeCapabilities() + " Keyed CW plan playback is driven through keyDown/keyUp timing.";
+        return adapter.describeCapabilities() + " 独立键控 CW 发射按 keyDown/keyUp 的时序驱动。";
     }
 
     @Override
@@ -120,7 +120,7 @@ public final class RigKeyingTxBackend implements CwTxBackend {
                 return;
             }
             if (!adapter.keyDown()) {
-                throw new IllegalStateException("Rig adapter rejected keyDown.");
+                throw new IllegalStateException("电台适配器拒绝执行 keyDown。");
             }
             sleepQuietly(durationMs);
         }
@@ -128,7 +128,7 @@ public final class RigKeyingTxBackend implements CwTxBackend {
         @Override
         public void playSilence(int durationMs) throws InterruptedException {
             if (!adapter.keyUp()) {
-                throw new IllegalStateException("Rig adapter rejected keyUp.");
+                throw new IllegalStateException("电台适配器拒绝执行 keyUp。");
             }
             if (durationMs > 0) {
                 sleepQuietly(durationMs);
@@ -149,7 +149,7 @@ public final class RigKeyingTxBackend implements CwTxBackend {
             int remainingMs = durationMs;
             while (remainingMs > 0) {
                 if (Thread.currentThread().isInterrupted()) {
-                    throw new InterruptedException("Rig keying interrupted");
+                    throw new InterruptedException("独立键控发射被中断");
                 }
                 int sliceMs = Math.min(remainingMs, 25);
                 Thread.sleep(sliceMs);

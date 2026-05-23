@@ -1,8 +1,8 @@
 package org.bi9clt.cwcn.core.rig;
 
 public enum KeyingPolarity {
-    ACTIVE_HIGH("Normal (assert on high)"),
-    ACTIVE_LOW("Inverted (assert on low)");
+    ACTIVE_HIGH("正常极性（高电平拉起）"),
+    ACTIVE_LOW("反相极性（低电平拉起）");
 
     private final String displayName;
 

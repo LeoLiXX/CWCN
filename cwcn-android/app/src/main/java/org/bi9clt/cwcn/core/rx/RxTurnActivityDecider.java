@@ -23,6 +23,25 @@ public final class RxTurnActivityDecider {
     private static final double MIN_CONTINUATION_TONE_DOMINANCE_RATIO = 0.12d;
     private static final double MIN_CONTINUATION_ISOLATION_RATIO = 0.12d;
     private static final int MAX_CONTINUATION_TARGET_DRIFT_HZ = 90;
+    private static final double MIN_POST_DECODE_CONTINUATION_TONE_DOMINANCE_RATIO = 0.18d;
+    private static final double MIN_POST_DECODE_CONTINUATION_ISOLATION_RATIO = 0.18d;
+    private static final int MIN_POST_DECODE_CONTINUATION_CONSECUTIVE_LOCKED_FRAMES = 2;
+    private static final int MIN_POST_DECODE_CONTINUATION_REPRESENTATIVE_LOCKED_FRAMES = 2;
+    private static final double MIN_RESTART_SQL_CLEAR_RATIO = 0.62d;
+    private static final double MIN_RESTART_SIGNAL_FLOOR_CLEAR_RATIO = 0.82d;
+    private static final double MIN_RESTART_TONE_DOMINANCE_RATIO = 0.18d;
+    private static final double MIN_RESTART_ISOLATION_RATIO = 0.18d;
+    private static final int MIN_RESTART_CONSECUTIVE_LOCKED_FRAMES = 2;
+    private static final int MIN_RESTART_REPRESENTATIVE_LOCKED_FRAMES = 2;
+    private static final double MIN_RESTART_SIGNAL_OVER_NOISE = 100.0d;
+    private static final double MIN_BOOTSTRAP_CONTINUATION_SQL_CLEAR_RATIO = 0.96d;
+    private static final double MIN_BOOTSTRAP_CONTINUATION_SIGNAL_FLOOR_CLEAR_RATIO = 1.02d;
+    private static final double MIN_BOOTSTRAP_CONTINUATION_TONE_DOMINANCE_RATIO = 0.18d;
+    private static final double MIN_BOOTSTRAP_CONTINUATION_ISOLATION_RATIO = 0.28d;
+    private static final double MIN_BOOTSTRAP_CONTINUATION_LOCKED_RATIO = 0.12d;
+    private static final int MIN_BOOTSTRAP_CONTINUATION_CONSECUTIVE_LOCKED_FRAMES = 3;
+    private static final int MIN_BOOTSTRAP_CONTINUATION_REPRESENTATIVE_LOCKED_FRAMES = 2;
+    private static final double MIN_BOOTSTRAP_CONTINUATION_SIGNAL_OVER_NOISE = 140.0d;
 
     private RxTurnActivityDecider() {
     }
@@ -34,32 +53,61 @@ public final class RxTurnActivityDecider {
         if (signalSnapshot.targetToneLocked()) {
             return true;
         }
-        if (!signalSnapshot.toneActive()) {
-            return false;
-        }
-
-        boolean sqlQualified = sqlClearRatio(signalSnapshot) >= MIN_SQL_CLEAR_RATIO
-                || signalFloorClearRatio(signalSnapshot) >= MIN_SIGNAL_FLOOR_CLEAR_RATIO;
-        boolean toneShapeQualified = signalSnapshot.toneDominanceRatio() >= MIN_TONE_DOMINANCE_RATIO
-                && signalSnapshot.narrowbandIsolationRatio() >= MIN_ISOLATION_RATIO;
-        boolean lockContextQualified = signalSnapshot.consecutiveLockedFrames() >= MIN_CONSECUTIVE_LOCKED_FRAMES
-                || signalSnapshot.recentLockedFrameRatio() >= MIN_LOCKED_RATIO;
-        boolean signalAboveNoise = signalSnapshot.lastToneRmsAmplitude()
-                >= signalSnapshot.noiseFloorEstimate() + MIN_SIGNAL_OVER_NOISE
-                || signalSnapshot.signalFloorEstimate()
-                >= signalSnapshot.noiseFloorEstimate() + MIN_SIGNAL_OVER_NOISE;
-
-        return sqlQualified && toneShapeQualified && (lockContextQualified || signalAboveNoise);
+        return passesToneActiveEvidence(
+                signalSnapshot,
+                MIN_SQL_CLEAR_RATIO,
+                MIN_SIGNAL_FLOOR_CLEAR_RATIO,
+                MIN_TONE_DOMINANCE_RATIO,
+                MIN_ISOLATION_RATIO,
+                MIN_LOCKED_RATIO,
+                MIN_CONSECUTIVE_LOCKED_FRAMES,
+                0,
+                MIN_SIGNAL_OVER_NOISE
+        );
     }
 
     public static boolean isMeaningfulTurnContinuation(CwSignalSnapshot signalSnapshot) {
-        if (isMeaningfulTurnActivity(signalSnapshot)) {
-            return true;
-        }
         if (signalSnapshot == null || signalSnapshot.toneActive()) {
             return false;
         }
+        return passesSilentContinuationEvidence(signalSnapshot);
+    }
 
+    public static boolean isMeaningfulTurnPostDecodeContinuation(CwSignalSnapshot signalSnapshot) {
+        if (signalSnapshot == null) {
+            return false;
+        }
+        if (signalSnapshot.toneActive()) {
+            return passesToneActiveEvidence(
+                    signalSnapshot,
+                    MIN_CONTINUATION_SQL_CLEAR_RATIO,
+                    MIN_CONTINUATION_SIGNAL_FLOOR_CLEAR_RATIO,
+                    MIN_POST_DECODE_CONTINUATION_TONE_DOMINANCE_RATIO,
+                    MIN_POST_DECODE_CONTINUATION_ISOLATION_RATIO,
+                    MIN_LOCKED_RATIO,
+                    MIN_POST_DECODE_CONTINUATION_CONSECUTIVE_LOCKED_FRAMES,
+                    MIN_POST_DECODE_CONTINUATION_REPRESENTATIVE_LOCKED_FRAMES,
+                    MIN_SIGNAL_OVER_NOISE
+            );
+        }
+        return passesSilentContinuationEvidence(signalSnapshot);
+    }
+
+    public static boolean isMeaningfulTurnRestartActivity(CwSignalSnapshot signalSnapshot) {
+        return passesToneActiveEvidence(
+                signalSnapshot,
+                MIN_RESTART_SQL_CLEAR_RATIO,
+                MIN_RESTART_SIGNAL_FLOOR_CLEAR_RATIO,
+                MIN_RESTART_TONE_DOMINANCE_RATIO,
+                MIN_RESTART_ISOLATION_RATIO,
+                MIN_LOCKED_RATIO,
+                MIN_RESTART_CONSECUTIVE_LOCKED_FRAMES,
+                MIN_RESTART_REPRESENTATIVE_LOCKED_FRAMES,
+                MIN_RESTART_SIGNAL_OVER_NOISE
+        );
+    }
+
+    private static boolean passesSilentContinuationEvidence(CwSignalSnapshot signalSnapshot) {
         int targetToneHz = signalSnapshot.targetToneFrequencyHz();
         int effectiveTrackedToneHz = signalSnapshot.effectiveTrackedToneFrequencyHz();
         if (targetToneHz <= 0
@@ -73,6 +121,58 @@ public final class RxTurnActivityDecider {
         boolean toneShapeQualified = signalSnapshot.toneDominanceRatio() >= MIN_CONTINUATION_TONE_DOMINANCE_RATIO
                 && signalSnapshot.narrowbandIsolationRatio() >= MIN_CONTINUATION_ISOLATION_RATIO;
         return sqlQualified && toneShapeQualified;
+    }
+
+    private static boolean passesToneActiveEvidence(
+            CwSignalSnapshot signalSnapshot,
+            double minSqlClearRatio,
+            double minSignalFloorClearRatio,
+            double minToneDominanceRatio,
+            double minIsolationRatio,
+            double minLockedRatio,
+            int minConsecutiveLockedFrames,
+            int minRepresentativeLockedFrames,
+            double minSignalOverNoise
+    ) {
+        if (signalSnapshot == null || !signalSnapshot.toneActive()) {
+            return false;
+        }
+        boolean sqlQualified = sqlClearRatio(signalSnapshot) >= minSqlClearRatio
+                || signalFloorClearRatio(signalSnapshot) >= minSignalFloorClearRatio;
+        boolean toneShapeQualified = signalSnapshot.toneDominanceRatio() >= minToneDominanceRatio
+                && signalSnapshot.narrowbandIsolationRatio() >= minIsolationRatio;
+        boolean lockContextQualified = signalSnapshot.consecutiveLockedFrames() >= minConsecutiveLockedFrames
+                || signalSnapshot.recentLockedFrameRatio() >= minLockedRatio
+                || signalSnapshot.representativeLockedToneFrameCount() >= minRepresentativeLockedFrames;
+        boolean signalAboveNoise = signalSnapshot.lastToneRmsAmplitude()
+                >= signalSnapshot.noiseFloorEstimate() + minSignalOverNoise
+                || signalSnapshot.signalFloorEstimate()
+                >= signalSnapshot.noiseFloorEstimate() + minSignalOverNoise;
+        return sqlQualified && toneShapeQualified && (lockContextQualified || signalAboveNoise);
+    }
+
+    public static boolean isMeaningfulTurnBootstrapContinuation(CwSignalSnapshot signalSnapshot) {
+        if (signalSnapshot == null || !signalSnapshot.toneActive()) {
+            return false;
+        }
+        boolean sqlQualified = sqlClearRatio(signalSnapshot) >= MIN_BOOTSTRAP_CONTINUATION_SQL_CLEAR_RATIO
+                || signalFloorClearRatio(signalSnapshot) >= MIN_BOOTSTRAP_CONTINUATION_SIGNAL_FLOOR_CLEAR_RATIO;
+        boolean toneShapeQualified =
+                signalSnapshot.toneDominanceRatio() >= MIN_BOOTSTRAP_CONTINUATION_TONE_DOMINANCE_RATIO
+                        && signalSnapshot.narrowbandIsolationRatio()
+                        >= MIN_BOOTSTRAP_CONTINUATION_ISOLATION_RATIO;
+        boolean lockContextQualified =
+                signalSnapshot.consecutiveLockedFrames()
+                        >= MIN_BOOTSTRAP_CONTINUATION_CONSECUTIVE_LOCKED_FRAMES
+                        || signalSnapshot.recentLockedFrameRatio()
+                        >= MIN_BOOTSTRAP_CONTINUATION_LOCKED_RATIO
+                        || signalSnapshot.representativeLockedToneFrameCount()
+                        >= MIN_BOOTSTRAP_CONTINUATION_REPRESENTATIVE_LOCKED_FRAMES;
+        boolean signalAboveNoise = signalSnapshot.lastToneRmsAmplitude()
+                >= signalSnapshot.noiseFloorEstimate() + MIN_BOOTSTRAP_CONTINUATION_SIGNAL_OVER_NOISE
+                || signalSnapshot.signalFloorEstimate()
+                >= signalSnapshot.noiseFloorEstimate() + MIN_BOOTSTRAP_CONTINUATION_SIGNAL_OVER_NOISE;
+        return sqlQualified && toneShapeQualified && lockContextQualified && signalAboveNoise;
     }
 
     public static boolean shouldResetFrontEndOnTurnEnd(CwSignalSnapshot signalSnapshot) {

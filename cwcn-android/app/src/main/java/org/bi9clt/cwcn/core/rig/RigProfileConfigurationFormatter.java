@@ -6,14 +6,14 @@ public final class RigProfileConfigurationFormatter {
 
     public static String renderCompactSummary(RigProfile profile, RigProfileSettings settings) {
         if (profile == null) {
-            return "Rig path: none pinned";
+            return "当前没有正式电台路径";
         }
         RigProfileSettings safeSettings = settings == null ? RigProfileSettings.defaults() : settings;
         StringBuilder builder = new StringBuilder();
-        builder.append("Rig path: ").append(profile.displayName())
-                .append("\nSupport level: ").append(profile.supportLevel().displayName())
-                .append("\nTransport: ").append(profile.transportKind().name())
-                .append("\nCW defaults: ")
+        builder.append("电台路径：").append(profile.displayName())
+                .append("\n支持级别：").append(profile.supportLevel().displayName())
+                .append("\n传输层：").append(renderTransportKind(profile.transportKind()))
+                .append("\nCW 参数：")
                 .append(safeSettings.defaultWpm()).append(" WPM / ")
                 .append(safeSettings.defaultToneFrequencyHz()).append(" Hz");
         appendTransportSpecificSummary(builder, profile, safeSettings);
@@ -26,37 +26,37 @@ public final class RigProfileConfigurationFormatter {
             RigProfileSettings settings
     ) {
         if (profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
-            builder.append("\nUSB key line: ").append(settings.usbKeyLine().name());
+            builder.append("\nUSB 键控线：").append(settings.usbKeyLine().name());
             if (settings.usbPreferredDeviceName() != null) {
-                builder.append("\nUSB device hint: ").append(settings.usbPreferredDeviceName());
+                builder.append("\n偏好 USB 设备：").append(settings.usbPreferredDeviceName());
             }
         }
         if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            builder.append("\nSerial CAT: ")
+            builder.append("\n串口 CAT：")
                     .append(settings.serialCatProtocolFamily().displayName())
                     .append(" / ")
                     .append(settings.serialCatBaudRate())
                     .append(" baud");
             if (settings.serialCatPortHint() != null) {
-                builder.append("\nSerial port hint: ").append(settings.serialCatPortHint());
+                builder.append("\n串口端口提示：").append(settings.serialCatPortHint());
             }
-            builder.append("\nCW keying line: ").append(settings.serialCatKeyLine().name());
+            builder.append("\n键控线：").append(settings.serialCatKeyLine().name());
             if (settings.serialCatKeyingPortHint() != null) {
-                builder.append("\nCW keying port: ").append(settings.serialCatKeyingPortHint());
-                builder.append("\nCW keying polarity: ").append(settings.serialCatKeyingPolarity());
-                builder.append("\nAssert RTS during keying: ").append(settings.serialCatAssertRtsDuringKeying() ? "yes" : "no");
-                builder.append("\nAssert DTR during keying: ").append(settings.serialCatAssertDtrDuringKeying() ? "yes" : "no");
+                builder.append("\n键控端口：").append(settings.serialCatKeyingPortHint());
+                builder.append("\n键控极性：").append(settings.serialCatKeyingPolarity());
+                builder.append("\n键控时拉高 RTS：").append(settings.serialCatAssertRtsDuringKeying() ? "是" : "否");
+                builder.append("\n键控时拉高 DTR：").append(settings.serialCatAssertDtrDuringKeying() ? "是" : "否");
             }
             if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
                     && settings.serialCatCivAddressHex() != null) {
-                builder.append("\nCI-V address: 0x").append(settings.serialCatCivAddressHex());
+                builder.append("\nCI-V 地址：0x").append(settings.serialCatCivAddressHex());
             }
         }
         if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
-            builder.append("\nNetwork CAT: ");
+            builder.append("\n网络 CAT：");
             builder.append(settings.networkCatProtocolFamily().displayName());
             if (settings.networkHost() == null) {
-                builder.append(" / (host not set)");
+                builder.append(" /（未填写主机）");
             } else {
                 builder.append(" / ")
                         .append(settings.networkHost())
@@ -65,17 +65,35 @@ public final class RigProfileConfigurationFormatter {
             }
             if (RigProfileFamilies.isYaesuFamily(profile)
                     && settings.networkCatProtocolFamily() == CatProtocolFamily.HAMLIB_RIGCTLD) {
-                builder.append("\nYaesu note: this family currently benches best through a working rigctld bridge.");
+                builder.append("\nYaesu 提示：这一家族当前更适合先通过可用的 rigctld 桥接路径联调。");
             }
         }
         if (profile.hasCapability(RigCapability.BLUETOOTH_SERIAL)) {
-            builder.append("\nBluetooth target: ")
+            builder.append("\n蓝牙目标设备：")
                     .append(settings.bluetoothDeviceHint() == null
-                            ? "(not set)"
+                            ? "（未填写）"
                             : settings.bluetoothDeviceHint());
         }
         if (profile.hasCapability(RigCapability.AUDIO_VOX)) {
-            builder.append("\nVOX note: tune radio-side VOX delay and audio gain conservatively.");
+            builder.append("\nVOX 提示：请在电台侧保守地微调 VOX 延时和音频增益。");
+        }
+    }
+
+    private static String renderTransportKind(RigTransport.TransportKind kind) {
+        if (kind == null) {
+            return "-";
+        }
+        switch (kind) {
+            case USB_SERIAL:
+                return "USB 串口";
+            case BLUETOOTH_SERIAL:
+                return "蓝牙串口";
+            case NETWORK_CAT:
+                return "网络 CAT";
+            case AUDIO_VOX:
+                return "音频 VOX";
+            default:
+                return kind.name();
         }
     }
 }

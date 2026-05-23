@@ -60,49 +60,49 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
 
     @Override
     public String displayName() {
-        return "Native Serial CAT Adapter";
+        return "原生串口 CAT 适配器";
     }
 
     @Override
     public String describeCapabilities() {
-        return "Shared native serial CAT control entry for Yaesu-style, Icom CI-V, and Kenwood-style rigs. Current phase: Yaesu and Icom family TX/PTT smoke-control first; Kenwood remains probe-first.";
+        return "统一承接 Yaesu 风格、Icom CI-V 和 Kenwood 风格的原生串口 CAT 控制。当前阶段优先收口 Yaesu 与 Icom 家族的 TX/PTT，Kenwood 仍以探测验证为主。";
     }
 
     @Override
     public String describeAvailability() {
         ActiveConfiguration configuration = configurationProvider.activeConfiguration();
         if (configuration == null) {
-            return "Open Rig Setup, pin a serial CAT profile, and select Yaesu-style CAT, Icom CI-V, or Kenwood-style CAT first.";
+            return "请先在电台配置中固定一条串口 CAT 路径，并选择 Yaesu 风格 CAT、Icom CI-V 或 Kenwood 风格 CAT。";
         }
         StringBuilder builder = new StringBuilder();
-        builder.append("Configured for ")
+        builder.append("已配置电台路径：")
                 .append(configuration.profile.displayName())
-                .append(" using ")
+                .append("，协议族：")
                 .append(configuration.settings.serialCatProtocolFamily().displayName())
-                .append(" at ")
+                .append("，波特率：")
                 .append(configuration.settings.serialCatBaudRate())
-                .append(" baud.");
+                .append("。");
         if (configuration.settings.serialCatPortHint() != null) {
-            builder.append(" Port hint: ").append(configuration.settings.serialCatPortHint()).append(".");
+            builder.append(" CAT 端口：").append(configuration.settings.serialCatPortHint()).append("。");
         }
         if (configuration.settings.serialCatKeyingPortHint() != null) {
-            builder.append(" Keying port: ")
+            builder.append(" 键控口：")
                     .append(configuration.settings.serialCatKeyingPortHint())
-                    .append(" via lines ")
+                    .append("，控制线：")
                     .append(renderAssertedKeyingLines(configuration.settings))
                     .append(" / ")
                     .append(configuration.settings.serialCatKeyingPolarity())
-                    .append(".");
+                    .append("。");
         }
         builder.append(" ").append(sessionFactory.describeAvailability(configuration.settings.serialCatPortHint()));
         if (configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
                 && configuration.settings.serialCatKeyingPortHint() != null) {
-            builder.append(" Keying availability: ")
+            builder.append(" 键控口状态：")
                     .append(keyerPortFactory.describeAvailability(configuration.settings.serialCatKeyingPortHint()));
         }
         builder.append(" ").append(familyStatus(configuration.settings.serialCatProtocolFamily()));
         if (lastAvailabilityNote != null && !lastAvailabilityNote.isEmpty()) {
-            builder.append(" Last result: ").append(lastAvailabilityNote);
+            builder.append(" 上次结果：").append(lastAvailabilityNote);
         }
         return builder.toString();
     }
@@ -133,7 +133,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                 && configuration.settings.serialCatKeyingPortHint() != null) {
             return keyerPortFactory.canOpenPort(configuration.settings.serialCatKeyingPortHint());
         }
-        return transportLooksUsable(sessionFactory.describeAvailability(configuration.settings.serialCatPortHint()));
+        return sessionFactory.isReady(configuration.settings.serialCatPortHint());
     }
 
     @Override
@@ -142,15 +142,15 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         if (shouldUseDedicatedKeyingPort(configuration)) {
             boolean result = keyingLineUp(configuration);
             if (result) {
-                lastAvailabilityNote = "Dedicated serial keying asserted on "
+                lastAvailabilityNote = "已通过独立串口键控拉起 "
                         + renderAssertedKeyingLines(configuration.settings)
-                        + " using "
+                        + "，极性 "
                         + configuration.settings.serialCatKeyingPolarity()
-                        + ".";
+                        + "。";
             }
             return result;
         }
-        return withSession("CAT TX asserted via native serial CAT.", this::executeKeyDown);
+        return withSession("已通过原生串口 CAT 拉起发射。", this::executeKeyDown);
     }
 
     @Override
@@ -159,24 +159,24 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         if (shouldUseDedicatedKeyingPort(configuration)) {
             boolean result = keyingLineDown(configuration);
             if (result) {
-                lastAvailabilityNote = "Dedicated serial keying released on "
+                lastAvailabilityNote = "已释放独立串口键控 "
                         + renderAssertedKeyingLines(configuration.settings)
-                        + ".";
+                        + "。";
             }
             return result;
         }
-        return withSession("CAT TX released via native serial CAT.", this::executeKeyUp);
+        return withSession("已通过原生串口 CAT 释放发射。", this::executeKeyUp);
     }
 
     @Override
     public boolean sendText(String text) {
         ActiveConfiguration configuration = configurationProvider.activeConfiguration();
         if (configuration == null) {
-            lastAvailabilityNote = "Open Rig Setup, pin a serial CAT profile, and validate the serial link first.";
+            lastAvailabilityNote = "请先在电台配置中固定串口 CAT 路径，并完成链路验证。";
             return false;
         }
         if (!supportsTextToCw()) {
-            lastAvailabilityNote = "Native serial CAT text TX is currently attached for Yaesu-style profiles first.";
+            lastAvailabilityNote = "当前原生串口 CAT 文本发射仅优先接入 Yaesu 风格路径。";
             return false;
         }
         if (!isReady()) {
@@ -185,12 +185,12 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         }
         CwTxRunner activeRunner = txRunner;
         if (activeRunner != null && activeRunner.isRunning()) {
-            lastAvailabilityNote = "Serial CAT text TX is already running.";
+            lastAvailabilityNote = "串口 CAT 文本发射正在进行中。";
             return false;
         }
         CwTxPlan plan = txEngine.buildPlan(text, wpm, toneFrequencyHz);
         if (plan.elements().isEmpty()) {
-            lastAvailabilityNote = "Text contained no Morse symbols supported by the current TX engine.";
+            lastAvailabilityNote = "文本里没有当前 TX 引擎支持的摩尔斯符号。";
             return false;
         }
         lastSnapshot = null;
@@ -205,9 +205,9 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             runner.runPlanBlocking(plan, this::recordSnapshot);
             return lastSnapshot != null && lastSnapshot.state() == CwTxState.COMPLETED;
         }
-        String availability = sessionFactory.describeAvailability(configuration.settings.serialCatPortHint());
-        if (!transportLooksUsable(availability)) {
-            lastAvailabilityNote = availability;
+        PortAvailability transportAvailability = sessionFactory.availability(configuration.settings.serialCatPortHint());
+        if (!transportAvailability.isReady()) {
+            lastAvailabilityNote = transportAvailability.message();
             return false;
         }
         try (SerialCatSession session = sessionFactory.openSession(
@@ -219,7 +219,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             runner.runPlanBlocking(plan, this::recordSnapshot);
             return lastSnapshot != null && lastSnapshot.state() == CwTxState.COMPLETED;
         } catch (IOException | RuntimeException exception) {
-            lastAvailabilityNote = "Native serial CAT text TX failed: " + safeMessage(exception);
+            lastAvailabilityNote = "原生串口 CAT 文本发射失败：" + safeMessage(exception);
             return false;
         } finally {
             txRunner = null;
@@ -291,53 +291,44 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                 && configuration.settings.serialCatKeyingPortHint() != null;
     }
 
-    private boolean transportLooksUsable(String availability) {
-        if (availability == null) {
-            return false;
-        }
-        String normalized = availability.trim().toLowerCase(Locale.US);
-        return normalized.contains("permission is available")
-                || normalized.contains("session is open");
-    }
-
     private String familyStatus(CatProtocolFamily family) {
         if (family == CatProtocolFamily.YAESU_STYLE) {
-            return "Yaesu native serial path is probe-ready. CW TX should prefer a dedicated keying port (RTS/DTR) instead of CAT TX1/TX0.";
+            return "Yaesu 原生串口路径已具备探测能力。CW 发射优先建议使用独立键控口（RTS/DTR），而不是 CAT TX1/TX0。";
         }
         if (family == CatProtocolFamily.ICOM_CIV) {
-            return "Icom native CI-V path is probe-ready, and a minimal CI-V PTT pulse path is now attached first.";
+            return "Icom 原生 CI-V 路径已具备探测能力，当前已先接入最小化的 CI-V PTT 脉冲路径。";
         }
         if (family == CatProtocolFamily.KENWOOD_STYLE) {
-            return "Kenwood native serial path is probe-ready; family-specific TX/PTT commands are the next layer.";
+            return "Kenwood 原生串口路径已具备探测能力；下一层是补齐家族专属的 TX/PTT 指令。";
         }
-        return "This CAT family is not attached to the native serial control adapter yet.";
+        return "当前这个 CAT 家族还没有接入原生串口控制适配器。";
     }
 
     private boolean withSession(String successNote, SessionAction action) {
         ActiveConfiguration configuration = configurationProvider.activeConfiguration();
         if (configuration == null) {
-            lastAvailabilityNote = "Open Rig Setup, pin a serial CAT profile, and validate the serial link first.";
+            lastAvailabilityNote = "请先在电台配置中固定串口 CAT 路径，并完成链路验证。";
             return false;
         }
         if (!supportsNativePtt(configuration)) {
-            lastAvailabilityNote = "Native serial CAT control is not attached for "
+            lastAvailabilityNote = "当前还没有为 "
                     + configuration.settings.serialCatProtocolFamily().displayName()
-                    + " yet.";
+                    + " 接入原生串口 CAT 控制。";
             return false;
         }
-        String availability = sessionFactory.describeAvailability(configuration.settings.serialCatPortHint());
-        if (!transportLooksUsable(availability)) {
-            lastAvailabilityNote = availability;
+        PortAvailability transportAvailability = sessionFactory.availability(configuration.settings.serialCatPortHint());
+        if (!transportAvailability.isReady()) {
+            lastAvailabilityNote = transportAvailability.message();
             return false;
         }
         try (SerialCatSession session = sessionFactory.openSession(
                 configuration.settings.serialCatPortHint(),
                 configuration.settings.serialCatBaudRate())) {
             boolean result = action.run(configuration, session);
-            lastAvailabilityNote = result ? successNote : "Native serial CAT command was not accepted.";
+            lastAvailabilityNote = result ? successNote : "原生串口 CAT 指令未被接受。";
             return result;
         } catch (IOException | RuntimeException exception) {
-            lastAvailabilityNote = "Native serial CAT command failed: " + safeMessage(exception);
+            lastAvailabilityNote = "原生串口 CAT 指令执行失败：" + safeMessage(exception);
             return false;
         }
     }
@@ -384,13 +375,13 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             return;
         }
         if (snapshot.state() == CwTxState.COMPLETED) {
-            lastAvailabilityNote = "Native serial CAT text TX completed.";
+            lastAvailabilityNote = "原生串口 CAT 文本发射已完成。";
         } else if (snapshot.state() == CwTxState.STOPPED) {
-            lastAvailabilityNote = "Native serial CAT text TX stopped.";
+            lastAvailabilityNote = "原生串口 CAT 文本发射已停止。";
         } else if (snapshot.state() == CwTxState.ERROR) {
             lastAvailabilityNote = snapshot.statusMessage();
         } else if (snapshot.state() == CwTxState.PLAYING) {
-            lastAvailabilityNote = "Native serial CAT text TX running.";
+            lastAvailabilityNote = "原生串口 CAT 文本发射进行中。";
         }
     }
 
@@ -403,7 +394,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         boolean keyedLevel = configuration.settings.serialCatKeyingPolarity().assertedLevel();
         boolean keyed = applyConfiguredKeyingLevels(port, configuration.settings, keyedLevel);
         if (!keyed) {
-            lastAvailabilityNote = "Dedicated serial keying line could not be asserted.";
+            lastAvailabilityNote = "独立串口键控线拉起失败。";
         }
         return keyed;
     }
@@ -417,7 +408,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         boolean releasedLevel = !configuration.settings.serialCatKeyingPolarity().assertedLevel();
         boolean released = applyConfiguredKeyingLevels(port, configuration.settings, releasedLevel);
         if (!released) {
-            lastAvailabilityNote = "Dedicated serial keying line could not be released.";
+            lastAvailabilityNote = "独立串口键控线释放失败。";
         }
         return released;
     }
@@ -450,7 +441,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
 
     private static String renderAssertedKeyingLines(RigProfileSettings settings) {
         if (settings == null) {
-            return "(none)";
+            return "(未指定)";
         }
         boolean useRts = settings.serialCatAssertRtsDuringKeying();
         boolean useDtr = settings.serialCatAssertDtrDuringKeying();
@@ -495,17 +486,17 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
 
         @Override
         public void playTone(int frequencyHz, int durationMs) throws InterruptedException {
-            if (!applyConfiguredKeyingLevels(port, settings, settings.serialCatKeyingPolarity().assertedLevel())) {
-                throw new IllegalStateException("Dedicated serial keying line could not be asserted.");
-            }
+                if (!applyConfiguredKeyingLevels(port, settings, settings.serialCatKeyingPolarity().assertedLevel())) {
+                    throw new IllegalStateException("独立串口键控线拉起失败。");
+                }
             sleepQuietly(durationMs);
         }
 
         @Override
         public void playSilence(int durationMs) throws InterruptedException {
-            if (!applyConfiguredKeyingLevels(port, settings, !settings.serialCatKeyingPolarity().assertedLevel())) {
-                throw new IllegalStateException("Dedicated serial keying line could not be released.");
-            }
+                if (!applyConfiguredKeyingLevels(port, settings, !settings.serialCatKeyingPolarity().assertedLevel())) {
+                    throw new IllegalStateException("独立串口键控线释放失败。");
+                }
             sleepQuietly(durationMs);
         }
 
@@ -566,7 +557,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         int remainingMs = Math.max(0, durationMs);
         while (remainingMs > 0) {
             if (Thread.currentThread().isInterrupted()) {
-                throw new InterruptedException("Serial CAT TX interrupted");
+                throw new InterruptedException("串口 CAT 发射被中断");
             }
             int sliceMs = Math.min(remainingMs, 25);
             Thread.sleep(sliceMs);
@@ -583,7 +574,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             int holdMs
     ) {
         if (profile == null || !profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            return new ControlResult(false, "Selected profile does not use serial CAT.");
+            return new ControlResult(false, "所选电台路径不使用串口 CAT。");
         }
         if (settings == null) {
             settings = profile.defaultSettings();
@@ -592,15 +583,15 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                 && settings.serialCatProtocolFamily() != CatProtocolFamily.ICOM_CIV) {
             return new ControlResult(
                     false,
-                    "Serial CAT PTT pulse test is currently attached for Yaesu-style CAT and Icom CI-V first."
+                    "当前串口 CAT PTT 脉冲验证优先支持 Yaesu 风格 CAT 和 Icom CI-V。"
             );
         }
         if (sessionFactory == null) {
-            return new ControlResult(false, "Serial CAT session factory is unavailable.");
+            return new ControlResult(false, "串口 CAT 会话工厂当前不可用。");
         }
         if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
                 && settings.serialCatCivAddressHex() == null) {
-            return new ControlResult(false, "Set the CI-V address first, then retry the serial CAT PTT pulse test.");
+            return new ControlResult(false, "请先填写 CI-V 地址，再重新执行串口 CAT PTT 脉冲验证。");
         }
         try (SerialCatSession session = sessionFactory.openSession(
                 settings.serialCatPortHint(),
@@ -621,7 +612,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                 } else {
                     session.send(buildIcomPttCommand(settings, false), COMMAND_TIMEOUT_MS);
                 }
-                return new ControlResult(false, "Serial CAT PTT pulse test was interrupted.");
+                  return new ControlResult(false, "串口 CAT PTT 脉冲验证被中断。");
             }
             if (settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE) {
                 session.send("TX0;", COMMAND_TIMEOUT_MS);
@@ -629,13 +620,13 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                 session.send(buildIcomPttCommand(settings, false), COMMAND_TIMEOUT_MS);
             }
             return new ControlResult(
-                    true,
-                    settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
-                            ? "Native serial CAT PTT pulse completed. Yaesu-style TX was asserted briefly and then released."
-                            : "Native serial CAT PTT pulse completed. Icom CI-V PTT was asserted briefly and then released."
-            );
+                      true,
+                      settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
+                              ? "原生串口 CAT PTT 脉冲已完成。Yaesu 风格发射已短暂拉起后释放。"
+                              : "原生串口 CAT PTT 脉冲已完成。Icom CI-V PTT 已短暂拉起后释放。"
+              );
         } catch (IOException | RuntimeException exception) {
-            return new ControlResult(false, "Native serial CAT PTT pulse failed: " + safeMessage(exception));
+            return new ControlResult(false, "原生串口 CAT PTT 脉冲验证失败：" + safeMessage(exception));
         }
     }
 
@@ -646,19 +637,19 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             int holdMs
     ) {
         if (profile == null || !profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            return new ControlResult(false, "Selected profile does not use serial CAT.");
+            return new ControlResult(false, "所选电台路径不使用串口 CAT。");
         }
         if (settings == null) {
             settings = profile.defaultSettings();
         }
         if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "Dedicated keying pulse is currently attached for Yaesu-style serial CAT first.");
+            return new ControlResult(false, "当前独立键控脉冲验证优先支持 Yaesu 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
-            return new ControlResult(false, "Choose the dedicated keying port first, then retry the keying pulse test.");
+            return new ControlResult(false, "请先选择独立键控口，再重新执行键控脉冲验证。");
         }
         if (keyingPortFactory == null) {
-            return new ControlResult(false, "Dedicated keying port factory is unavailable.");
+            return new ControlResult(false, "独立键控口工厂当前不可用。");
         }
         SerialKeyerPort port = keyingPortFactory.openPort(settings.serialCatKeyingPortHint());
         if (port == null || !port.isOpen()) {
@@ -668,34 +659,34 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         try {
             boolean assertedLevel = settings.serialCatKeyingPolarity().assertedLevel();
             asserted = applyConfiguredKeyingLevels(port, settings, assertedLevel);
-            if (!asserted) {
-                return new ControlResult(false, "Dedicated keying line could not be asserted.");
-            }
+              if (!asserted) {
+                  return new ControlResult(false, "独立键控线拉起失败。");
+              }
             try {
                 Thread.sleep(Math.max(50, Math.min(1500, holdMs)));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 boolean releasedLevel = !settings.serialCatKeyingPolarity().assertedLevel();
                 applyConfiguredKeyingLevels(port, settings, releasedLevel);
-                return new ControlResult(false, "Dedicated keying pulse test was interrupted.");
+                  return new ControlResult(false, "独立键控脉冲验证被中断。");
             }
             boolean releasedLevel = !settings.serialCatKeyingPolarity().assertedLevel();
             boolean released = applyConfiguredKeyingLevels(port, settings, releasedLevel);
-            if (!released) {
-                return new ControlResult(false, "Dedicated keying line asserted, but release failed.");
-            }
-            return new ControlResult(
-                    true,
-                    "Dedicated keying pulse completed on "
-                            + renderAssertedKeyingLines(settings)
-                            + " / "
-                            + settings.serialCatKeyingPolarity()
-                            + " via "
-                            + settings.serialCatKeyingPortHint()
-                            + "."
-            );
+              if (!released) {
+                  return new ControlResult(false, "独立键控线已经拉起，但释放失败。");
+              }
+              return new ControlResult(
+                      true,
+                      "独立键控脉冲已完成："
+                              + renderAssertedKeyingLines(settings)
+                              + " / "
+                              + settings.serialCatKeyingPolarity()
+                              + "，端口 "
+                              + settings.serialCatKeyingPortHint()
+                              + "。"
+              );
         } catch (RuntimeException exception) {
-            return new ControlResult(false, "Dedicated keying pulse failed: " + safeMessage(exception));
+            return new ControlResult(false, "独立键控脉冲验证失败：" + safeMessage(exception));
         } finally {
             port.close();
         }
@@ -708,19 +699,19 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             int holdMs
     ) {
         if (profile == null || !profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            return new ControlResult(false, "Selected profile does not use serial CAT.");
+            return new ControlResult(false, "所选电台路径不使用串口 CAT。");
         }
         if (settings == null) {
             settings = profile.defaultSettings();
         }
         if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "Dedicated keying hold is currently attached for Yaesu-style serial CAT first.");
+            return new ControlResult(false, "当前独立键控保持验证优先支持 Yaesu 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
-            return new ControlResult(false, "Choose the dedicated keying port first, then retry the keying hold test.");
+            return new ControlResult(false, "请先选择独立键控口，再重新执行键控保持验证。");
         }
         if (keyingPortFactory == null) {
-            return new ControlResult(false, "Dedicated keying port factory is unavailable.");
+            return new ControlResult(false, "独立键控口工厂当前不可用。");
         }
         SerialKeyerPort port = keyingPortFactory.openPort(settings.serialCatKeyingPortHint());
         if (port == null || !port.isOpen()) {
@@ -728,31 +719,31 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         }
         try {
             boolean assertedLevel = settings.serialCatKeyingPolarity().assertedLevel();
-            boolean asserted = applyConfiguredKeyingLevels(port, settings, assertedLevel);
-            if (!asserted) {
-                return new ControlResult(false, "Dedicated keying line could not be asserted for the hold test.");
-            }
+              boolean asserted = applyConfiguredKeyingLevels(port, settings, assertedLevel);
+              if (!asserted) {
+                  return new ControlResult(false, "独立键控保持验证中，键控线拉起失败。");
+              }
             try {
                 Thread.sleep(Math.max(200, Math.min(2500, holdMs)));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                return new ControlResult(false, "Dedicated keying hold test was interrupted.");
+                  return new ControlResult(false, "独立键控保持验证被中断。");
             } finally {
                 boolean releasedLevel = !settings.serialCatKeyingPolarity().assertedLevel();
                 applyConfiguredKeyingLevels(port, settings, releasedLevel);
             }
-            return new ControlResult(
-                    true,
-                    "Dedicated keying hold completed on "
-                            + settings.serialCatKeyingPortHint()
-                            + " / "
-                            + renderAssertedKeyingLines(settings)
-                            + " / "
-                            + settings.serialCatKeyingPolarity()
-                            + ". Watch whether TX stayed active during the 1.5s hold, not only at the edges."
-            );
+              return new ControlResult(
+                      true,
+                      "独立键控保持验证已完成：端口 "
+                              + settings.serialCatKeyingPortHint()
+                              + " / "
+                              + renderAssertedKeyingLines(settings)
+                              + " / "
+                              + settings.serialCatKeyingPolarity()
+                              + "。请重点观察保持阶段内 TX 是否持续有效，而不只是起止边沿。"
+              );
         } catch (RuntimeException exception) {
-            return new ControlResult(false, "Dedicated keying hold failed: " + safeMessage(exception));
+            return new ControlResult(false, "独立键控保持验证失败：" + safeMessage(exception));
         } finally {
             port.close();
         }
@@ -765,19 +756,19 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             int holdMs
     ) {
         if (profile == null || !profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            return new ControlResult(false, "Selected profile does not use serial CAT.");
+            return new ControlResult(false, "所选电台路径不使用串口 CAT。");
         }
         if (settings == null) {
             settings = profile.defaultSettings();
         }
         if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "Dedicated keying port open/close test is currently attached for Yaesu-style serial CAT first.");
+            return new ControlResult(false, "当前键控口开关验证优先支持 Yaesu 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
-            return new ControlResult(false, "Choose the dedicated keying port first, then retry the open/close test.");
+            return new ControlResult(false, "请先选择独立键控口，再重新执行开关验证。");
         }
         if (keyingPortFactory == null) {
-            return new ControlResult(false, "Dedicated keying port factory is unavailable.");
+            return new ControlResult(false, "独立键控口工厂当前不可用。");
         }
         SerialKeyerPort port = keyingPortFactory.openPort(settings.serialCatKeyingPortHint());
         if (port == null || !port.isOpen()) {
@@ -788,14 +779,14 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                 Thread.sleep(Math.max(200, Math.min(2000, holdMs)));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                return new ControlResult(false, "Dedicated keying port open/close test was interrupted.");
+                  return new ControlResult(false, "键控口开关验证被中断。");
             }
-            return new ControlResult(
-                    true,
-                    "Dedicated keying port open/close test completed on "
-                            + settings.serialCatKeyingPortHint()
-                            + ". No DTR/RTS line change was requested; watch whether TX still flashed on port open or close."
-            );
+              return new ControlResult(
+                      true,
+                      "键控口开关验证已完成：端口 "
+                              + settings.serialCatKeyingPortHint()
+                              + "。本次没有主动切换 DTR/RTS，请观察打开或关闭端口时电台是否仍然闪 TX。"
+              );
         } finally {
             port.close();
         }
@@ -808,22 +799,22 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             TimingLabPlan plan
     ) {
         if (profile == null || !profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            return new ControlResult(false, "Selected profile does not use serial CAT.");
+            return new ControlResult(false, "所选电台路径不使用串口 CAT。");
         }
         if (settings == null) {
             settings = profile.defaultSettings();
         }
         if (plan == null) {
-            return new ControlResult(false, "Timing lab plan is missing.");
+            return new ControlResult(false, "时序实验参数缺失。");
         }
         if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "Dedicated keying timing lab is currently attached for Yaesu-style serial CAT first.");
+            return new ControlResult(false, "当前独立键控时序实验优先支持 Yaesu 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
-            return new ControlResult(false, "Choose the dedicated keying port first, then retry the timing lab.");
+            return new ControlResult(false, "请先选择独立键控口，再重新执行时序实验。");
         }
         if (keyingPortFactory == null) {
-            return new ControlResult(false, "Dedicated keying port factory is unavailable.");
+            return new ControlResult(false, "独立键控口工厂当前不可用。");
         }
         SerialKeyerPort port = keyingPortFactory.openPort(settings.serialCatKeyingPortHint());
         if (port == null || !port.isOpen()) {
@@ -832,7 +823,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         try {
             return runDedicatedKeyingTimingLab(port, settings, plan);
         } catch (RuntimeException exception) {
-            return new ControlResult(false, "Dedicated keying timing lab failed: " + safeMessage(exception));
+            return new ControlResult(false, "独立键控时序实验失败：" + safeMessage(exception));
         } finally {
             port.close();
         }
@@ -845,22 +836,22 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             ShortPulseLabPlan plan
     ) {
         if (profile == null || !profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            return new ControlResult(false, "Selected profile does not use serial CAT.");
+            return new ControlResult(false, "所选电台路径不使用串口 CAT。");
         }
         if (settings == null) {
             settings = profile.defaultSettings();
         }
         if (plan == null) {
-            return new ControlResult(false, "Short pulse lab plan is missing.");
+            return new ControlResult(false, "短脉冲实验参数缺失。");
         }
         if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "Dedicated short pulse lab is currently attached for Yaesu-style serial CAT first.");
+            return new ControlResult(false, "当前独立键控短脉冲实验优先支持 Yaesu 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
-            return new ControlResult(false, "Choose the dedicated keying port first, then retry the short pulse lab.");
+            return new ControlResult(false, "请先选择独立键控口，再重新执行短脉冲实验。");
         }
         if (keyingPortFactory == null) {
-            return new ControlResult(false, "Dedicated keying port factory is unavailable.");
+            return new ControlResult(false, "独立键控口工厂当前不可用。");
         }
         SerialKeyerPort port = keyingPortFactory.openPort(settings.serialCatKeyingPortHint());
         if (port == null || !port.isOpen()) {
@@ -869,7 +860,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         try {
             return runDedicatedShortPulseLab(port, settings, plan);
         } catch (RuntimeException exception) {
-            return new ControlResult(false, "Dedicated short pulse lab failed: " + safeMessage(exception));
+            return new ControlResult(false, "独立键控短脉冲实验失败：" + safeMessage(exception));
         } finally {
             port.close();
         }
@@ -884,14 +875,14 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         boolean releasedLevel = !assertedLevel;
         LineSelection selection = resolveLineSelection(settings);
         if (!setLinesToLevel(port, selection, releasedLevel, TimingLabOrder.SIMULTANEOUS, 0)) {
-            return new ControlResult(false, "Timing lab could not normalize the keying lines to the released state.");
+            return new ControlResult(false, "时序实验无法先把键控线归一到释放状态。");
         }
         if (!sleepChecked(plan.preDelayMs())) {
-            return new ControlResult(false, "Dedicated keying timing lab was interrupted during pre-delay.");
+            return new ControlResult(false, "独立键控时序实验在预延时阶段被中断。");
         }
         if (!setLinesToLevel(port, selection, assertedLevel, plan.assertOrder(), plan.interLineGapMs())) {
             setLinesToLevel(port, selection, releasedLevel, TimingLabOrder.SIMULTANEOUS, 0);
-            return new ControlResult(false, "Timing lab could not assert the requested keying pattern.");
+            return new ControlResult(false, "时序实验无法按要求拉起键控模式。");
         }
         if (!sleepChecked(plan.holdMs())) {
             setLinesToLevel(
@@ -901,7 +892,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                     plan.releaseOrder().toTimingOrder(),
                     plan.releaseGapMs()
             );
-            return new ControlResult(false, "Dedicated keying timing lab was interrupted during hold time.");
+            return new ControlResult(false, "独立键控时序实验在保持阶段被中断。");
         }
         if (!setLinesToLevel(
                 port,
@@ -910,29 +901,29 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                 plan.releaseOrder().toTimingOrder(),
                 plan.releaseGapMs()
         )) {
-            return new ControlResult(false, "Timing lab asserted the keying lines, but release failed.");
+            return new ControlResult(false, "时序实验已拉起键控线，但释放失败。");
         }
         return new ControlResult(
                 true,
-                "Timing lab completed on "
+                "时序实验已完成：端口 "
                         + settings.serialCatKeyingPortHint()
-                        + " with assert="
+                        + "，拉起线 "
                         + selection.render()
-                        + ", order="
+                        + "，拉起顺序 "
                         + plan.assertOrder().displayName()
-                        + ", preDelay="
+                        + "，预延时 "
                         + plan.preDelayMs()
-                        + "ms, hold="
+                        + "ms，保持 "
                         + plan.holdMs()
-                        + "ms, interLineGap="
+                        + "ms，线间隔 "
                         + plan.interLineGapMs()
-                        + "ms, release="
+                        + "ms，释放顺序 "
                         + plan.releaseOrder().displayName()
-                        + ", releaseGap="
+                        + "，释放间隔 "
                         + plan.releaseGapMs()
-                        + "ms, polarity="
+                        + "ms，极性 "
                         + settings.serialCatKeyingPolarity()
-                        + "."
+                        + "。"
         );
     }
 
@@ -945,15 +936,15 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         boolean releasedLevel = !assertedLevel;
         LineSelection selection = resolveLineSelection(settings);
         if (!setLinesToLevel(port, selection, releasedLevel, TimingLabOrder.SIMULTANEOUS, 0)) {
-            return new ControlResult(false, "Short pulse lab could not normalize the keying lines to the released state.");
+            return new ControlResult(false, "短脉冲实验无法先把键控线归一到释放状态。");
         }
         if (!sleepChecked(plan.preDelayMs())) {
-            return new ControlResult(false, "Dedicated short pulse lab was interrupted during pre-delay.");
+            return new ControlResult(false, "独立键控短脉冲实验在预延时阶段被中断。");
         }
         CwTxPlan txPlan = new CwTxEngine().buildPlan(plan.preset().text(), plan.wpm(), settings.defaultToneFrequencyHz());
         List<CwTxElement> elements = txPlan.elements();
         if (elements.isEmpty()) {
-            return new ControlResult(false, "Short pulse lab built no CW elements for the selected preset.");
+            return new ControlResult(false, "短脉冲实验没有为所选预置生成任何 CW 元素。");
         }
         for (CwTxElement element : elements) {
             if (element.kind() == CwTxElement.Kind.KEY_DOWN) {
@@ -965,7 +956,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                             plan.releaseOrder().toTimingOrder(),
                             plan.releaseLineGapMs()
                     );
-                    return new ControlResult(false, "Short pulse lab could not assert the keying pattern for " + plan.preset().displayName() + ".");
+                    return new ControlResult(false, "短脉冲实验无法为 " + plan.preset().displayName() + " 拉起键控模式。");
                 }
                 if (!sleepChecked(element.durationMs() + plan.tailHoldMs())) {
                     setLinesToLevel(
@@ -975,7 +966,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                             plan.releaseOrder().toTimingOrder(),
                             plan.releaseLineGapMs()
                     );
-                    return new ControlResult(false, "Dedicated short pulse lab was interrupted during a key-down segment.");
+                    return new ControlResult(false, "独立键控短脉冲实验在 key-down 段被中断。");
                 }
                 continue;
             }
@@ -987,10 +978,10 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                     plan.releaseOrder().toTimingOrder(),
                     plan.releaseLineGapMs()
             )) {
-                return new ControlResult(false, "Short pulse lab could not release the keying lines during " + plan.preset().displayName() + ".");
+                return new ControlResult(false, "短脉冲实验在 " + plan.preset().displayName() + " 期间释放键控线失败。");
             }
             if (!sleepChecked(element.durationMs() + plan.extraReleaseGapMs())) {
-                return new ControlResult(false, "Dedicated short pulse lab was interrupted during a key-up segment.");
+                return new ControlResult(false, "独立键控短脉冲实验在 key-up 段被中断。");
             }
         }
         if (!setLinesToLevel(
@@ -1000,31 +991,31 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                 plan.releaseOrder().toTimingOrder(),
                 plan.releaseLineGapMs()
         )) {
-            return new ControlResult(false, "Short pulse lab completed the pattern, but final release failed.");
+            return new ControlResult(false, "短脉冲实验已完成整段模式，但最终释放失败。");
         }
         return new ControlResult(
                 true,
-                "Short pulse lab completed "
+                "短脉冲实验已完成："
                         + plan.preset().displayName()
                         + " ("
                         + txPlan.morsePreview()
-                        + ") at "
+                        + ")，"
                         + plan.wpm()
-                        + " WPM on "
+                        + " WPM，端口 "
                         + settings.serialCatKeyingPortHint()
-                        + ". preDelay="
+                        + "。预延时 "
                         + plan.preDelayMs()
-                        + "ms, tailHold="
+                        + "ms，尾部保持 "
                         + plan.tailHoldMs()
-                        + "ms, extraReleaseGap="
+                        + "ms，额外释放间隔 "
                         + plan.extraReleaseGapMs()
-                        + "ms, assertOrder="
+                        + "ms，拉起顺序 "
                         + plan.assertOrder().displayName()
-                        + ", releaseOrder="
+                        + "，释放顺序 "
                         + plan.releaseOrder().displayName()
-                        + ", releaseLineGap="
+                        + "，释放线间隔 "
                         + plan.releaseLineGapMs()
-                        + "ms."
+                        + "ms。"
         );
     }
 
@@ -1090,7 +1081,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
 
     private static String safeMessage(Throwable throwable) {
         if (throwable == null || throwable.getMessage() == null || throwable.getMessage().trim().isEmpty()) {
-            return throwable == null ? "unknown failure" : throwable.getClass().getSimpleName();
+            return throwable == null ? "未知错误" : throwable.getClass().getSimpleName();
         }
         return throwable.getMessage().trim();
     }
@@ -1109,7 +1100,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
 
     static byte[] buildIcomPttCommand(RigProfileSettings settings, boolean enabled) {
         if (settings == null || settings.serialCatCivAddressHex() == null) {
-            throw new IllegalArgumentException("CI-V address must be set before building an Icom PTT command.");
+            throw new IllegalArgumentException("构造 Icom CI-V PTT 指令前，必须先设置 CI-V 地址。");
         }
         int radioAddress = Integer.parseInt(settings.serialCatCivAddressHex(), 16);
         return new byte[] {
@@ -1147,7 +1138,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
     }
 
     public enum TimingLabOrder {
-        SIMULTANEOUS("Simultaneous"),
+        SIMULTANEOUS("同步"),
         RTS_THEN_DTR("RTS -> DTR"),
         DTR_THEN_RTS("DTR -> RTS");
 
@@ -1168,9 +1159,9 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
     }
 
     public enum TimingLabReleaseOrder {
-        TOGETHER("Together"),
-        RELEASE_RTS_FIRST("RTS first"),
-        RELEASE_DTR_FIRST("DTR first");
+        TOGETHER("同时释放"),
+        RELEASE_RTS_FIRST("先放 RTS"),
+        RELEASE_DTR_FIRST("先放 DTR");
 
         private final String displayName;
 
@@ -1253,8 +1244,8 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
     }
 
     public enum ShortPulseLabPreset {
-        SINGLE_E("Single E", "E"),
-        SINGLE_T("Single T", "T"),
+        SINGLE_E("单个 E", "E"),
+        SINGLE_T("单个 T", "T"),
         EEE("EEE", "EEE"),
         VVV("VVV", "VVV");
 

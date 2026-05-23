@@ -8,223 +8,202 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="10dp">
 
-        <TextView
-            android:id="@+id/titleText"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="电台配置"
-            android:textColor="@color/cwcn_title"
-            android:textSize="30sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/titleText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/rig_setup_title_config"
+                android:textColor="@color/cwcn_title"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/versionText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/cwcn_accent"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/backButton"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/operate_chip_background"
+                android:contentDescription="@string/rig_setup_back"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_ui_back"
+                android:tint="@color/cwcn_body" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/subtitleText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="在这里选择正式电台路径并保存连接默认值，更深入的实验工具放到开发入口。"
+            android:layout_marginTop="6dp"
+            android:text="@string/rig_setup_subtitle_config"
             android:textColor="@color/cwcn_subtitle"
-            android:textSize="15sp" />
-
-        <TextView
-            android:id="@+id/versionText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textColor="@color/cwcn_accent"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textSize="11sp" />
 
         <LinearLayout
             android:id="@+id/usbAttachStatusPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp"
+            android:padding="12dp"
             android:visibility="gone">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="USB Attach"
+                android:text="@string/rig_setup_usb_attach_title"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/usbAttachStatusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
         </LinearLayout>
-
-        <Button
-            android:id="@+id/backButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Back" />
 
         <LinearLayout
             android:id="@+id/connectionGuidePanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Connection Guide"
+                android:text="@string/rig_setup_connection_guide_title"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/connectionGuideText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/readinessSummaryPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Readiness Snapshot"
+                android:text="@string/rig_setup_readiness_title"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/readinessSummaryText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Selected Rig Path"
+                android:text="@string/rig_setup_current_path_title"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <Spinner
                 android:id="@+id/profileSpinner"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:background="@drawable/bootstrap_field_background"
-                android:padding="12dp" />
+                android:padding="10dp" />
 
             <Button
                 android:id="@+id/saveSelectedProfileButton"
+                style="@style/Widget.CWCN.CompactActionButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Use This Rig Path" />
+                android:layout_marginTop="8dp"
+                android:text="@string/rig_setup_select_current_path" />
 
             <TextView
                 android:id="@+id/selectedProfileStatusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/profileConfigPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Profile Configuration"
+                android:text="@string/rig_setup_profile_config_title"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Default CW profile"
+                android:layout_marginTop="8dp"
+                android:text="@string/rig_setup_profile_config_hint"
                 android:textColor="@color/cwcn_subtitle"
-                android:textSize="13sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <EditText
-                    android:id="@+id/defaultWpmEditText"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:background="@drawable/bootstrap_field_background"
-                    android:hint="18"
-                    android:inputType="number"
-                    android:padding="12dp"
-                    android:singleLine="true"
-                    android:textColor="@color/cwcn_body"
-                    android:textColorHint="@color/cwcn_subtitle" />
-
-                <EditText
-                    android:id="@+id/defaultToneFrequencyEditText"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bootstrap_field_background"
-                    android:hint="650"
-                    android:inputType="number"
-                    android:padding="12dp"
-                    android:singleLine="true"
-                    android:textColor="@color/cwcn_body"
-                    android:textColorHint="@color/cwcn_subtitle" />
-            </LinearLayout>
+                android:textSize="11sp" />
 
             <LinearLayout
                 android:id="@+id/usbConfigGroup"
@@ -236,7 +215,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="USB serial / key line"
+                    android:text="@string/rig_setup_usb_config_title"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -254,7 +233,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="Preferred USB device hint"
+                    android:hint="@string/rig_setup_usb_preferred_device_hint"
                     android:inputType="text"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -271,17 +250,19 @@
 
                 <Button
                     android:id="@+id/requestUsbKeyerPermissionButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="请求 USB 键控权限" />
+                    android:text="@string/rig_setup_usb_keyer_request_permission" />
 
                 <Button
                     android:id="@+id/testUsbKeyerPulseButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="脉冲验证 USB 键控线" />
+                    android:text="@string/rig_setup_action_test_usb_keyer_pulse" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -291,18 +272,20 @@
 
                     <Button
                         android:id="@+id/sendUsbKeyerTestTextButton"
+                        style="@style/Widget.CWCN.CompactActionButton"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="发送 VVV 验证" />
+                        android:text="@string/rig_setup_action_send_usb_vvv" />
 
                     <Button
                         android:id="@+id/stopUsbKeyerTextButton"
+                        style="@style/Widget.CWCN.CompactActionButton"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="10dp"
                         android:layout_weight="1"
-                        android:text="停止" />
+                        android:text="@string/rig_setup_action_stop" />
                 </LinearLayout>
 
                 <TextView
@@ -326,7 +309,7 @@
                     android:id="@+id/serialCatProtocolLabelText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Serial CAT"
+                    android:text="@string/rig_setup_serial_cat_protocol_title"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -344,7 +327,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="9600"
+                    android:hint="@string/rig_setup_baud_rate_hint"
                     android:inputType="number"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -356,7 +339,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="CW keying line"
+                    android:text="@string/rig_setup_key_line_title"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -373,7 +356,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="CW keying polarity"
+                    android:text="@string/rig_setup_keying_polarity_title"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -390,21 +373,21 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Assert RTS during keying" />
+                    android:text="@string/rig_setup_assert_rts" />
 
                 <CheckBox
                     android:id="@+id/serialCatAssertDtrCheckBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:text="Assert DTR during keying" />
+                    android:text="@string/rig_setup_assert_dtr" />
 
                 <TextView
                     android:id="@+id/serialCatPortPickerLabelText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Detected CAT port"
+                    android:text="@string/rig_setup_detected_cat_ports_title"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -421,7 +404,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Detected keying port"
+                    android:text="@string/rig_setup_detected_keying_ports_title"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -439,7 +422,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="CAT port hint (advanced fallback)"
+                    android:hint="@string/rig_setup_cat_port_hint"
                     android:inputType="text"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -452,7 +435,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="CI-V address hex (e.g. 94)"
+                    android:hint="@string/rig_setup_civ_address_hint"
                     android:inputType="textCapCharacters"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -461,59 +444,66 @@
 
                 <Button
                     android:id="@+id/requestSerialCatPermissionButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="请求串口 CAT USB 权限" />
+                    android:text="@string/rig_setup_action_request_serial_cat_permission" />
 
                 <Button
                     android:id="@+id/testSerialCatConnectionButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="验证串口 CAT 连接" />
+                    android:text="@string/rig_setup_action_test_serial_cat_connection" />
 
                 <Button
                     android:id="@+id/testSerialCatPttButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="旧版 CAT TX/PTT 脉冲验证" />
+                    android:text="@string/rig_setup_action_test_serial_cat_ptt" />
 
                 <Button
                     android:id="@+id/testSerialCatKeyingButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="独立键控口脉冲验证（DTR/RTS）" />
+                    android:text="@string/rig_setup_action_test_serial_keying_pulse" />
 
                 <Button
                     android:id="@+id/holdSerialCatKeyingButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="独立键控保持验证（1.5s）" />
+                    android:text="@string/rig_setup_action_test_serial_keying_hold" />
 
                 <Button
                     android:id="@+id/openCloseSerialCatKeyingPortButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="键控口开关验证" />
+                    android:text="@string/rig_setup_action_test_serial_keying_open_close" />
 
                 <Button
                     android:id="@+id/runSerialCatKeyingSweepButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="运行键控线全量扫描" />
+                    android:text="@string/rig_setup_action_run_serial_keying_sweep" />
 
                 <TextView
                     android:id="@+id/serialCatTimingLabLabelText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="DTR 时序实验"
+                    android:text="@string/rig_setup_timing_lab_title"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -545,7 +535,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:background="@drawable/bootstrap_field_background"
-                        android:hint="Pre-delay ms"
+                        android:hint="@string/rig_setup_hint_pre_delay_ms"
                         android:inputType="number"
                         android:padding="12dp"
                         android:singleLine="true"
@@ -559,7 +549,7 @@
                         android:layout_marginStart="12dp"
                         android:layout_weight="1"
                         android:background="@drawable/bootstrap_field_background"
-                        android:hint="Hold ms"
+                        android:hint="@string/rig_setup_hint_hold_ms"
                         android:inputType="number"
                         android:padding="12dp"
                         android:singleLine="true"
@@ -579,7 +569,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:background="@drawable/bootstrap_field_background"
-                        android:hint="Inter-line gap ms"
+                        android:hint="@string/rig_setup_hint_inter_line_gap_ms"
                         android:inputType="number"
                         android:padding="12dp"
                         android:singleLine="true"
@@ -593,7 +583,7 @@
                         android:layout_marginStart="12dp"
                         android:layout_weight="1"
                         android:background="@drawable/bootstrap_field_background"
-                        android:hint="Release gap ms"
+                        android:hint="@string/rig_setup_hint_release_gap_ms"
                         android:inputType="number"
                         android:padding="12dp"
                         android:singleLine="true"
@@ -603,17 +593,18 @@
 
                 <Button
                     android:id="@+id/runSerialCatTimingLabButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="运行 DTR 时序实验" />
+                    android:text="@string/rig_setup_action_run_timing_lab" />
 
                 <TextView
                     android:id="@+id/serialCatShortPulseLabLabelText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="短脉冲实验"
+                    android:text="@string/rig_setup_short_pulse_lab_title"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -637,7 +628,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:background="@drawable/bootstrap_field_background"
-                        android:hint="Pre-delay ms"
+                        android:hint="@string/rig_setup_hint_pre_delay_ms"
                         android:inputType="number"
                         android:padding="12dp"
                         android:singleLine="true"
@@ -651,7 +642,7 @@
                         android:layout_marginStart="12dp"
                         android:layout_weight="1"
                         android:background="@drawable/bootstrap_field_background"
-                        android:hint="Tail-hold ms"
+                        android:hint="@string/rig_setup_hint_tail_hold_ms"
                         android:inputType="number"
                         android:padding="12dp"
                         android:singleLine="true"
@@ -665,7 +656,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="Extra release gap ms"
+                    android:hint="@string/rig_setup_hint_extra_release_gap_ms"
                     android:inputType="number"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -674,10 +665,11 @@
 
                 <Button
                     android:id="@+id/runSerialCatShortPulseLabButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Run Short Pulse Lab" />
+                    android:text="@string/rig_setup_action_run_short_pulse_lab" />
 
                 <TextView
                     android:id="@+id/serialCatProbeStatusText"
@@ -700,7 +692,7 @@
                     android:id="@+id/networkCatProtocolLabelText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Network CAT"
+                    android:text="@string/rig_setup_transport_network_cat"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -718,7 +710,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="Host or IP"
+                    android:hint="@string/rig_setup_hint_host_or_ip"
                     android:inputType="textUri"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -731,7 +723,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="4532"
+                    android:hint="@string/rig_setup_hint_network_port"
                     android:inputType="number"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -740,10 +732,11 @@
 
                 <Button
                     android:id="@+id/testNetworkCatConnectionButton"
+                    style="@style/Widget.CWCN.CompactActionButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="Test rigctld Connection" />
+                    android:text="@string/rig_setup_action_test_network_cat_connection" />
 
                 <TextView
                     android:id="@+id/networkCatProbeStatusText"
@@ -765,7 +758,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Bluetooth serial"
+                    android:text="@string/rig_setup_transport_bluetooth_serial"
                     android:textColor="@color/cwcn_subtitle"
                     android:textSize="13sp" />
 
@@ -775,7 +768,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:background="@drawable/bootstrap_field_background"
-                    android:hint="Bluetooth target hint"
+                    android:hint="@string/rig_setup_hint_bluetooth_device"
                     android:inputType="text"
                     android:padding="12dp"
                     android:singleLine="true"
@@ -783,29 +776,31 @@
                     android:textColorHint="@color/cwcn_subtitle" />
             </LinearLayout>
 
-            <TextView
-                android:id="@+id/audioVoxConfigHintText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:lineSpacingExtra="3dp"
-                android:text="Audio VOX uses the same default WPM/tone values, but final VOX timing still needs to be tuned on the radio side."
-                android:textColor="@color/cwcn_subtitle"
-                android:textSize="13sp" />
+        <TextView
+            android:id="@+id/audioVoxConfigHintText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:lineSpacingExtra="3dp"
+            android:text="@string/rig_setup_audio_vox_config_hint"
+            android:textColor="@color/cwcn_subtitle"
+            android:textSize="13sp" />
 
             <Button
                 android:id="@+id/saveProfileConfigButton"
+                style="@style/Widget.CWCN.CompactActionButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="Save Profile Configuration" />
+                android:text="@string/rig_setup_action_save_profile_config" />
 
             <Button
                 android:id="@+id/resetProfileConfigButton"
+                style="@style/Widget.CWCN.CompactActionButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:text="Restore Recommended Defaults" />
+                android:text="@string/rig_setup_action_reset_profile_config" />
 
             <TextView
                 android:id="@+id/profileConfigStatusText"
@@ -821,81 +816,81 @@
             android:id="@+id/transportSummaryPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Transport Status"
+                android:text="@string/rig_setup_transport_summary_title"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/transportSummaryText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/profileSummaryPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Rig Profiles"
+                android:text="@string/rig_setup_profile_summary_title"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/profileSummaryText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/nextStepPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bootstrap_panel_background"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Recommended Next Step"
+                android:text="@string/rig_setup_next_step_panel_title"
                 android:textColor="@color/cwcn_title"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/nextStepText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:lineSpacingExtra="3dp"
                 android:textColor="@color/cwcn_body"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
     </LinearLayout>

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/cwcn_screen_background"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="6dp">
+
+        <ImageButton
+            android:id="@+id/backButton"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/tx_template_back"
+            android:padding="5dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_back"
+            android:tint="@color/cwcn_accent" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/titleText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/tx_template_list_title"
+                android:textColor="@color/cwcn_title"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/subtitleText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/newButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/logbook_toolbar_button_background"
+            android:contentDescription="@string/tx_template_list_new"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_add"
+            android:tint="@color/cwcn_body" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/summaryText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:textColor="@color/cwcn_body"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="10dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="2dp"
+        android:textColor="@color/cwcn_subtitle"
+        android:textSize="10sp"
+        android:visibility="gone" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/templateRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="5dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="5dp"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:id="@+id/emptyStateText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:text="@string/tx_template_list_empty"
+            android:textColor="@color/cwcn_subtitle"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNavView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/formal_bottom_nav_background"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        app:itemBackground="@drawable/formal_bottom_nav_item_background"
+        app:itemIconSize="22dp"
+        app:itemIconTint="@color/formal_bottom_nav_item_colors"
+        app:itemRippleColor="@android:color/transparent"
+        app:itemTextAppearanceActive="@style/TextAppearance.CWCN.BottomNav.Active"
+        app:itemTextAppearanceInactive="@style/TextAppearance.CWCN.BottomNav.Inactive"
+        app:itemTextColor="@color/formal_bottom_nav_item_colors"
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/formal_bottom_nav_menu" />
+
+</LinearLayout>

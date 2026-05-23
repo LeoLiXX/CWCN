@@ -47,7 +47,7 @@ final class AndroidUsbCdcAcmSerialKeyerPort implements SerialKeyerPort {
 
     @Override
     public String describeAvailability() {
-        return "USB CDC/ACM keyer port is open on " + device.getDeviceName() + ".";
+        return "USB CDC/ACM 键控口已打开：" + device.getDeviceName() + "。";
     }
 
     @Override

@@ -3,6 +3,10 @@ package org.bi9clt.cwcn.core.app;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import androidx.annotation.StringRes;
+
+import org.bi9clt.cwcn.R;
+
 public final class RxInputSettingsStore {
     private static final String PREFS_NAME = "cwcn_rx_input_settings";
     private static final String KEY_RX_INPUT_MODE = "rx_input_mode";
@@ -11,82 +15,109 @@ public final class RxInputSettingsStore {
     private static final String KEY_FIXED_TONE_LEARNING_WINDOW_HZ = "fixed_tone_learning_window_hz";
 
     public enum RxInputMode {
-        AUTO("自动", "无电台时优先走手机麦克风；有正式路由时优先尝试外部音频输入。"),
-        PHONE_MICROPHONE("手机麦克风", "始终使用手机麦克风作为接收输入。"),
-        USB_EXTERNAL_AUDIO("USB/外部音频", "优先选择 Android 已路由的 USB 外部音频输入。");
+        AUTO(
+                R.string.settings_rx_input_mode_auto,
+                R.string.settings_rx_input_mode_auto_description
+        ),
+        PHONE_MICROPHONE(
+                R.string.settings_rx_input_mode_phone_microphone,
+                R.string.settings_rx_input_mode_phone_microphone_description
+        ),
+        USB_EXTERNAL_AUDIO(
+                R.string.settings_rx_input_mode_usb_external_audio,
+                R.string.settings_rx_input_mode_usb_external_audio_description
+        );
 
-        private final String displayName;
-        private final String description;
+        private final int displayNameResId;
+        private final int descriptionResId;
 
-        RxInputMode(String displayName, String description) {
-            this.displayName = displayName;
-            this.description = description;
+        RxInputMode(@StringRes int displayNameResId, @StringRes int descriptionResId) {
+            this.displayNameResId = displayNameResId;
+            this.descriptionResId = descriptionResId;
         }
 
-        public String displayName() {
-            return displayName;
+        @StringRes
+        public int displayNameResId() {
+            return displayNameResId;
         }
 
-        public String description() {
-            return description;
+        @StringRes
+        public int descriptionResId() {
+            return descriptionResId;
         }
 
-        @Override
-        public String toString() {
-            return displayName;
+        public String displayName(Context context) {
+            return context == null ? name() : context.getString(displayNameResId);
         }
     }
 
     public enum MicSourceMode {
-        UNPROCESSED("原始输入", "优先绕开系统语音增强，适合固定侧音测试。"),
-        VOICE_RECOGNITION("语音识别", "部分手机会关闭一部分通话类处理，适合作为折中模式。"),
-        MIC("标准麦克风", "兼容性最高，但最可能带入系统降噪和语音处理。");
+        UNPROCESSED(
+                R.string.settings_mic_source_mode_unprocessed,
+                R.string.settings_mic_source_mode_unprocessed_description
+        ),
+        VOICE_RECOGNITION(
+                R.string.settings_mic_source_mode_voice_recognition,
+                R.string.settings_mic_source_mode_voice_recognition_description
+        ),
+        MIC(
+                R.string.settings_mic_source_mode_mic,
+                R.string.settings_mic_source_mode_mic_description
+        );
 
-        private final String displayName;
-        private final String description;
+        private final int displayNameResId;
+        private final int descriptionResId;
 
-        MicSourceMode(String displayName, String description) {
-            this.displayName = displayName;
-            this.description = description;
+        MicSourceMode(@StringRes int displayNameResId, @StringRes int descriptionResId) {
+            this.displayNameResId = displayNameResId;
+            this.descriptionResId = descriptionResId;
         }
 
-        public String displayName() {
-            return displayName;
+        @StringRes
+        public int displayNameResId() {
+            return displayNameResId;
         }
 
-        public String description() {
-            return description;
+        @StringRes
+        public int descriptionResId() {
+            return descriptionResId;
         }
 
-        @Override
-        public String toString() {
-            return displayName;
+        public String displayName(Context context) {
+            return context == null ? name() : context.getString(displayNameResId);
         }
     }
 
     public enum RxToneMode {
-        FIXED_TONE("固定音调", "围绕设定音调做窄窗口锁定，优先减少误跟踪。"),
-        AUTO_TRACK("自动跟踪", "允许在更大范围内搜索峰值，更适合未知音调。");
+        FIXED_TONE(
+                R.string.settings_rx_tone_mode_fixed_tone,
+                R.string.settings_rx_tone_mode_fixed_tone_description
+        ),
+        AUTO_TRACK(
+                R.string.settings_rx_tone_mode_auto_track,
+                R.string.settings_rx_tone_mode_auto_track_description
+        );
 
-        private final String displayName;
-        private final String description;
+        private final int displayNameResId;
+        private final int descriptionResId;
 
-        RxToneMode(String displayName, String description) {
-            this.displayName = displayName;
-            this.description = description;
+        RxToneMode(@StringRes int displayNameResId, @StringRes int descriptionResId) {
+            this.displayNameResId = displayNameResId;
+            this.descriptionResId = descriptionResId;
         }
 
-        public String displayName() {
-            return displayName;
+        @StringRes
+        public int displayNameResId() {
+            return displayNameResId;
         }
 
-        public String description() {
-            return description;
+        @StringRes
+        public int descriptionResId() {
+            return descriptionResId;
         }
 
-        @Override
-        public String toString() {
-            return displayName;
+        public String displayName(Context context) {
+            return context == null ? name() : context.getString(displayNameResId);
         }
     }
 

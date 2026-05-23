@@ -26,6 +26,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
     private volatile State state = State.IDLE;
     private volatile boolean running;
     private volatile CwFixtureScenario scenario = CwFixtureLibrary.defaultScenario();
+    private volatile boolean lastReplayCompleted;
 
     private Thread workerThread;
 
@@ -36,7 +37,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
 
     @Override
     public String displayName() {
-        return "Synthetic Fixture";
+        return "合成夹具";
     }
 
     @Override
@@ -71,7 +72,8 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         }
 
         running = true;
-        updateState(State.STARTING, "Preparing fixture replay: " + scenario.displayName());
+        lastReplayCompleted = false;
+        updateState(State.STARTING, "正在准备夹具回放：" + scenario.displayName());
         workerThread = new Thread(this::replayLoop, "cwcn-fixture-source");
         workerThread.start();
     }
@@ -82,16 +84,21 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
             return;
         }
         running = false;
-        updateState(State.STOPPING, "Stopping fixture replay.");
+        lastReplayCompleted = false;
+        updateState(State.STOPPING, "正在停止夹具回放。");
         joinWorkerThread();
         if (state != State.ERROR) {
-            updateState(State.IDLE, "Fixture replay stopped.");
+            updateState(State.IDLE, "夹具回放已停止。");
         }
     }
 
     @Override
     public synchronized void release() {
         stop();
+    }
+
+    public boolean wasLastReplayCompleted() {
+        return lastReplayCompleted;
     }
 
     private void replayLoop() {
@@ -102,7 +109,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
                     State.RUNNING,
                     String.format(
                             Locale.US,
-                            "Replaying fixture %s (%d samples, %d WPM).",
+                            "正在回放夹具 %s（%d 个采样，%d WPM）。",
                             activeScenario.displayName(),
                             waveform.length,
                             activeScenario.wpm()
@@ -121,7 +128,8 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
                 SystemClock.sleep(frameDurationMs);
             }
         } catch (IllegalArgumentException exception) {
-            setErrorState("Fixture replay failed: " + exception.getMessage(), exception);
+            lastReplayCompleted = false;
+            setErrorState("夹具回放失败：" + exception.getMessage(), exception);
             return;
         } finally {
             running = false;
@@ -129,7 +137,8 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
         }
 
         if (state != State.ERROR) {
-            updateState(State.IDLE, "Fixture replay completed.");
+            lastReplayCompleted = true;
+            updateState(State.IDLE, "夹具回放已完成。");
         }
     }
 
@@ -320,7 +329,7 @@ public final class SyntheticFixtureRxAudioSource implements RxAudioSource {
     private List<Segment> buildSegments(CwFixtureScenario scenario) {
         List<String> messageParts = scenario.messageParts();
         if (messageParts == null || messageParts.isEmpty()) {
-            throw new IllegalArgumentException("Scenario text is empty.");
+            throw new IllegalArgumentException("夹具场景文本为空。");
         }
 
         List<Segment> segments = new ArrayList<>();

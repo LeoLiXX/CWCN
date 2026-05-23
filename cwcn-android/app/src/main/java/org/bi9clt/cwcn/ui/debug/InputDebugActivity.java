@@ -1688,7 +1688,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             return;
         }
         BatchRunItem completedItem = activeBatchRunItem;
-        boolean completed = detail != null && detail.toLowerCase(Locale.US).contains("completed");
+        boolean completed = syntheticFixtureRxAudioSource != null
+                && syntheticFixtureRxAudioSource.wasLastReplayCompleted();
         if (completedItem.kind == BatchRunItem.Kind.SYNTHETIC_FIXTURE && completedItem.fixtureScenario != null) {
             CwFixtureEvaluationResult evaluationResult = CwFixtureEvaluator.evaluate(
                     completedItem.fixtureScenario,
@@ -3041,7 +3042,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             if (fixtureReplayInProgress
                     && state == RxAudioSource.State.IDLE
                     && lastFixtureScenario != null) {
-                boolean completed = detail != null && detail.toLowerCase(Locale.US).contains("completed");
+                boolean completed = syntheticFixtureRxAudioSource != null
+                        && syntheticFixtureRxAudioSource.wasLastReplayCompleted();
                 lastFixtureEvaluationResult = CwFixtureEvaluator.evaluate(
                         lastFixtureScenario,
                         currentCommittedInterpreterSnapshot(),
@@ -3053,8 +3055,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 refreshStoredState();
                 fixtureReplayInProgress = false;
                 fixtureEvaluationStatusMessage = completed
-                        ? "Fixture evaluation finished."
-                        : "Fixture evaluation captured a partial run.";
+                        ? "夹具评估已完成。"
+                        : "夹具评估记录了一次未完整结束的回放。";
             }
             if (!anySourceActive()) {
                 activeRxAudioSource = null;

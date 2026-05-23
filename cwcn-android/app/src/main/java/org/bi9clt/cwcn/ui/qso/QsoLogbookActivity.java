@@ -226,15 +226,15 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
         DialogLogbookFilterBinding dialogBinding = DialogLogbookFilterBinding.inflate(getLayoutInflater());
         bindScopeSelection(dialogBinding, buildCurrentScopeRequest());
         new AlertDialog.Builder(this)
-                .setTitle("高级筛选")
+                .setTitle(R.string.qso_logbook_filter_title)
                 .setView(dialogBinding.getRoot())
-                .setNegativeButton("重置", (dialog, which) -> {
+                .setNegativeButton(R.string.common_reset, (dialog, which) -> {
                     confirmationScope = LogbookExportRequest.ConfirmationScope.ALL;
                     timeRangeScope = LogbookExportRequest.TimeRangeScope.ALL;
                     reloadLogs();
                 })
-                .setNeutralButton("取消", null)
-                .setPositiveButton("应用", (dialog, which) -> {
+                .setNeutralButton(R.string.common_cancel, null)
+                .setPositiveButton(R.string.common_apply, (dialog, which) -> {
                     LogbookExportRequest request = readScopeSelection(dialogBinding);
                     confirmationScope = request.confirmationScope();
                     timeRangeScope = request.timeRangeScope();
@@ -247,11 +247,11 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
         PopupMenu popupMenu = new PopupMenu(this, anchorView);
         boolean running = LogbookLanExportServer.getInstance().isRunning();
         if (!running) {
-            popupMenu.getMenu().add(0, MENU_LAN_START, 0, "启动局域网导出");
+            popupMenu.getMenu().add(0, MENU_LAN_START, 0, getString(R.string.qso_logbook_export_menu_start));
         } else {
-            popupMenu.getMenu().add(0, MENU_LAN_SHOW, 0, "查看导出地址");
-            popupMenu.getMenu().add(0, MENU_LAN_COPY, 1, "复制导出地址");
-            popupMenu.getMenu().add(0, MENU_LAN_STOP, 2, "停止局域网导出");
+            popupMenu.getMenu().add(0, MENU_LAN_SHOW, 0, getString(R.string.qso_logbook_export_menu_show));
+            popupMenu.getMenu().add(0, MENU_LAN_COPY, 1, getString(R.string.qso_logbook_export_menu_copy));
+            popupMenu.getMenu().add(0, MENU_LAN_STOP, 2, getString(R.string.qso_logbook_export_menu_stop));
         }
         popupMenu.setOnMenuItemClickListener(item -> {
             int itemId = item.getItemId();
@@ -277,7 +277,11 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
     }
 
     private void showShareDialog() {
-        showScopedActionDialog("分享文本", "分享", this::performTxtShare);
+        showScopedActionDialog(
+                getString(R.string.qso_logbook_share_dialog_title),
+                getString(R.string.common_share),
+                this::performTxtShare
+        );
     }
 
     private void showScopedActionDialog(
@@ -290,7 +294,7 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
         new AlertDialog.Builder(this)
                 .setTitle(title)
                 .setView(dialogBinding.getRoot())
-                .setNegativeButton("取消", null)
+                .setNegativeButton(R.string.common_cancel, null)
                 .setPositiveButton(positiveLabel, (dialog, which) ->
                         exportAction.run(readScopeSelection(dialogBinding)))
                 .show();
@@ -315,8 +319,8 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
                 ? R.drawable.ic_ui_view_compact
                 : R.drawable.ic_ui_view_detail);
         binding.viewModeButton.setContentDescription(viewMode == QsoLogbookAdapter.ViewMode.DETAILED
-                ? "切换到简约模式"
-                : "切换到详细模式");
+                ? getString(R.string.qso_logbook_view_mode_to_compact)
+                : getString(R.string.qso_logbook_view_mode_to_detailed));
         binding.emptyStateText.setVisibility(displayedLogs.isEmpty() ? View.VISIBLE : View.GONE);
     }
 
@@ -367,7 +371,7 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
     private void performTxtShare(LogbookExportRequest request) {
         List<ConfirmedQsoLog> logs = loadLogsForRequest(request);
         if (logs.isEmpty()) {
-            Toast.makeText(this, "没有可分享的 QSO 记录。", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.qso_logbook_share_empty, Toast.LENGTH_SHORT).show();
             return;
         }
         try {
@@ -383,13 +387,17 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
             );
             Intent shareIntent = new Intent(Intent.ACTION_SEND);
             shareIntent.setType("text/plain");
-            shareIntent.putExtra(Intent.EXTRA_SUBJECT, "CWCN QSO 日志");
+            shareIntent.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.qso_logbook_share_subject));
             shareIntent.putExtra(Intent.EXTRA_STREAM, shareUri);
-            shareIntent.setClipData(ClipData.newUri(getContentResolver(), "CWCN QSO 日志", shareUri));
+            shareIntent.setClipData(ClipData.newUri(
+                    getContentResolver(),
+                    getString(R.string.qso_logbook_share_subject),
+                    shareUri
+            ));
             shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(shareIntent, "分享 QSO 记录"));
+            startActivity(Intent.createChooser(shareIntent, getString(R.string.qso_logbook_share_chooser)));
         } catch (IOException exception) {
-            Toast.makeText(this, "文本分享失败。", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.qso_logbook_share_failed, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -399,41 +407,44 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
             refreshChrome();
             showLanAddressDialog();
         } catch (IOException exception) {
-            Toast.makeText(this, "无法启动局域网导出。", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.qso_logbook_lan_start_failed, Toast.LENGTH_SHORT).show();
         }
     }
 
     private void stopLanExport() {
         LogbookLanExportServer.getInstance().stop();
         refreshChrome();
-        Toast.makeText(this, "已停止局域网导出。", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.qso_logbook_lan_stopped, Toast.LENGTH_SHORT).show();
     }
 
     private void showLanAddressDialog() {
         String baseUrl = LogbookLanExportServer.getInstance().getBaseUrl();
         if (baseUrl == null || baseUrl.trim().isEmpty()) {
-            Toast.makeText(this, "局域网导出尚未启动。", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.qso_logbook_lan_not_running, Toast.LENGTH_SHORT).show();
             return;
         }
         new AlertDialog.Builder(this)
-                .setTitle("局域网导出")
-                .setMessage("在同一局域网浏览器打开下面地址下载 ADI：\n\n" + baseUrl)
-                .setNegativeButton("关闭", null)
-                .setPositiveButton("复制地址", (dialog, which) -> copyLanAddressToClipboard())
+                .setTitle(R.string.qso_logbook_lan_dialog_title)
+                .setMessage(getString(R.string.qso_logbook_lan_dialog_message, baseUrl))
+                .setNegativeButton(R.string.common_close, null)
+                .setPositiveButton(R.string.qso_logbook_lan_copy_button, (dialog, which) -> copyLanAddressToClipboard())
                 .show();
     }
 
     private void copyLanAddressToClipboard() {
         String baseUrl = LogbookLanExportServer.getInstance().getBaseUrl();
         if (baseUrl == null || baseUrl.trim().isEmpty()) {
-            Toast.makeText(this, "局域网导出尚未启动。", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.qso_logbook_lan_not_running, Toast.LENGTH_SHORT).show();
             return;
         }
         ClipboardManager clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         if (clipboardManager != null) {
-            clipboardManager.setPrimaryClip(ClipData.newPlainText("CWCN 局域网导出地址", baseUrl));
+            clipboardManager.setPrimaryClip(ClipData.newPlainText(
+                    getString(R.string.qso_logbook_lan_clipboard_label),
+                    baseUrl
+            ));
         }
-        Toast.makeText(this, "导出地址已复制。", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.qso_logbook_lan_copied, Toast.LENGTH_SHORT).show();
     }
 
     private List<ConfirmedQsoLog> loadLogsForRequest(LogbookExportRequest request) {
@@ -454,9 +465,16 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
     @Override
     public void onLogLongPressed(View anchorView, ConfirmedQsoLog log) {
         PopupMenu popupMenu = new PopupMenu(this, anchorView);
-        popupMenu.getMenu().add(0, 1, 0, log.manualConfirmed() ? "标记未确认" : "标记已确认");
-        popupMenu.getMenu().add(0, 2, 1, "编辑");
-        popupMenu.getMenu().add(0, 3, 2, "删除");
+        popupMenu.getMenu().add(
+                0,
+                1,
+                0,
+                log.manualConfirmed()
+                        ? getString(R.string.qso_logbook_context_mark_unconfirmed)
+                        : getString(R.string.qso_logbook_context_mark_confirmed)
+        );
+        popupMenu.getMenu().add(0, 2, 1, getString(R.string.common_edit));
+        popupMenu.getMenu().add(0, 3, 2, getString(R.string.common_delete));
         popupMenu.setOnMenuItemClickListener(item -> {
             int itemId = item.getItemId();
             if (itemId == 1) {
@@ -482,34 +500,36 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
                 log.withManualConfirmed(!log.manualConfirmed())
         );
         if (!updated) {
-            Toast.makeText(this, "无法更新确认状态。", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.qso_logbook_confirm_update_failed, Toast.LENGTH_SHORT).show();
             return;
         }
         reloadLogs();
         Toast.makeText(
                 this,
-                log.manualConfirmed() ? "已取消确认。" : "已标记为已确认。",
+                log.manualConfirmed()
+                        ? getString(R.string.qso_logbook_confirm_cleared)
+                        : getString(R.string.qso_logbook_confirm_marked),
                 Toast.LENGTH_SHORT
         ).show();
     }
 
     private void confirmDelete(ConfirmedQsoLog log) {
         new AlertDialog.Builder(this)
-                .setTitle("删除这条 QSO 记录？")
-                .setMessage("确定删除 " + safeText(log.remoteCallsign()) + " 的记录吗？")
-                .setNegativeButton("取消", null)
-                .setPositiveButton("删除", (dialog, which) -> deleteLog(log))
+                .setTitle(R.string.qso_logbook_delete_title)
+                .setMessage(getString(R.string.qso_logbook_delete_message, safeText(log.remoteCallsign())))
+                .setNegativeButton(R.string.common_cancel, null)
+                .setPositiveButton(R.string.common_delete, (dialog, which) -> deleteLog(log))
                 .show();
     }
 
     private void deleteLog(ConfirmedQsoLog log) {
         boolean deleted = localLogRepository.deleteConfirmedLog(log.id());
         if (!deleted) {
-            Toast.makeText(this, "无法删除这条 QSO 记录。", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.qso_logbook_delete_failed, Toast.LENGTH_SHORT).show();
             return;
         }
         reloadLogs();
-        Toast.makeText(this, "已删除记录。", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.qso_logbook_delete_done, Toast.LENGTH_SHORT).show();
     }
 
     private void openEditorForLog(ConfirmedQsoLog log) {
@@ -654,8 +674,12 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
         canvas.drawRoundRect(rect, dpToPx(5f), dpToPx(5f), swipeBackgroundPaint);
 
         String label = rightSwipe
-                ? (ready ? "松手确认" : "右滑确认")
-                : (ready ? "松手删除" : "左滑删除");
+                ? (ready
+                ? getString(R.string.qso_logbook_swipe_release_confirm)
+                : getString(R.string.qso_logbook_swipe_right_confirm))
+                : (ready
+                ? getString(R.string.qso_logbook_swipe_release_delete)
+                : getString(R.string.qso_logbook_swipe_left_delete));
         float textX = rightSwipe
                 ? itemView.getLeft() + dpToPx(14f)
                 : itemView.getRight() - dpToPx(14f);

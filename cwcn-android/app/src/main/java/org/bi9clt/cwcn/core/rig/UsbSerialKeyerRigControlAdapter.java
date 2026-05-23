@@ -35,8 +35,8 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
     ) {
         this(
                 "usb-serial-keyer",
-                "USB Serial Keyer Adapter",
-                "Drive a simple serial keyer by toggling the %s control line according to CW timing.",
+                "USB 串口键控适配器",
+                "按 CW 时序切换 %s 控制线，驱动简单串口键控。",
                 portFactory,
                 keyLine,
                 wpm,
@@ -54,9 +54,9 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
             int toneFrequencyHz
     ) {
         this.adapterId = adapterId == null ? "usb-serial-keyer" : adapterId;
-        this.adapterDisplayName = adapterDisplayName == null ? "USB Serial Keyer Adapter" : adapterDisplayName;
+        this.adapterDisplayName = adapterDisplayName == null ? "USB 串口键控适配器" : adapterDisplayName;
         this.capabilityTemplate = capabilityTemplate == null
-                ? "Drive a simple serial keyer by toggling the %s control line according to CW timing."
+                ? "按 CW 时序切换 %s 控制线，驱动简单串口键控。"
                 : capabilityTemplate;
         this.portFactory = portFactory;
         this.keyLine = keyLine;
@@ -209,7 +209,7 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
         if (portFactory instanceof UsbSerialRouteFactory) {
             return ((UsbSerialRouteFactory) portFactory).describeMatchedDevice();
         }
-        return "USB device details are unavailable in this environment.";
+        return "当前环境无法提供 USB 设备详情。";
     }
 
     public boolean requestUsbPermission(PendingIntent pendingIntent) {
@@ -324,36 +324,36 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
 
     public static String diagnosticStageLabel(String diagnosticCode) {
         if ("usb-serial-ready".equals(diagnosticCode)) {
-            return "Ready";
+            return "已就绪";
         }
         if ("usb-serial-target-missing".equals(diagnosticCode)) {
-            return "Locked target missing";
+            return "锁定目标缺失";
         }
         if ("usb-serial-no-device".equals(diagnosticCode)) {
-            return "No USB device";
+            return "没有 USB 设备";
         }
         if ("usb-serial-no-cdc".equals(diagnosticCode)) {
-            return "No CDC/ACM keyer";
+            return "没有 CDC/ACM 键控设备";
         }
         if ("usb-serial-no-permission".equals(diagnosticCode)) {
-            return "Permission missing";
+            return "缺少权限";
         }
         if ("usb-serial-open-failed".equals(diagnosticCode)) {
-            return "Open failed";
+            return "打开失败";
         }
         if ("usb-serial-claim-failed".equals(diagnosticCode)) {
-            return "Interface claim failed";
+            return "接口声明失败";
         }
         if ("usb-serial-no-control-interface".equals(diagnosticCode)) {
-            return "Control interface missing";
+            return "控制接口缺失";
         }
         if ("usb-serial-no-context".equals(diagnosticCode)) {
-            return "No Android context";
+            return "缺少 Android Context";
         }
         if ("usb-serial-no-manager".equals(diagnosticCode)) {
-            return "USB manager unavailable";
+            return "USB 管理器不可用";
         }
-        return "Unavailable";
+        return "不可用";
     }
 
     private SerialKeyerPort ensureOpenPort() {

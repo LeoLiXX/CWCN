@@ -1,12 +1,12 @@
 package org.bi9clt.cwcn.core.tx;
 
 public enum CwTxPreset {
-    BENCH_DIT("Bench DIT", "E E E"),
-    BENCH_PATTERN("Bench VVV", "VVV VVV DE {MYCALL}"),
-    GENERAL_CQ("CQ General", "CQ CQ CQ DE {MYCALL} {MYCALL} K"),
+    BENCH_DIT("基准 DIT", "E E E"),
+    BENCH_PATTERN("基准 VVV", "VVV VVV DE {MYCALL}"),
+    GENERAL_CQ("常规 CQ", "CQ CQ CQ DE {MYCALL} {MYCALL} K"),
     CQ_DX("CQ DX", "CQ DX CQ DX DE {MYCALL} K"),
-    TEST_CALL("Test Call", "VVV VVV TEST DE {MYCALL} K"),
-    REPORT_599("Send 599", "UR RST 599 599 BK"),
+    TEST_CALL("测试呼叫", "VVV VVV TEST DE {MYCALL} K"),
+    REPORT_599("发送 599", "UR RST 599 599 BK"),
     AGN_PSE("AGN / PSE", "AGN AGN PSE BK"),
     TU_73("TU 73", "TU TU 73 EE");
 

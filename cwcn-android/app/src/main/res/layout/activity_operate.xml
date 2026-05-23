@@ -56,7 +56,7 @@
                 android:layout_marginStart="8dp"
                 android:alpha="0.82"
                 android:background="@android:color/transparent"
-                android:contentDescription="打开电台设置"
+                android:contentDescription="@string/operate_open_rig_setup_cd"
                 android:padding="3dp"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_ui_settings"
@@ -88,7 +88,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Transcript"
+                        android:text="@string/operate_transcript_title"
                         android:textColor="@color/cwcn_title"
                         android:textSize="10sp"
                         android:textStyle="bold" />
@@ -122,7 +122,7 @@
                         android:paddingTop="2dp"
                         android:paddingEnd="6dp"
                         android:paddingBottom="2dp"
-                        android:text="UTC"
+                        android:text="@string/operate_time_mode_utc"
                         android:textColor="@color/cwcn_body"
                         android:textSize="8sp"
                         android:textStyle="bold" />
@@ -141,7 +141,7 @@
                         android:paddingTop="2dp"
                         android:paddingEnd="6dp"
                         android:paddingBottom="2dp"
-                        android:text="Clear"
+                        android:text="@string/operate_transcript_clear"
                         android:textColor="@color/cwcn_body"
                         android:textSize="8sp"
                         android:textStyle="bold" />
@@ -214,14 +214,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="6dp"
-                        android:text="模板"
+                        android:text="@string/operate_template_label"
                         android:textColor="@color/cwcn_subtitle"
                         android:textSize="8sp"
                         android:textStyle="bold" />
 
                     <Spinner
                         android:id="@+id/templateSelectorSpinner"
-                        android:layout_width="74dp"
+                        android:layout_width="88dp"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bootstrap_field_background"
                         android:minHeight="24dp" />
@@ -303,7 +303,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="发射输入"
+                        android:text="@string/operate_tx_input_title"
                         android:textColor="@color/cwcn_subtitle"
                         android:textSize="8sp"
                         android:textStyle="bold" />
@@ -313,7 +313,7 @@
                         android:layout_width="22dp"
                         android:layout_height="22dp"
                         android:background="@drawable/operate_chip_background"
-                        android:contentDescription="清空发送文本"
+                        android:contentDescription="@string/operate_tx_clear_cd"
                         android:padding="4dp"
                         android:scaleType="centerInside"
                         android:src="@drawable/ic_ui_clear"
@@ -336,7 +336,7 @@
                         android:background="@drawable/bootstrap_field_background"
                         android:fontFamily="monospace"
                         android:gravity="top|start"
-                        android:hint="输入或套用模板后发射"
+                        android:hint="@string/operate_tx_input_hint"
                         android:inputType="textCapCharacters|textMultiLine"
                         android:maxLines="2"
                         android:minLines="2"
@@ -351,7 +351,7 @@
                         android:layout_height="32dp"
                         android:layout_marginStart="6dp"
                         android:background="@drawable/operate_chip_active_background"
-                        android:contentDescription="发送 CW"
+                        android:contentDescription="@string/operate_tx_send_cd"
                         android:padding="6dp"
                         android:scaleType="centerInside"
                         android:src="@drawable/ic_ui_send"
@@ -372,7 +372,7 @@
                         android:layout_width="24dp"
                         android:layout_height="24dp"
                         android:background="@drawable/operate_chip_background"
-                        android:contentDescription="重复发送"
+                        android:contentDescription="@string/operate_tx_repeat_cd"
                         android:padding="4dp"
                         android:scaleType="centerInside"
                         android:src="@drawable/ic_ui_repeat"
@@ -385,7 +385,7 @@
                         android:layout_height="24dp"
                         android:layout_marginStart="6dp"
                         android:background="@drawable/operate_chip_background"
-                        android:contentDescription="停止发送"
+                        android:contentDescription="@string/operate_tx_stop_cd"
                         android:padding="4dp"
                         android:scaleType="centerInside"
                         android:src="@drawable/ic_ui_clear"
@@ -467,7 +467,7 @@
                 android:layout_width="28dp"
                 android:layout_height="28dp"
                 android:background="@drawable/operate_chip_background"
-                android:contentDescription="关闭浮层"
+                android:contentDescription="@string/operate_overlay_close_cd"
                 android:padding="6dp"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_ui_clear"
@@ -513,7 +513,7 @@
                 android:id="@+id/sqlLabelText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="SQL 门限"
+                android:text="@string/operate_sql_label"
                 android:textColor="@color/cwcn_subtitle"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -530,7 +530,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:text="发射速度"
+                android:text="@string/operate_wpm_label"
                 android:textColor="@color/cwcn_subtitle"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -563,71 +563,33 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/overlayTemplateCqButton"
-                    android:layout_width="wrap_content"
+                <HorizontalScrollView
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:background="@drawable/operate_chip_active_background"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:paddingStart="12dp"
-                    android:paddingTop="8dp"
-                    android:paddingEnd="12dp"
-                    android:paddingBottom="8dp"
-                    android:text="CQ"
-                    android:textColor="@color/cwcn_accent"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:layout_weight="1"
+                    android:scrollbars="none">
 
-                <TextView
-                    android:id="@+id/overlayTemplateCqDxButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    <LinearLayout
+                        android:id="@+id/overlayTemplateChipContainer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
+
+                <ImageButton
+                    android:id="@+id/openTemplateLibraryButton"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
                     android:layout_marginStart="8dp"
                     android:background="@drawable/operate_chip_background"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:paddingStart="12dp"
-                    android:paddingTop="8dp"
-                    android:paddingEnd="12dp"
-                    android:paddingBottom="8dp"
-                    android:text="应答"
-                    android:textColor="@color/cwcn_body"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/overlayTemplateQrzButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/operate_chip_background"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:paddingStart="12dp"
-                    android:paddingTop="8dp"
-                    android:paddingEnd="12dp"
-                    android:paddingBottom="8dp"
-                    android:text="QRZ"
-                    android:textColor="@color/cwcn_body"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/overlayTemplateTu73Button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/operate_chip_background"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:paddingStart="12dp"
-                    android:paddingTop="8dp"
-                    android:paddingEnd="12dp"
-                    android:paddingBottom="8dp"
-                    android:text="TU73"
-                    android:textColor="@color/cwcn_body"
-                    android:textSize="12sp" />
+                    android:contentDescription="@string/operate_open_template_library_cd"
+                    android:padding="6dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_ui_edit"
+                    android:tint="@color/cwcn_body" />
             </LinearLayout>
 
             <TextView
@@ -664,7 +626,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:background="@drawable/operate_side_button_background"
-                android:contentDescription="打开频谱浮层"
+                android:contentDescription="@string/operate_open_chart_overlay_cd"
                 android:padding="6dp"
                 android:scaleType="centerInside"
                 android:src="@drawable/icon_side_chart"
@@ -676,7 +638,7 @@
                 android:layout_height="36dp"
                 android:layout_marginTop="4dp"
                 android:background="@drawable/operate_side_button_background"
-                android:contentDescription="打开调谐浮层"
+                android:contentDescription="@string/operate_open_sql_overlay_cd"
                 android:padding="6dp"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_ui_sliders"
@@ -688,7 +650,7 @@
                 android:layout_height="36dp"
                 android:layout_marginTop="4dp"
                 android:background="@drawable/operate_side_button_background"
-                android:contentDescription="打开模板浮层"
+                android:contentDescription="@string/operate_open_template_overlay_cd"
                 android:padding="6dp"
                 android:scaleType="centerInside"
                 android:src="@drawable/icon_side_template"

@@ -23,41 +23,58 @@ public final class AndroidUsbSerialCatSessionFactory implements SerialCatSession
     }
 
     @Override
-    public String describeAvailability(String portHint) {
+    public PortAvailability availability(String portHint) {
         try {
             if (appContext == null) {
-                return "Serial CAT session factory was created without an Android context.";
+                return new PortAvailability(PortAvailability.Stage.NO_CONTEXT, "串口 CAT 会话工厂创建时缺少 Android Context。");
             }
             UsbManager usbManager = usbManager();
             if (usbManager == null) {
-                return "USB manager is unavailable on this device.";
+                return new PortAvailability(PortAvailability.Stage.NO_MANAGER, "当前设备无法获取 USB 管理器。");
             }
             HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
             if (deviceList.isEmpty()) {
-                return "No USB device is attached.";
+                return new PortAvailability(PortAvailability.Stage.NO_DEVICE, "当前没有连接 USB 设备。");
             }
             CandidateResolution resolution = resolveCandidate(deviceList, portHint);
             if (resolution.requiresExplicitPortHint()) {
-                return resolution.renderExplicitPortHintMessage();
+                return new PortAvailability(
+                        PortAvailability.Stage.MULTIPLE_CANDIDATES,
+                        resolution.renderExplicitPortHintMessage()
+                );
             }
             ProbedSerialCandidate candidate = resolution.candidate();
             if (candidate == null) {
                 if (portHint != null && !portHint.trim().isEmpty()) {
-                    return "Preferred serial CAT device is not attached right now: " + portHint.trim();
+                    return new PortAvailability(
+                            PortAvailability.Stage.TARGET_MISSING,
+                            "已指定的串口 CAT 设备当前未连接：" + portHint.trim()
+                    );
                 }
-                return "USB device detected, but no supported USB serial CAT driver candidate was found. Current native path recognizes CDC/ACM, CP210x, FTDI, Prolific, and CH34x families.";
+                return new PortAvailability(
+                        PortAvailability.Stage.NO_SUPPORTED_PORT,
+                        "已检测到 USB 设备，但没有找到受支持的 USB 串口 CAT 驱动候选。当前原生路径识别 CDC/ACM、CP210x、FTDI、Prolific 和 CH34x。"
+                );
             }
             if (!usbManager.hasPermission(candidate.device)) {
-                return candidate.driverLabel + " USB serial CAT device found, but app permission has not been granted yet.";
+                return new PortAvailability(
+                        PortAvailability.Stage.NO_PERMISSION,
+                        candidate.driverLabel + " USB 串口 CAT 设备已找到，但应用尚未获得权限。"
+                );
             }
-            return candidate.driverLabel
-                    + " USB serial CAT device is attached and permission is available on port "
-                    + candidate.port.getPortNumber()
-                    + ".";
+            return new PortAvailability(
+                    PortAvailability.Stage.READY,
+                    candidate.driverLabel
+                            + " USB 串口 CAT 设备已连接，端口权限已就绪："
+                            + candidate.port.getPortNumber()
+                            + "。"
+            );
         } catch (RuntimeException exception) {
             Log.e(TAG, "Serial CAT availability probe crashed", exception);
-            return "USB serial CAT availability check failed before the probe could finish: "
-                    + safeMessage(exception);
+            return new PortAvailability(
+                    PortAvailability.Stage.ERROR,
+                    "USB 串口 CAT 可用性检查在完成前失败：" + safeMessage(exception)
+            );
         }
     }
 
@@ -105,11 +122,11 @@ public final class AndroidUsbSerialCatSessionFactory implements SerialCatSession
     public SerialCatSession openSession(String portHint, int baudRate) throws IOException {
         try {
             if (appContext == null) {
-                throw new IOException("Serial CAT session factory has no Android context.");
+                throw new IOException("串口 CAT 会话工厂缺少 Android Context。");
             }
             UsbManager usbManager = usbManager();
             if (usbManager == null) {
-                throw new IOException("USB manager is unavailable on this device.");
+                throw new IOException("当前设备无法获取 USB 管理器。");
             }
             CandidateResolution resolution = resolveCandidate(usbManager.getDeviceList(), portHint);
             if (resolution.requiresExplicitPortHint()) {
@@ -118,15 +135,15 @@ public final class AndroidUsbSerialCatSessionFactory implements SerialCatSession
             ProbedSerialCandidate candidate = resolution.candidate();
             if (candidate == null) {
                 throw new IOException(portHint == null || portHint.trim().isEmpty()
-                        ? "No supported USB serial CAT device is attached."
-                        : "Preferred serial CAT device is not attached: " + portHint.trim());
+                        ? "当前没有连接受支持的 USB 串口 CAT 设备。"
+                        : "已指定的串口 CAT 设备当前未连接：" + portHint.trim());
             }
             if (!usbManager.hasPermission(candidate.device)) {
-                throw new IOException("USB serial CAT device is attached, but app permission has not been granted yet.");
+                throw new IOException("USB 串口 CAT 设备已连接，但应用尚未获得权限。");
             }
             UsbDeviceConnection connection = usbManager.openDevice(candidate.device);
             if (connection == null) {
-                throw new IOException("USB device permission exists, but opening the device failed.");
+                throw new IOException("USB 权限已存在，但打开设备失败。");
             }
             try {
                 candidate.port.open(connection);
@@ -142,18 +159,18 @@ public final class AndroidUsbSerialCatSessionFactory implements SerialCatSession
                 if (exception instanceof IOException) {
                     throw (IOException) exception;
                 }
-                throw new IOException("USB serial CAT session failed: " + safeMessage(exception), exception);
+                throw new IOException("USB 串口 CAT 会话打开失败：" + safeMessage(exception), exception);
             }
         } catch (RuntimeException exception) {
             Log.e(TAG, "Serial CAT session open crashed", exception);
-            throw new IOException("USB serial CAT session crashed before it could open: "
+            throw new IOException("USB 串口 CAT 会话在打开前异常中断："
                     + safeMessage(exception), exception);
         }
     }
 
     private static String safeMessage(Throwable throwable) {
         if (throwable == null || throwable.getMessage() == null || throwable.getMessage().trim().isEmpty()) {
-            return throwable == null ? "unknown failure" : throwable.getClass().getSimpleName();
+            return throwable == null ? "未知故障" : throwable.getClass().getSimpleName();
         }
         return throwable.getMessage().trim();
     }
@@ -320,9 +337,9 @@ public final class AndroidUsbSerialCatSessionFactory implements SerialCatSession
 
         private String renderExplicitPortHintMessage() {
             if (candidateHints.isEmpty()) {
-                return "Multiple USB serial CAT ports were detected. Choose the detected serial port before requesting permission or probing.";
+                return "检测到多个 USB 串口 CAT 端口。请先明确选择一个串口，再申请权限或执行探测。";
             }
-            return "Multiple USB serial CAT ports were detected. Choose the detected serial port before testing. Candidates: "
+            return "检测到多个 USB 串口 CAT 端口。请先明确选择一个串口，再执行测试。候选项："
                     + String.join(", ", candidateHints);
         }
     }
@@ -343,6 +360,6 @@ public final class AndroidUsbSerialCatSessionFactory implements SerialCatSession
         if (driver instanceof Ch34xSerialDriver) {
             return "CH34x";
         }
-        return "USB serial";
+        return "USB 串口";
     }
 }

@@ -14,7 +14,7 @@
             android:id="@+id/titleText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="开发工具"
+            android:text="@string/developer_tools_title"
             android:textColor="@color/cwcn_title"
             android:textSize="30sp"
             android:textStyle="bold" />
@@ -23,7 +23,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="开发者模式下的试验入口集中放在这里，避免干扰正式用户路径。"
+            android:text="@string/developer_tools_subtitle"
             android:textColor="@color/cwcn_subtitle"
             android:textSize="15sp" />
 
@@ -41,7 +41,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="返回" />
+            android:text="@string/developer_tools_back" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -54,7 +54,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="开发者模式"
+                android:text="@string/developer_tools_mode_title"
                 android:textColor="@color/cwcn_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -73,7 +73,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="开启开发者模式" />
+                android:text="@string/developer_tools_toggle_on" />
         </LinearLayout>
 
         <LinearLayout
@@ -89,7 +89,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="实验入口"
+                android:text="@string/developer_tools_tools_title"
                 android:textColor="@color/cwcn_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -108,7 +108,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="打开 RX 实验台" />
+                android:text="@string/developer_tools_open_rx_debug" />
 
             <TextView
                 android:id="@+id/latestTraceStatusText"
@@ -118,7 +118,7 @@
                 android:background="@drawable/bootstrap_field_background"
                 android:lineSpacingExtra="3dp"
                 android:padding="12dp"
-                android:text="最近现场 trace：暂无。"
+                android:text="@string/developer_tools_latest_trace_empty"
                 android:textColor="@color/cwcn_body"
                 android:textSize="13sp" />
 
@@ -127,21 +127,21 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="回放最近一次现场 Trace" />
+                android:text="@string/developer_tools_open_latest_trace_replay" />
 
             <Button
                 android:id="@+id/openTxConsoleButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="打开 TX 开发控制台" />
+                android:text="@string/developer_tools_open_tx_console" />
 
             <Button
                 android:id="@+id/openRigBenchButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="打开电台实验台" />
+                android:text="@string/developer_tools_open_rig_bench" />
         </LinearLayout>
 
     </LinearLayout>

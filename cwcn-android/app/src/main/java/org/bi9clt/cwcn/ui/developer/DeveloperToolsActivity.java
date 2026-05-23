@@ -7,6 +7,7 @@ import android.view.View;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.core.audio.WavReplayFrameLoader;
 import org.bi9clt.cwcn.BuildConfig;
 import org.bi9clt.cwcn.core.app.DeveloperModeStore;
@@ -21,7 +22,6 @@ import org.bi9clt.cwcn.ui.rig.RigSetupActivity;
 import org.bi9clt.cwcn.ui.tx.TxActivity;
 
 import java.io.File;
-import java.util.Locale;
 
 public final class DeveloperToolsActivity extends AppCompatActivity {
     public static final String EXTRA_TRACE_WAV_FILE_PATH =
@@ -48,7 +48,7 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
         developerModeStore = new DeveloperModeStore(this);
         liveRxTraceStore = new LiveRxTraceStore(this);
-        binding.versionText.setText("开发工具 " + BuildConfig.VERSION_NAME);
+        binding.versionText.setText(getString(R.string.developer_tools_version, BuildConfig.VERSION_NAME));
         setupActions();
         refreshUi();
     }
@@ -80,16 +80,16 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
     private void refreshUi() {
         boolean enabled = developerModeStore.isEnabled();
         binding.developerModeStatusText.setText(enabled
-                ? "开发者模式已开启。\n当前优先保留 RX 实验台、TX 开发控制台和电台实验台，其他杂项不再放进正式路径。"
-                : "开发者模式已关闭。\n只有在需要底层收发排查、链路实验或协议验证时才建议开启。");
+                ? getString(R.string.developer_tools_mode_on)
+                : getString(R.string.developer_tools_mode_off));
         binding.toggleDeveloperModeButton.setText(enabled
-                ? "关闭开发者模式"
-                : "开启开发者模式");
+                ? getString(R.string.developer_tools_toggle_off)
+                : getString(R.string.developer_tools_toggle_on));
         int visibility = enabled ? View.VISIBLE : View.GONE;
         binding.toolsPanel.setVisibility(visibility);
         binding.toolsHintText.setText(enabled
-                ? "RX 实验台聚焦接收链路与解码问题，现场 trace 回放用于复盘 Operate 真机输入，TX 控制台用于发射验证，电台实验台用于 CAT / 键控实验。"
-                : "开发工具会在开启开发者模式后显示。");
+                ? getString(R.string.developer_tools_tools_hint_on)
+                : getString(R.string.developer_tools_tools_hint_off));
         LiveRxTraceArtifact latestTrace = liveRxTraceStore == null ? null : liveRxTraceStore.loadLatest();
         ensureLatestTraceAnalysis(latestTrace);
         binding.latestTraceStatusText.setText(renderLatestTraceStatus(latestTrace));
@@ -115,30 +115,38 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
 
     private String renderLatestTraceStatus(@Nullable LiveRxTraceArtifact artifact) {
         if (artifact == null || !artifact.hasReplayableAudio()) {
-            return "最近现场 trace：暂无。\n先在 Operate 真机路径下复现一次，系统会自动记录最近一份 WAV 和时间线。";
+            return getString(R.string.developer_tools_latest_trace_empty);
         }
         File wavFile = new File(artifact.wavFilePath());
         File logFile = artifact.hasTraceLog() ? new File(artifact.logFilePath()) : null;
-        return String.format(
-                Locale.US,
-                "最近现场 trace：%s\n来源：%s\n时长：%d ms | %d Hz | %d samples\n现场设置：Tone %s | SQL %s\n%s\nWAV：%s%s",
-                artifact.sessionLabel(),
-                artifact.sourceLabel(),
+        String toneSummary = artifact.hasPreferredToneFrequency()
+                ? artifact.preferredToneFrequencyHz() + " Hz"
+                : getString(R.string.developer_tools_not_recorded);
+        String sqlSummary = artifact.hasSqlPercent()
+                ? artifact.sqlPercent() + "%"
+                : getString(R.string.developer_tools_not_recorded);
+        StringBuilder builder = new StringBuilder();
+        builder.append(getString(R.string.developer_tools_trace_latest, artifact.sessionLabel()));
+        builder.append('\n').append(getString(R.string.developer_tools_trace_source, artifact.sourceLabel()));
+        builder.append('\n').append(getString(
+                R.string.developer_tools_trace_audio,
                 artifact.durationMs(),
                 artifact.sampleRateHz(),
-                artifact.sampleCount(),
-                artifact.hasPreferredToneFrequency()
-                        ? artifact.preferredToneFrequencyHz() + " Hz"
-                        : "未记录",
-                artifact.hasSqlPercent()
-                        ? artifact.sqlPercent() + "%"
-                        : "未记录",
-                latestTraceAnalysisSummary.isEmpty()
-                        ? "离线分析：等待执行。"
-                        : latestTraceAnalysisSummary,
-                wavFile.getAbsolutePath(),
-                (logFile != null && logFile.exists()) ? "\nLOG：" + logFile.getAbsolutePath() : ""
-        );
+                artifact.sampleCount()
+        ));
+        builder.append('\n').append(getString(
+                R.string.developer_tools_trace_settings,
+                toneSummary,
+                sqlSummary
+        ));
+        builder.append('\n').append(latestTraceAnalysisSummary.isEmpty()
+                ? getString(R.string.developer_tools_trace_analysis_waiting)
+                : latestTraceAnalysisSummary);
+        builder.append('\n').append(getString(R.string.developer_tools_trace_wav_path, wavFile.getAbsolutePath()));
+        if (logFile != null && logFile.exists()) {
+            builder.append('\n').append(getString(R.string.developer_tools_trace_log_path, logFile.getAbsolutePath()));
+        }
+        return builder.toString();
     }
 
     private void ensureLatestTraceAnalysis(@Nullable LiveRxTraceArtifact artifact) {
@@ -159,7 +167,7 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
             return;
         }
         latestTraceAnalysisKey = analysisKey;
-        latestTraceAnalysisSummary = "离线分析：处理中…";
+        latestTraceAnalysisSummary = getString(R.string.developer_tools_trace_analysis_pending);
         long generation = ++latestTraceAnalysisGeneration;
         LiveRxTraceArtifact traceArtifact = artifact;
         new Thread(() -> runLatestTraceAnalysis(traceArtifact, analysisKey, generation), "cwcn-latest-trace-analysis").start();
@@ -187,7 +195,10 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
                     );
             summary = formatTraceAnalysisSummary(analysisResult, startupToneHint);
         } catch (Exception exception) {
-            summary = "离线分析：失败 - " + safeAnalysisErrorMessage(exception);
+            summary = getString(
+                    R.string.developer_tools_trace_analysis_failed,
+                    safeAnalysisErrorMessage(exception)
+            );
         }
         final String finalSummary = summary;
         runOnUiThread(() -> {
@@ -214,7 +225,7 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
             @Nullable RxDeveloperStartupToneHintAnalyzer.Result startupToneHint
     ) {
         if (analysisResult == null) {
-            return "离线分析：未得到结果。";
+            return getString(R.string.developer_tools_trace_analysis_no_result);
         }
         String preview = trimPreview(bestDecodedPreview(analysisResult));
         int finalToneHz = analysisResult.signalSnapshot() == null
@@ -225,9 +236,8 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
                 : analysisResult.timingSnapshot().estimatedWpmPrecise() > 0.0d
                 ? analysisResult.timingSnapshot().estimatedWpmPrecise()
                 : analysisResult.timingSnapshot().estimatedWpm();
-        return String.format(
-                Locale.US,
-                "离线分析（共享 replay）：%d frames | %d tone | %d decode | %d turns | %d repairs | 锁定 %s | WPM %.1f\n%s\n预览：%s",
+        return getString(
+                R.string.developer_tools_trace_analysis_summary,
                 analysisResult.processedFrameCount(),
                 analysisResult.toneEventCount(),
                 analysisResult.decodeEventCount(),
@@ -244,17 +254,16 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
             @Nullable RxDeveloperStartupToneHintAnalyzer.Result startupToneHint
     ) {
         if (startupToneHint == null) {
-            return "开发提示：startup raw spectrum hint 未执行。";
+            return getString(R.string.developer_tools_trace_hint_not_run);
         }
         if (!startupToneHint.accepted()) {
-            return "开发提示：暂无保守 startup 固定 Tone 建议"
-                    + "（仅基于 raw spectrum，非 shared replay 结论；"
-                    + startupToneHint.decisionCode()
-                    + "）";
+            return getString(
+                    R.string.developer_tools_trace_hint_none,
+                    startupToneHint.decisionCode()
+            );
         }
-        return String.format(
-                Locale.US,
-                "开发提示：可试固定 Tone %d Hz（仅基于 startup raw spectrum，非 shared replay 结论；%s，%d frames）",
+        return getString(
+                R.string.developer_tools_trace_hint_fixed,
                 startupToneHint.suggestedToneHz(),
                 startupToneHint.clusterSummary(),
                 startupToneHint.supportFrames()
@@ -263,7 +272,7 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
 
     private String bestDecodedPreview(RxReplayAnalysisResult analysisResult) {
         if (analysisResult == null) {
-            return "(empty)";
+            return getString(R.string.developer_tools_preview_empty);
         }
         String decodedText = analysisResult.decodedText();
         if (decodedText != null && !decodedText.trim().isEmpty()) {
@@ -275,16 +284,16 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
                 return fallback.trim();
             }
         }
-        return "(empty)";
+        return getString(R.string.developer_tools_preview_empty);
     }
 
     private String trimPreview(String text) {
         if (text == null) {
-            return "(empty)";
+            return getString(R.string.developer_tools_preview_empty);
         }
         String compact = text.replace('\n', ' ').replace('\r', ' ').trim().replaceAll("\\s+", " ");
         if (compact.isEmpty()) {
-            return "(empty)";
+            return getString(R.string.developer_tools_preview_empty);
         }
         if (compact.length() <= TRACE_ANALYSIS_PREVIEW_MAX_CHARS) {
             return compact;
@@ -294,7 +303,7 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
 
     private String safeAnalysisErrorMessage(Exception exception) {
         if (exception == null || exception.getMessage() == null || exception.getMessage().trim().isEmpty()) {
-            return "unknown error";
+            return getString(R.string.developer_tools_unknown_error);
         }
         return exception.getMessage().trim();
     }

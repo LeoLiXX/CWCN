@@ -108,14 +108,6 @@ public final class QsoDraftFactory {
     }
 
     private static QsoPhase safePhase(String rawPhase) {
-        if (rawPhase == null || rawPhase.isEmpty()) {
-            return QsoPhase.IDLE;
-        }
-        for (QsoPhase phase : QsoPhase.values()) {
-            if (rawPhase.equals(phase.displayName()) || rawPhase.equals(phase.name())) {
-                return phase;
-            }
-        }
-        return QsoPhase.IDLE;
+        return QsoPhase.fromPersistedValue(rawPhase);
     }
 }

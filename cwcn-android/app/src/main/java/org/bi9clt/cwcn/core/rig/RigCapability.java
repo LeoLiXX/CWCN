@@ -1,19 +1,19 @@
 package org.bi9clt.cwcn.core.rig;
 
 public enum RigCapability {
-    TEXT_TO_CW("Text-to-CW"),
-    PTT_CONTROL("PTT control"),
-    KEY_LINE_CONTROL("RTS/DTR key line"),
-    LIVE_PROFILE_UPDATE("Live WPM/tone profile"),
-    AUDIO_VOX("Audio VOX"),
-    USB_DEVICE_SELECTION("USB device selection"),
-    SERIAL_CAT("Serial CAT"),
-    NETWORK_CAT("Network CAT"),
-    BLUETOOTH_SERIAL("Bluetooth serial"),
-    FREQUENCY_READ("Frequency read"),
-    FREQUENCY_SET("Frequency set"),
-    MODE_READ("Mode read"),
-    MODE_SET("Mode set");
+    TEXT_TO_CW("文本转 CW"),
+    PTT_CONTROL("PTT 控制"),
+    KEY_LINE_CONTROL("RTS/DTR 键控线"),
+    LIVE_PROFILE_UPDATE("实时 WPM / Tone 配置"),
+    AUDIO_VOX("音频 VOX"),
+    USB_DEVICE_SELECTION("USB 设备选择"),
+    SERIAL_CAT("串口 CAT"),
+    NETWORK_CAT("网络 CAT"),
+    BLUETOOTH_SERIAL("蓝牙串口"),
+    FREQUENCY_READ("读取频率"),
+    FREQUENCY_SET("设置频率"),
+    MODE_READ("读取模式"),
+    MODE_SET("设置模式");
 
     private final String displayName;
 

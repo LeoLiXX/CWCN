@@ -39,7 +39,7 @@ public final class UsbExternalRxAudioSource implements RxAudioSource {
     private NoiseSuppressor noiseSuppressor;
     private AutomaticGainControl automaticGainControl;
     private AcousticEchoCanceler acousticEchoCanceler;
-    private String activeDeviceLabel = "USB External Audio";
+    private String activeDeviceLabel = "USB 外部音频";
 
     public UsbExternalRxAudioSource(Context context, RxInputSettingsStore.MicSourceMode sourceMode) {
         this.appContext = context.getApplicationContext();
@@ -55,12 +55,12 @@ public final class UsbExternalRxAudioSource implements RxAudioSource {
 
     @Override
     public String displayName() {
-        return activeDeviceLabel + " (" + sourceMode.displayName() + ")";
+        return activeDeviceLabel + " (" + sourceMode.displayName(appContext) + ")";
     }
 
     @Override
     public boolean isAvailable() {
-        return findUsbInputDevice() != null;
+        return hasUsbInputDevice(appContext);
     }
 
     @Override
@@ -171,6 +171,8 @@ public final class UsbExternalRxAudioSource implements RxAudioSource {
             updateState(State.RUNNING, activeDeviceLabel + " 已启动。");
 
             short[] readBuffer = new short[FRAME_SIZE_SAMPLES];
+            long captureStartedAtMs = SystemClock.elapsedRealtime();
+            long emittedSampleCount = 0L;
             while (running) {
                 int readCount = audioRecord.read(readBuffer, 0, readBuffer.length);
                 if (readCount <= 0) {
@@ -193,6 +195,9 @@ public final class UsbExternalRxAudioSource implements RxAudioSource {
                 }
 
                 double rms = Math.sqrt(sumSquares / readCount);
+                long capturedAtMs = captureStartedAtMs
+                        + Math.round(emittedSampleCount * 1000.0d / SAMPLE_RATE_HZ);
+                emittedSampleCount += readCount;
                 Callback currentCallback = callback;
                 if (currentCallback != null) {
                     currentCallback.onAudioFrame(new AudioFrame(
@@ -202,7 +207,7 @@ public final class UsbExternalRxAudioSource implements RxAudioSource {
                             peak,
                             rms,
                             clippedSampleCount,
-                            SystemClock.elapsedRealtime()
+                            capturedAtMs
                     ));
                 }
             }
@@ -284,7 +289,20 @@ public final class UsbExternalRxAudioSource implements RxAudioSource {
 
     @Nullable
     private AudioDeviceInfo findUsbInputDevice() {
-        AudioManager audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
+        return findUsbInputDevice(appContext);
+    }
+
+    public static boolean hasUsbInputDevice(@Nullable Context context) {
+        return findUsbInputDevice(context) != null;
+    }
+
+    @Nullable
+    private static AudioDeviceInfo findUsbInputDevice(@Nullable Context context) {
+        if (context == null) {
+            return null;
+        }
+        AudioManager audioManager = (AudioManager) context.getApplicationContext()
+                .getSystemService(Context.AUDIO_SERVICE);
         if (audioManager == null) {
             return null;
         }
@@ -314,11 +332,11 @@ public final class UsbExternalRxAudioSource implements RxAudioSource {
 
     private String buildDeviceLabel(@Nullable AudioDeviceInfo device) {
         if (device == null) {
-            return "USB External Audio";
+            return "USB 外部音频";
         }
         CharSequence productName = device.getProductName();
         if (productName == null || productName.toString().trim().isEmpty()) {
-            return "USB External Audio";
+            return "USB 外部音频";
         }
         return "USB " + productName.toString().trim();
     }

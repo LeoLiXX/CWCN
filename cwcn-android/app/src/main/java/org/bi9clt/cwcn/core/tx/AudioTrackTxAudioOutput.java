@@ -79,7 +79,7 @@ public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
         long deadlineMs = System.currentTimeMillis() + 1500L;
         while (System.currentTimeMillis() < deadlineMs) {
             if (Thread.currentThread().isInterrupted()) {
-                throw new InterruptedException("TX audio drain interrupted");
+                throw new InterruptedException("TX 音频排空等待被中断");
             }
             int playedFrames;
             try {
@@ -135,12 +135,12 @@ public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
         int offset = 0;
         while (offset < pcm.length) {
             if (Thread.currentThread().isInterrupted()) {
-                throw new InterruptedException("TX audio playback interrupted");
+                throw new InterruptedException("TX 音频播放被中断");
             }
             int count = Math.min(chunkSamples, pcm.length - offset);
             int written = track.write(pcm, offset, count);
             if (written <= 0) {
-                throw new IllegalStateException("AudioTrack write failed: " + written);
+                throw new IllegalStateException("AudioTrack 写入失败：" + written);
             }
             offset += written;
             synchronized (lock) {

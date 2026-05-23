@@ -40,20 +40,20 @@ final class AndroidUsbCdcAcmSerialCatSession implements SerialCatSession {
 
     @Override
     public String describeAvailability() {
-        return "USB CDC/ACM serial CAT session is open on " + device.getDeviceName() + ".";
+        return "USB CDC/ACM 串口 CAT 会话已打开：" + device.getDeviceName() + "。";
     }
 
     @Override
     public void send(byte[] command, int timeoutMs) throws IOException {
         if (closed) {
-            throw new IOException("Serial CAT session is already closed.");
+            throw new IOException("串口 CAT 会话已经关闭。");
         }
         if (command == null || command.length == 0) {
-            throw new IOException("Serial CAT command is empty.");
+            throw new IOException("串口 CAT 指令为空。");
         }
         int written = connection.bulkTransfer(outputEndpoint, command, command.length, Math.max(500, timeoutMs));
         if (written < 0) {
-            throw new IOException("USB bulk OUT failed for serial CAT command.");
+            throw new IOException("串口 CAT 指令的 USB bulk OUT 发送失败。");
         }
     }
 

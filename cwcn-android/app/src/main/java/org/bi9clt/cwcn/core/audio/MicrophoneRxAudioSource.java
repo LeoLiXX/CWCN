@@ -51,7 +51,7 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
 
     @Override
     public String displayName() {
-        return "Phone Microphone (" + sourceMode.displayName() + ")";
+        return "手机麦克风 (" + sourceMode.displayName(appContext) + ")";
     }
 
     @Override
@@ -147,6 +147,8 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
             updateState(State.RUNNING, "麦克风采集已启动。");
 
             short[] readBuffer = new short[FRAME_SIZE_SAMPLES];
+            long captureStartedAtMs = SystemClock.elapsedRealtime();
+            long emittedSampleCount = 0L;
             while (running) {
                 int readCount = audioRecord.read(readBuffer, 0, readBuffer.length);
                 if (readCount <= 0) {
@@ -169,6 +171,9 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
                 }
 
                 double rms = Math.sqrt(sumSquares / readCount);
+                long capturedAtMs = captureStartedAtMs
+                        + Math.round(emittedSampleCount * 1000.0d / SAMPLE_RATE_HZ);
+                emittedSampleCount += readCount;
                 Callback currentCallback = callback;
                 if (currentCallback != null) {
                     currentCallback.onAudioFrame(new AudioFrame(
@@ -178,7 +183,7 @@ public final class MicrophoneRxAudioSource implements RxAudioSource {
                             peak,
                             rms,
                             clippedSampleCount,
-                            SystemClock.elapsedRealtime()
+                            capturedAtMs
                     ));
                 }
             }

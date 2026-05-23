@@ -2,44 +2,44 @@ package org.bi9clt.cwcn.core.rig;
 
 public enum MockUsbSerialBenchScenario {
     NO_DEVICE(
-            "No Device Attached",
+            "未连接设备",
             "usb-serial-no-device",
-            "Simulate the baseline state where no USB device is attached."
+            "模拟基线状态：当前没有连接任何 USB 设备。"
     ),
     NO_PERMISSION(
-            "Device Attached, No Permission",
+            "设备已连但无权限",
             "usb-serial-no-permission",
-            "Simulate a visible target device before Android USB permission is granted."
+            "模拟目标设备可见，但 Android USB 权限尚未授予。"
     ),
     READY(
-            "Ready",
+            "已就绪",
             "usb-serial-ready",
-            "Simulate a healthy attached device with permission and working control-line access."
+            "模拟设备连接正常、权限已授予且控制线可正常访问。"
     ),
     OPEN_FAILED(
-            "Open Failed",
+            "打开失败",
             "usb-serial-open-failed",
-            "Simulate a target device that is found but fails when Android tries to open it."
+            "模拟目标设备能被发现，但 Android 打开设备时失败。"
     ),
     CLAIM_FAILED(
-            "Claim Failed",
+            "声明失败",
             "usb-serial-claim-failed",
-            "Simulate a target device whose control interface cannot be claimed."
+            "模拟目标设备的控制接口无法声明。"
     ),
     NO_CONTROL_INTERFACE(
-            "No Control Interface",
+            "缺少控制接口",
             "usb-serial-no-control-interface",
-            "Simulate a device without the expected CDC control interface."
+            "模拟设备存在，但缺少预期的 CDC 控制接口。"
     ),
     TARGET_MISSING(
-            "Locked Target Missing",
+            "锁定目标缺失",
             "usb-serial-target-missing",
-            "Simulate a previously selected target device that is no longer attached."
+            "模拟之前选定的目标设备当前已经断开。"
     ),
     NO_CDC(
-            "No CDC Candidate",
+            "没有 CDC 候选",
             "usb-serial-no-cdc",
-            "Simulate a non-CDC USB device that cannot be used for RTS/DTR keying."
+            "模拟存在非 CDC USB 设备，但不能用于 RTS/DTR 键控。"
     );
 
     private final String displayName;

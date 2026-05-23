@@ -62,6 +62,12 @@
             android:name=".ui.qso.QsoEditorActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.tx.TxTemplateListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.tx.TxTemplateEditorActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.tx.TxActivity"
             android:exported="false" />
         <activity

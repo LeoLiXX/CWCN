@@ -48,42 +48,42 @@ public final class HamlibRigctldRigControlAdapter implements RigControlAdapter {
 
     @Override
     public String displayName() {
-        return "Hamlib rigctld Adapter";
+        return "Hamlib rigctld 适配器";
     }
 
     @Override
     public String describeCapabilities() {
-        return "Send CW through a Hamlib rigctld network session using send_morse, with optional KEYSPD and CWPITCH updates.";
+        return "通过 Hamlib rigctld 网络会话发送 CW，支持配合 send_morse 更新 KEYSPD 和 CWPITCH。";
     }
 
     @Override
     public String describeAvailability() {
         ActiveConfiguration configuration = configurationProvider.activeConfiguration();
         if (configuration == null) {
-            return "Open Rig Setup, pin a network CAT profile, and select the Hamlib rigctld protocol family first.";
+            return "请先在电台配置中固定一条网络 CAT 路径，并选择 Hamlib rigctld 协议族。";
         }
         if (configuration.host == null || configuration.host.isEmpty()) {
-            return "Hamlib rigctld is selected, but the network host is not set yet in Rig Setup.";
+            return "当前已选择 Hamlib rigctld，但还没有填写网络主机地址。";
         }
         StringBuilder builder = new StringBuilder();
-        builder.append("Configured for Hamlib rigctld at ")
+        builder.append("已配置 Hamlib rigctld：")
                 .append(configuration.host)
                 .append(":")
                 .append(configuration.port)
-                .append(" using ")
+                .append("，电台路径：")
                 .append(configuration.profile.displayName())
-                .append(".");
+                .append("。");
         if (lastAvailabilityNote != null && !lastAvailabilityNote.isEmpty()) {
-            builder.append(" Last result: ").append(lastAvailabilityNote);
+            builder.append(" 上次结果：").append(lastAvailabilityNote);
         } else {
-            builder.append(" Connectivity is checked when TX starts.");
+            builder.append(" 连通性会在开始发射时检查。");
         }
         if (RigProfileFamilies.isYaesuFamily(configuration.profile)) {
-            builder.append(" Yaesu note: confirm rigctld can already control the radio outside CWCN before longer CW tests.");
+            builder.append(" Yaesu 提示：在进行长报文前，请先确认 rigctld 在 CWCN 之外已经能控制电台。");
         } else if (RigProfileFamilies.isIcomFamily(configuration.profile)) {
-            builder.append(" Icom note: confirm the rigctld bridge already speaks to the target CI-V radio before longer CW tests.");
+            builder.append(" Icom 提示：在进行长报文前，请先确认 rigctld 桥接已经能和目标 CI-V 电台通信。");
         } else if (RigProfileFamilies.isKenwoodFamily(configuration.profile)) {
-            builder.append(" Kenwood note: confirm the rigctld bridge already speaks to the target radio before longer CW tests.");
+            builder.append(" Kenwood 提示：在进行长报文前，请先确认 rigctld 桥接已经能和目标电台通信。");
         }
         return builder.toString();
     }
@@ -118,24 +118,24 @@ public final class HamlibRigctldRigControlAdapter implements RigControlAdapter {
 
     @Override
     public boolean keyDown() {
-        return withSession(session -> session.setPtt(true), "PTT asserted via rigctld.");
+        return withSession(session -> session.setPtt(true), "已通过 rigctld 拉起 PTT。");
     }
 
     @Override
     public boolean keyUp() {
-        return withSession(session -> session.setPtt(false), "PTT released via rigctld.");
+        return withSession(session -> session.setPtt(false), "已通过 rigctld 释放 PTT。");
     }
 
     @Override
     public boolean sendText(String text) {
         ActiveConfiguration configuration = configurationProvider.activeConfiguration();
         if (configuration == null) {
-            lastAvailabilityNote = "Rig Setup does not currently point to a Hamlib rigctld profile.";
+            lastAvailabilityNote = "当前电台配置没有指向 Hamlib rigctld 路径。";
             return false;
         }
         CwTxPlan plan = txEngine.buildPlan(text, wpm, toneFrequencyHz);
         if (plan.morsePreview().isEmpty()) {
-            lastAvailabilityNote = "Text contained no Morse symbols supported by the current TX engine.";
+            lastAvailabilityNote = "文本里没有当前 TX 引擎支持的摩尔斯符号。";
             return false;
         }
         try (HamlibRigctldSession session = sessionFactory.open(configuration.host, configuration.port)) {
@@ -143,11 +143,11 @@ public final class HamlibRigctldRigControlAdapter implements RigControlAdapter {
             session.setCwPitchHz(toneFrequencyHz);
             boolean sent = session.sendMorse(plan.morsePreview());
             lastAvailabilityNote = sent
-                    ? "Last send_morse request was accepted."
-                    : "Last send_morse request was rejected by rigctld.";
+                    ? "最近一次 send_morse 请求已被接受。"
+                    : "最近一次 send_morse 请求被 rigctld 拒绝。";
             return sent;
         } catch (IOException exception) {
-            lastAvailabilityNote = "Connection failed: " + exception.getMessage();
+            lastAvailabilityNote = "连接失败：" + exception.getMessage();
             return false;
         }
     }
@@ -162,15 +162,15 @@ public final class HamlibRigctldRigControlAdapter implements RigControlAdapter {
             HamlibRigctldSessionFactory sessionFactory
     ) {
         if (profile == null || !profile.hasCapability(RigCapability.NETWORK_CAT)) {
-            return new ProbeResult(false, "Selected profile does not use network CAT.");
+            return new ProbeResult(false, "所选电台路径不使用网络 CAT。");
         }
         RigProfileSettings safeSettings = settings == null ? profile.defaultSettings() : settings;
         if (safeSettings.networkCatProtocolFamily() != CatProtocolFamily.HAMLIB_RIGCTLD) {
-            return new ProbeResult(false, "Connection probe is currently implemented only for the Hamlib rigctld protocol family.");
+            return new ProbeResult(false, "当前连接探测仅支持 Hamlib rigctld 协议族。");
         }
         String host = safeSettings.networkHost();
         if (host == null || host.trim().isEmpty()) {
-            return new ProbeResult(false, "Set the rigctld host first.");
+            return new ProbeResult(false, "请先填写 rigctld 主机地址。");
         }
         int port = Math.max(1, safeSettings.networkPort());
         boolean yaesuFamily = RigProfileFamilies.isYaesuFamily(profile);
@@ -181,29 +181,29 @@ public final class HamlibRigctldRigControlAdapter implements RigControlAdapter {
             if (info == null || info.trim().isEmpty()) {
                 return new ProbeResult(
                         true,
-                        "Connected to rigctld at "
+                        "已连接到 rigctld："
                                 + host
                                 + ":"
                                 + port
-                                + ", but the server returned no rig info."
+                                + "，但服务端没有返回电台信息。"
                                 + familyProbeTail(yaesuFamily, icomFamily, kenwoodFamily, false)
                 );
             }
             String firstLine = info.split("\\R", 2)[0].trim();
             return new ProbeResult(
                     true,
-                    "Connected to rigctld at "
+                    "已连接到 rigctld："
                             + host
                             + ":"
                             + port
-                            + ". Rig info: "
+                            + "。电台信息："
                             + firstLine
                             + familyProbeTail(yaesuFamily, icomFamily, kenwoodFamily, true)
             );
         } catch (IOException exception) {
             return new ProbeResult(
                     false,
-                    "rigctld probe failed: "
+                    "rigctld 探测失败："
                             + exception.getMessage()
                             + familyFailureTail(yaesuFamily, icomFamily, kenwoodFamily)
             );
@@ -218,18 +218,18 @@ public final class HamlibRigctldRigControlAdapter implements RigControlAdapter {
     ) {
         if (yaesuFamily) {
             return withRigInfo
-                    ? " Yaesu note: start with a short DIT or VVV bench before longer text."
-                    : " For Yaesu FT-family radios, still confirm basic CAT/PTT behavior with a short bench send.";
+                    ? " Yaesu 提示：建议先用一个短 DIT 或 VVV 做台架验证，再发长报文。"
+                    : " 对 Yaesu FT 家族，仍建议先用短报文确认基础 CAT/PTT 行为。";
         }
         if (icomFamily) {
             return withRigInfo
-                    ? " Icom note: start with a short DIT or VVV bench before longer text."
-                    : " For Icom-family radios, still confirm basic CAT/PTT behavior with a short bench send.";
+                    ? " Icom 提示：建议先用一个短 DIT 或 VVV 做台架验证，再发长报文。"
+                    : " 对 Icom 家族，仍建议先用短报文确认基础 CAT/PTT 行为。";
         }
         if (kenwoodFamily) {
             return withRigInfo
-                    ? " Kenwood note: start with a short DIT or VVV bench before longer text."
-                    : " For Kenwood-family radios, still confirm basic CAT/PTT behavior with a short bench send.";
+                    ? " Kenwood 提示：建议先用一个短 DIT 或 VVV 做台架验证，再发长报文。"
+                    : " 对 Kenwood 家族，仍建议先用短报文确认基础 CAT/PTT 行为。";
         }
         return "";
     }
@@ -240,13 +240,13 @@ public final class HamlibRigctldRigControlAdapter implements RigControlAdapter {
             boolean kenwoodFamily
     ) {
         if (yaesuFamily) {
-            return " Yaesu note: verify the daemon is bound to the FT-family radio and responding outside CWCN first.";
+            return " Yaesu 提示：请先确认守护进程已经绑定到 FT 家族电台，并且在 CWCN 之外可以正常响应。";
         }
         if (icomFamily) {
-            return " Icom note: verify the daemon is bound to the CI-V radio and responding outside CWCN first.";
+            return " Icom 提示：请先确认守护进程已经绑定到目标 CI-V 电台，并且在 CWCN 之外可以正常响应。";
         }
         if (kenwoodFamily) {
-            return " Kenwood note: verify the daemon is bound to the radio and responding outside CWCN first.";
+            return " Kenwood 提示：请先确认守护进程已经绑定到目标电台，并且在 CWCN 之外可以正常响应。";
         }
         return "";
     }
@@ -254,15 +254,15 @@ public final class HamlibRigctldRigControlAdapter implements RigControlAdapter {
     private boolean withSession(SessionAction action, String successNote) {
         ActiveConfiguration configuration = configurationProvider.activeConfiguration();
         if (configuration == null) {
-            lastAvailabilityNote = "Rig Setup does not currently point to a Hamlib rigctld profile.";
+            lastAvailabilityNote = "当前电台配置没有指向 Hamlib rigctld 路径。";
             return false;
         }
         try (HamlibRigctldSession session = sessionFactory.open(configuration.host, configuration.port)) {
             boolean result = action.run(session);
-            lastAvailabilityNote = result ? successNote : "rigctld rejected the latest control request.";
+            lastAvailabilityNote = result ? successNote : "rigctld 拒绝了最近一次控制请求。";
             return result;
         } catch (IOException exception) {
-            lastAvailabilityNote = "Connection failed: " + exception.getMessage();
+            lastAvailabilityNote = "连接失败：" + exception.getMessage();
             return false;
         }
     }

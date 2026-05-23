@@ -8,4 +8,14 @@
         <item name="android:textSize">10sp</item>
         <item name="android:fontFamily">sans-serif</item>
     </style>
+
+    <style name="Widget.CWCN.CompactActionButton" parent="Widget.AppCompat.Button">
+        <item name="android:background">@drawable/operate_chip_background</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/cwcn_body</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:paddingTop">7dp</item>
+        <item name="android:paddingBottom">7dp</item>
+    </style>
 </resources>

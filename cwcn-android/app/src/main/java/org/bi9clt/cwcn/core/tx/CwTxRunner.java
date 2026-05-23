@@ -57,7 +57,7 @@ public final class CwTxRunner {
                     completedElementCount,
                     elapsedMs,
                     elements.isEmpty() ? null : elements.get(0),
-                    "TX started"
+                    "TX 已启动"
             ));
             for (CwTxElement element : elements) {
                 if (stopRequested) {
@@ -67,7 +67,7 @@ public final class CwTxRunner {
                             completedElementCount,
                             elapsedMs,
                             null,
-                            "TX stopped"
+                            "TX 已停止"
                     ));
                     return;
                 }
@@ -80,7 +80,7 @@ public final class CwTxRunner {
                         completedElementCount,
                         elapsedMs,
                         nextElement(elements, completedElementCount),
-                        "TX running"
+                        "TX 发射中"
                 ));
             }
             audioOutput.finish();
@@ -90,7 +90,7 @@ public final class CwTxRunner {
                     completedElementCount,
                     elapsedMs,
                     null,
-                    "TX completed"
+                    "TX 已完成"
             ));
         } catch (InterruptedException interruptedException) {
             Thread.currentThread().interrupt();
@@ -100,7 +100,7 @@ public final class CwTxRunner {
                     completedElementCount,
                     elapsedMs,
                     null,
-                    stopRequested ? "TX stopped" : "TX interrupted"
+                    stopRequested ? "TX 已停止" : "TX 已中断"
             ));
         } catch (RuntimeException exception) {
             emitSnapshot(listener, buildSnapshot(
@@ -109,7 +109,7 @@ public final class CwTxRunner {
                     completedElementCount,
                     elapsedMs,
                     null,
-                    "TX error: " + exception.getMessage()
+                    "TX 错误：" + exception.getMessage()
             ));
         } finally {
             audioOutput.stop();

@@ -15,10 +15,10 @@ public final class SerialCatProbe {
             SerialCatSessionFactory sessionFactory
     ) {
         if (profile == null || !profile.hasCapability(RigCapability.SERIAL_CAT)) {
-            return new ProbeResult(false, "Selected profile does not use serial CAT.");
+            return new ProbeResult(false, "所选电台路径不使用串口 CAT。");
         }
         if (sessionFactory == null) {
-            return new ProbeResult(false, "Serial CAT session factory is unavailable.");
+            return new ProbeResult(false, "串口 CAT 会话工厂当前不可用。");
         }
         RigProfileSettings safeSettings = settings == null ? profile.defaultSettings() : settings;
         CatProtocolFamily family = safeSettings.serialCatProtocolFamily();
@@ -33,7 +33,7 @@ public final class SerialCatProbe {
         }
         return new ProbeResult(
                 false,
-                "Serial CAT probe is currently implemented for Yaesu-style CAT, Icom CI-V, and Kenwood-style CAT first."
+                "当前串口 CAT 探测优先支持 Yaesu 风格 CAT、Icom CI-V 和 Kenwood 风格 CAT。"
         );
     }
 
@@ -50,15 +50,15 @@ public final class SerialCatProbe {
             if (response == null || response.isEmpty()) {
                 return new ProbeResult(
                         false,
-                        "Serial CAT link opened, but the radio returned no readable response to FA;/IF;. Check baud rate, USB CDC mode, and radio-side CAT settings."
+                        "串口 CAT 链路已打开，但电台对 FA;/IF; 没有返回可读响应。请检查波特率、USB CDC 模式和电台端 CAT 设置。"
                 );
             }
             return new ProbeResult(
                     true,
-                    "Serial CAT responded. First reply: " + response + " Start with configuration validation first; TX-side native Yaesu CAT work is still in progress."
+                    "串口 CAT 已响应。首条返回：" + response + "。建议先完成配置验证；原生 Yaesu CAT 发射链路仍在继续完善。"
             );
         } catch (IOException | RuntimeException exception) {
-            return new ProbeResult(false, "Serial CAT probe failed: " + safeMessage(exception));
+            return new ProbeResult(false, "串口 CAT 探测失败：" + safeMessage(exception));
         }
     }
 
@@ -67,7 +67,7 @@ public final class SerialCatProbe {
             SerialCatSessionFactory sessionFactory
     ) {
         if (settings.serialCatCivAddressHex() == null) {
-            return new ProbeResult(false, "Set the CI-V address first, then retry the serial CAT probe.");
+            return new ProbeResult(false, "请先填写 CI-V 地址，再重新探测串口 CAT。");
         }
         int radioAddress = Integer.parseInt(settings.serialCatCivAddressHex(), 16);
         byte[] command = new byte[] {
@@ -85,15 +85,15 @@ public final class SerialCatProbe {
             if (response == null || response.length == 0) {
                 return new ProbeResult(
                         false,
-                        "CI-V link opened, but the radio returned no readable response to the transceiver-ID query. Check CI-V address, baud rate, and radio-side CI-V settings."
+                        "CI-V 链路已打开，但电台对机型查询没有返回可读响应。请检查 CI-V 地址、波特率和电台端 CI-V 设置。"
                 );
             }
             return new ProbeResult(
                     true,
-                    "CI-V responded. First reply: " + toHex(response) + " Start with read/probe validation first; native Icom TX work is still in progress."
+                    "CI-V 已响应。首条返回：" + toHex(response) + "。建议先完成读写验证；原生 Icom 发射链路仍在继续完善。"
             );
         } catch (IOException | RuntimeException exception) {
-            return new ProbeResult(false, "Serial CAT probe failed: " + safeMessage(exception));
+            return new ProbeResult(false, "串口 CAT 探测失败：" + safeMessage(exception));
         }
     }
 
@@ -111,21 +111,21 @@ public final class SerialCatProbe {
             if (response == null || response.isEmpty()) {
                 return new ProbeResult(
                         false,
-                        "Kenwood-style CAT link opened, but the radio returned no readable response to ID;/FA;/IF;. Check baud rate, serial framing, and radio-side CAT settings."
+                        "Kenwood 风格 CAT 链路已打开，但电台对 ID;/FA;/IF; 没有返回可读响应。请检查波特率、串口帧格式和电台端 CAT 设置。"
                 );
             }
             return new ProbeResult(
                     true,
-                    "Kenwood-style CAT responded. First reply: " + response + " Start with read/probe validation first; native Kenwood TX work is still in progress."
+                    "Kenwood 风格 CAT 已响应。首条返回：" + response + "。建议先完成读写验证；原生 Kenwood 发射链路仍在继续完善。"
             );
         } catch (IOException | RuntimeException exception) {
-            return new ProbeResult(false, "Serial CAT probe failed: " + safeMessage(exception));
+            return new ProbeResult(false, "串口 CAT 探测失败：" + safeMessage(exception));
         }
     }
 
     private static String safeMessage(Throwable throwable) {
         if (throwable == null || throwable.getMessage() == null || throwable.getMessage().trim().isEmpty()) {
-            return throwable == null ? "unknown failure" : throwable.getClass().getSimpleName();
+            return throwable == null ? "未知故障" : throwable.getClass().getSimpleName();
         }
         return throwable.getMessage().trim();
     }

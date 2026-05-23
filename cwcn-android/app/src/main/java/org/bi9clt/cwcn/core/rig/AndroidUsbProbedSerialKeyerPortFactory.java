@@ -22,49 +22,59 @@ public final class AndroidUsbProbedSerialKeyerPortFactory implements DedicatedKe
     }
 
     @Override
-    public String describeAvailability(String portHint) {
+    public PortAvailability availability(String portHint) {
         try {
             if (appContext == null) {
-                return "USB keying port factory was created without an Android context.";
+                return new PortAvailability(PortAvailability.Stage.NO_CONTEXT, "USB 键控口工厂创建时缺少 Android Context。");
             }
             UsbManager usbManager = usbManager();
             if (usbManager == null) {
-                return "USB manager is unavailable on this device.";
+                return new PortAvailability(PortAvailability.Stage.NO_MANAGER, "当前设备无法获取 USB 管理器。");
             }
             HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
             if (deviceList.isEmpty()) {
-                return "No USB device is attached.";
+                return new PortAvailability(PortAvailability.Stage.NO_DEVICE, "当前没有连接 USB 设备。");
             }
             CandidateResolution resolution = resolveCandidate(deviceList, portHint);
             if (resolution.requiresExplicitPortHint()) {
-                return resolution.renderExplicitPortHintMessage();
+                return new PortAvailability(
+                        PortAvailability.Stage.MULTIPLE_CANDIDATES,
+                        resolution.renderExplicitPortHintMessage()
+                );
             }
             ProbedKeyingCandidate candidate = resolution.candidate();
             if (candidate == null) {
                 if (portHint != null && !portHint.trim().isEmpty()) {
-                    return "Preferred USB keying port is not attached right now: " + portHint.trim();
+                    return new PortAvailability(
+                            PortAvailability.Stage.TARGET_MISSING,
+                            "已指定的 USB 键控口当前未连接：" + portHint.trim()
+                    );
                 }
-                return "USB device detected, but no supported USB serial keying port was found.";
+                return new PortAvailability(
+                        PortAvailability.Stage.NO_SUPPORTED_PORT,
+                        "已检测到 USB 设备，但没有找到受支持的 USB 串口键控口。"
+                );
             }
             if (!usbManager.hasPermission(candidate.device)) {
-                return candidate.driverLabel + " USB keying port found, but app permission has not been granted yet.";
+                return new PortAvailability(
+                        PortAvailability.Stage.NO_PERMISSION,
+                        candidate.driverLabel + " USB 键控口已找到，但应用尚未获得权限。"
+                );
             }
-            return candidate.driverLabel
-                    + " USB keying port is attached and permission is available on port "
-                    + candidate.port.getPortNumber()
-                    + ".";
+            return new PortAvailability(
+                    PortAvailability.Stage.READY,
+                    candidate.driverLabel
+                            + " USB 键控口已连接，端口权限已就绪："
+                            + candidate.port.getPortNumber()
+                            + "。"
+            );
         } catch (RuntimeException exception) {
             Log.e(TAG, "USB keying availability probe crashed", exception);
-            return "USB keying availability check failed before the probe could finish: "
-                    + safeMessage(exception);
+            return new PortAvailability(
+                    PortAvailability.Stage.ERROR,
+                    "USB 键控口可用性检查在完成前失败：" + safeMessage(exception)
+            );
         }
-    }
-
-    @Override
-    public boolean canOpenPort(String portHint) {
-        String availability = describeAvailability(portHint);
-        String normalized = availability == null ? "" : availability.trim().toLowerCase(java.util.Locale.US);
-        return normalized.contains("permission is available");
     }
 
     @Override
@@ -73,23 +83,23 @@ public final class AndroidUsbProbedSerialKeyerPortFactory implements DedicatedKe
             if (appContext == null) {
                 return new DisconnectedSerialKeyerPort(
                         "usb-keying-no-context",
-                        "USB Keying Port",
-                        "USB keying port factory was created without an Android context."
+                        "USB 键控口",
+                        "USB 键控口工厂创建时缺少 Android Context。"
                 );
             }
             UsbManager usbManager = usbManager();
             if (usbManager == null) {
                 return new DisconnectedSerialKeyerPort(
                         "usb-keying-no-manager",
-                        "USB Keying Port",
-                        "USB manager is unavailable on this device."
+                        "USB 键控口",
+                        "当前设备无法获取 USB 管理器。"
                 );
             }
             CandidateResolution resolution = resolveCandidate(usbManager.getDeviceList(), portHint);
             if (resolution.requiresExplicitPortHint()) {
                 return new DisconnectedSerialKeyerPort(
                         "usb-keying-port-ambiguous",
-                        "USB Keying Port",
+                        "USB 键控口",
                         resolution.renderExplicitPortHintMessage()
                 );
             }
@@ -97,17 +107,17 @@ public final class AndroidUsbProbedSerialKeyerPortFactory implements DedicatedKe
             if (candidate == null) {
                 return new DisconnectedSerialKeyerPort(
                         "usb-keying-no-port",
-                        "USB Keying Port",
+                        "USB 键控口",
                         portHint == null || portHint.trim().isEmpty()
-                                ? "No supported USB serial keying port is attached."
-                                : "Preferred USB keying port is not attached: " + portHint.trim()
+                                ? "当前没有连接受支持的 USB 串口键控口。"
+                                : "已指定的 USB 键控口当前未连接：" + portHint.trim()
                 );
             }
             if (!usbManager.hasPermission(candidate.device)) {
                 return new DisconnectedSerialKeyerPort(
                         "usb-keying-no-permission",
                         candidate.device.getDeviceName(),
-                        "USB keying port is attached, but app permission has not been granted yet."
+                        "USB 键控口已连接，但应用尚未获得权限。"
                 );
             }
             UsbDeviceConnection connection = usbManager.openDevice(candidate.device);
@@ -115,7 +125,7 @@ public final class AndroidUsbProbedSerialKeyerPortFactory implements DedicatedKe
                 return new DisconnectedSerialKeyerPort(
                         "usb-keying-open-failed",
                         candidate.device.getDeviceName(),
-                        "USB keying permission exists, but opening the device failed."
+                        "USB 权限已存在，但打开键控口失败。"
                 );
             }
             try {
@@ -140,15 +150,15 @@ public final class AndroidUsbProbedSerialKeyerPortFactory implements DedicatedKe
                 return new DisconnectedSerialKeyerPort(
                         "usb-keying-open-failed",
                         candidate.device.getDeviceName(),
-                        "USB keying port failed to open: " + safeMessage(exception)
+                        "USB 键控口打开失败：" + safeMessage(exception)
                 );
             }
         } catch (RuntimeException exception) {
             Log.e(TAG, "USB keying port open crashed", exception);
             return new DisconnectedSerialKeyerPort(
                     "usb-keying-crashed",
-                    "USB Keying Port",
-                    "USB keying port crashed before it could open: " + safeMessage(exception)
+                    "USB 键控口",
+                    "USB 键控口在打开前异常中断：" + safeMessage(exception)
             );
         }
     }
@@ -216,12 +226,12 @@ public final class AndroidUsbProbedSerialKeyerPortFactory implements DedicatedKe
         if (driver instanceof Ch34xSerialDriver) {
             return "CH34x";
         }
-        return "USB serial";
+        return "USB 串口";
     }
 
     private static String safeMessage(Throwable throwable) {
         if (throwable == null || throwable.getMessage() == null || throwable.getMessage().trim().isEmpty()) {
-            return throwable == null ? "unknown failure" : throwable.getClass().getSimpleName();
+            return throwable == null ? "未知故障" : throwable.getClass().getSimpleName();
         }
         return throwable.getMessage().trim();
     }
@@ -319,9 +329,9 @@ public final class AndroidUsbProbedSerialKeyerPortFactory implements DedicatedKe
 
         private String renderExplicitPortHintMessage() {
             if (candidateHints.isEmpty()) {
-                return "Multiple USB keying ports were detected. Choose the detected keying port before transmitting.";
+                return "检测到多个 USB 键控口。请先明确选择一个键控口，再开始发射。";
             }
-            return "Multiple USB keying ports were detected. Choose the detected keying port before transmitting. Candidates: "
+            return "检测到多个 USB 键控口。请先明确选择一个键控口，再开始发射。候选项："
                     + String.join(", ", candidateHints);
         }
     }

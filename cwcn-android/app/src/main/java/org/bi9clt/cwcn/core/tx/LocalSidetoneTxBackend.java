@@ -14,17 +14,17 @@ public final class LocalSidetoneTxBackend implements CwTxBackend {
 
     @Override
     public String displayName() {
-        return "Local Sidetone";
+        return "本地侧音";
     }
 
     @Override
     public String describeRoute() {
-        return "Play generated CW locally through the phone audio path for dry-run TX testing.";
+        return "通过手机音频链路在本地播放生成的 CW，适合脱离电台的发射演练。";
     }
 
     @Override
     public String describeAvailability() {
-        return "Ready for local sidetone playback.";
+        return "已准备好进行本地侧音播放。";
     }
 
     @Override

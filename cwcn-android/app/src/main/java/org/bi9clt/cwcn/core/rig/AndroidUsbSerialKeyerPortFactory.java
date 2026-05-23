@@ -28,27 +28,27 @@ public final class AndroidUsbSerialKeyerPortFactory implements UsbSerialRouteFac
     @Override
     public String describeAvailability() {
         if (appContext == null) {
-            return "USB adapter registry was created without an Android context.";
+            return "USB 适配器注册表创建时缺少 Android Context。";
         }
         UsbManager usbManager = usbManager();
         if (usbManager == null) {
-            return "USB manager is unavailable on this device.";
+            return "当前设备无法获取 USB 管理器。";
         }
         HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
         if (deviceList.isEmpty()) {
-            return "No USB device is attached.";
+            return "当前没有连接 USB 设备。";
         }
         UsbDevice matchedDevice = matchedDevice(deviceList);
         if (matchedDevice == null) {
             if (preferredDeviceName != null && !preferredDeviceName.isEmpty()) {
-                return "Preferred USB CDC/ACM device is not attached right now: " + preferredDeviceName;
+                return "已指定的 USB CDC/ACM 设备当前未连接：" + preferredDeviceName;
             }
-            return "USB device detected, but no CDC/ACM serial interface was found for RTS/DTR keying.";
+            return "已检测到 USB 设备，但没有找到可用于 RTS/DTR 键控的 CDC/ACM 串口接口。";
         }
         if (!usbManager.hasPermission(matchedDevice)) {
-            return "USB CDC/ACM device found, but app permission has not been granted yet.";
+            return "USB CDC/ACM 设备已找到，但应用尚未获得权限。";
         }
-        return "USB CDC/ACM device is attached and permission is available.";
+        return "USB CDC/ACM 设备已连接，权限已就绪。";
     }
 
     @Override
@@ -66,16 +66,16 @@ public final class AndroidUsbSerialKeyerPortFactory implements UsbSerialRouteFac
         if (appContext == null) {
             return new DisconnectedSerialKeyerPort(
                     "usb-serial-no-context",
-                    "USB Serial Keyer Port",
-                    "USB adapter registry was created without an Android context."
+                    "USB 串口键控口",
+                    "USB 适配器注册表创建时缺少 Android Context。"
             );
         }
         UsbManager usbManager = usbManager();
         if (usbManager == null) {
             return new DisconnectedSerialKeyerPort(
                     "usb-serial-no-manager",
-                    "USB Serial Keyer Port",
-                    "USB manager is unavailable on this device."
+                    "USB 串口键控口",
+                    "当前设备无法获取 USB 管理器。"
             );
         }
 
@@ -83,17 +83,17 @@ public final class AndroidUsbSerialKeyerPortFactory implements UsbSerialRouteFac
         if (device == null) {
             return new DisconnectedSerialKeyerPort(
                     "usb-serial-no-cdc",
-                    "USB Serial Keyer Port",
+                    "USB 串口键控口",
                     preferredDeviceName != null && !preferredDeviceName.isEmpty()
-                            ? "Preferred USB CDC/ACM device is not attached: " + preferredDeviceName
-                            : "No CDC/ACM serial device is attached."
+                            ? "已指定的 USB CDC/ACM 设备当前未连接：" + preferredDeviceName
+                            : "当前没有连接 CDC/ACM 串口设备。"
             );
         }
         if (!usbManager.hasPermission(device)) {
             return new DisconnectedSerialKeyerPort(
                     "usb-serial-no-permission",
                     device.getDeviceName(),
-                    "USB CDC/ACM device is attached, but app permission has not been granted yet."
+                    "USB CDC/ACM 设备已连接，但应用尚未获得权限。"
             );
         }
 
@@ -102,7 +102,7 @@ public final class AndroidUsbSerialKeyerPortFactory implements UsbSerialRouteFac
             return new DisconnectedSerialKeyerPort(
                     "usb-serial-no-control-interface",
                     device.getDeviceName(),
-                    "CDC/ACM control interface was not found on the USB device."
+                    "在 USB 设备上没有找到 CDC/ACM 控制接口。"
             );
         }
 
@@ -111,7 +111,7 @@ public final class AndroidUsbSerialKeyerPortFactory implements UsbSerialRouteFac
             return new DisconnectedSerialKeyerPort(
                     "usb-serial-open-failed",
                     device.getDeviceName(),
-                    "USB device permission exists, but opening the device failed."
+                    "USB 权限已存在，但打开设备失败。"
             );
         }
         if (!connection.claimInterface(controlInterface, true)) {
@@ -119,7 +119,7 @@ public final class AndroidUsbSerialKeyerPortFactory implements UsbSerialRouteFac
             return new DisconnectedSerialKeyerPort(
                     "usb-serial-claim-failed",
                     device.getDeviceName(),
-                    "USB CDC/ACM control interface could not be claimed."
+                    "无法声明 USB CDC/ACM 控制接口。"
             );
         }
         return new AndroidUsbCdcAcmSerialKeyerPort(device, controlInterface, connection);
@@ -128,14 +128,14 @@ public final class AndroidUsbSerialKeyerPortFactory implements UsbSerialRouteFac
     public String describeMatchedDevice() {
         UsbManager usbManager = usbManager();
         if (usbManager == null) {
-            return "No USB manager";
+            return "没有 USB 管理器";
         }
         UsbDevice matchedDevice = matchedDevice(usbManager.getDeviceList());
         if (matchedDevice == null) {
             if (preferredDeviceName != null && !preferredDeviceName.isEmpty()) {
-                return "Preferred device missing: " + preferredDeviceName;
+                return "已指定设备缺失：" + preferredDeviceName;
             }
-            return "No CDC/ACM serial device";
+            return "没有 CDC/ACM 串口设备";
         }
         return matchedDevice.getDeviceName()
                 + " (VID:PID "

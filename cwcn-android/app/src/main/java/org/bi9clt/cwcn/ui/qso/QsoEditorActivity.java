@@ -10,6 +10,7 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.core.app.StationProfileStore;
 import org.bi9clt.cwcn.core.log.ConfirmedQsoLog;
 import org.bi9clt.cwcn.core.log.LogDisplayFormatter;
@@ -146,11 +147,11 @@ public final class QsoEditorActivity extends AppCompatActivity {
     private void resetEditor() {
         if (isEditingConfirmedLog()) {
             if (currentConfirmedLog == null) {
-                Toast.makeText(this, "Confirmed log is no longer available.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.qso_editor_toast_log_missing, Toast.LENGTH_SHORT).show();
                 return;
             }
             syncEditorFromSource();
-            actionStatusMessage = "Restored the saved log.";
+            actionStatusMessage = getString(R.string.qso_editor_action_status_restored_saved);
             refreshUi();
             return;
         }
@@ -158,8 +159,8 @@ public final class QsoEditorActivity extends AppCompatActivity {
         currentDraftSnapshot = localLogRepository.loadDraft();
         syncEditorFromSource();
         actionStatusMessage = currentDraftSnapshot == null
-                ? "Cleared editor back to blank/new state."
-                : "Restored the current draft seed.";
+                ? getString(R.string.qso_editor_action_status_cleared_new)
+                : getString(R.string.qso_editor_action_status_restored_draft);
         refreshUi();
     }
 
@@ -172,14 +173,14 @@ public final class QsoEditorActivity extends AppCompatActivity {
 
         ConfirmedQsoLog record = buildRecordFromEditor();
         if (record == null) {
-            Toast.makeText(this, "Unable to build QSO record.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.qso_editor_toast_build_failed, Toast.LENGTH_SHORT).show();
             return;
         }
 
         if (isEditingConfirmedLog()) {
             boolean updated = localLogRepository.updateConfirmedLog(currentConfirmedLogId, record);
             if (!updated) {
-                Toast.makeText(this, "Unable to update QSO record.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.qso_editor_toast_update_failed, Toast.LENGTH_SHORT).show();
                 return;
             }
             currentConfirmedLog = localLogRepository.loadConfirmedLogById(currentConfirmedLogId);
@@ -190,11 +191,14 @@ public final class QsoEditorActivity extends AppCompatActivity {
                             currentConfirmedLog.qsoTimeUtcEpochMs(),
                             "updated confirmed log"
                     );
-            actionStatusMessage = "Updated QSO record: " + safeValue(record.remoteCallsign()) + ".";
+            actionStatusMessage = getString(
+                    R.string.qso_editor_action_status_updated,
+                    safeValue(record.remoteCallsign())
+            );
         } else {
             ConfirmedQsoLog saved = localLogRepository.saveConfirmedLog(record);
             if (saved == null) {
-                Toast.makeText(this, "Unable to save QSO record.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.qso_editor_toast_save_failed, Toast.LENGTH_SHORT).show();
                 return;
             }
             localLogRepository.clearDraft();
@@ -205,7 +209,10 @@ public final class QsoEditorActivity extends AppCompatActivity {
                     saved.qsoTimeUtcEpochMs(),
                     "saved from qso editor"
             );
-            actionStatusMessage = "Saved QSO record: " + safeValue(saved.remoteCallsign()) + ".";
+            actionStatusMessage = getString(
+                    R.string.qso_editor_action_status_saved,
+                    safeValue(saved.remoteCallsign())
+            );
         }
 
         syncEditorFromSource();
@@ -257,7 +264,7 @@ public final class QsoEditorActivity extends AppCompatActivity {
                 syncingEditor = true;
                 binding.frequencyEditText.setText(String.valueOf(detectedFrequencyHz));
                 syncingEditor = false;
-                actionStatusMessage = "Loaded current rig frequency into the QSO editor.";
+                actionStatusMessage = getString(R.string.qso_editor_action_status_frequency_loaded);
                 refreshDerivedViews();
                 refreshStatusText();
             });
@@ -265,13 +272,21 @@ public final class QsoEditorActivity extends AppCompatActivity {
     }
 
     private void refreshUi() {
-        binding.titleText.setText(isEditingConfirmedLog() ? "Edit QSO Record" : "New QSO Record");
+        binding.titleText.setText(isEditingConfirmedLog()
+                ? R.string.qso_editor_title_edit
+                : R.string.qso_editor_title_new);
         binding.subtitleText.setText(isEditingConfirmedLog()
-                ? "Formal log entry editor"
-                : "Create a formal CW QSO record");
-        binding.editorModeChip.setText(isEditingConfirmedLog() ? "EDIT" : "NEW");
-        binding.saveButton.setText(isEditingConfirmedLog() ? "Update" : "Save");
-        binding.resetButton.setText(isEditingConfirmedLog() ? "Revert" : "Reset");
+                ? R.string.qso_editor_subtitle_edit
+                : R.string.qso_editor_subtitle_new);
+        binding.editorModeChip.setText(isEditingConfirmedLog()
+                ? R.string.qso_editor_mode_edit
+                : R.string.qso_editor_mode_new);
+        binding.saveButton.setText(isEditingConfirmedLog()
+                ? R.string.qso_editor_action_update
+                : R.string.qso_editor_action_save);
+        binding.resetButton.setText(isEditingConfirmedLog()
+                ? R.string.qso_editor_action_revert
+                : R.string.qso_editor_action_reset);
         binding.seedSummaryText.setText(renderSeedSummary());
         refreshDerivedViews();
         refreshStatusText();
@@ -284,41 +299,51 @@ public final class QsoEditorActivity extends AppCompatActivity {
         long frequencyHz = parseFrequencyHz(binding.frequencyEditText.getText());
         String bandLabel = LogDisplayFormatter.formatBand(frequencyHz);
         String frequencyLabel = LogDisplayFormatter.formatFrequency(frequencyHz);
-        binding.bandSummaryText.setText("Band: " + bandLabel + "  |  Frequency: " + frequencyLabel);
+        binding.bandSummaryText.setText(getString(
+                R.string.qso_editor_band_summary,
+                bandLabel,
+                frequencyLabel
+        ));
 
         Double distanceKm = resolveDistanceKm(
                 normalizedEditorValue(binding.stationGridEditText.getText()),
                 normalizedEditorValue(binding.remoteGridEditText.getText())
         );
-        binding.distanceSummaryText.setText("Distance: " + LogDisplayFormatter.formatDistanceKm(distanceKm));
+        binding.distanceSummaryText.setText(getString(
+                R.string.qso_editor_distance_summary,
+                LogDisplayFormatter.formatDistanceKm(distanceKm)
+        ));
     }
 
     private void refreshStatusText() {
         StringBuilder statusBuilder = new StringBuilder();
-        statusBuilder.append(editorDirty ? "Unsaved changes." : "Saved state loaded.");
+        statusBuilder.append(getString(editorDirty
+                ? R.string.qso_editor_status_unsaved
+                : R.string.qso_editor_status_loaded));
         if (isEditingConfirmedLog()) {
-            statusBuilder.append("  Record #").append(currentConfirmedLogId).append(".");
+            statusBuilder.append("  ")
+                    .append(getString(R.string.qso_editor_status_record_id, currentConfirmedLogId));
         } else if (currentDraftSnapshot != null) {
-            statusBuilder.append("  Draft seed available.");
+            statusBuilder.append("  ").append(getString(R.string.qso_editor_status_draft_seed));
         } else {
-            statusBuilder.append("  Manual entry.");
+            statusBuilder.append("  ").append(getString(R.string.qso_editor_status_manual_entry));
         }
         binding.editorStatusText.setText(statusBuilder.toString());
         binding.actionStatusText.setText(actionStatusMessage.isEmpty()
-                ? "Local input is stored as UTC internally and exported as ADIF UTC."
+                ? getString(R.string.qso_editor_status_utc_note)
                 : actionStatusMessage);
     }
 
     @Nullable
     private String validateEditor() {
         if (normalizedEditorValue(binding.remoteCallsignEditText.getText()) == null) {
-            return "Remote callsign is required.";
+            return getString(R.string.qso_editor_error_remote_callsign_required);
         }
         if (normalizedEditorValue(binding.stationCallsignEditText.getText()) == null) {
-            return "My callsign is required.";
+            return getString(R.string.qso_editor_error_station_callsign_required);
         }
         if (parseLocalTimeMillis(binding.qsoTimeEditText.getText()) == null) {
-            return "QSO time must be yyyy-MM-dd HH:mm:ss.";
+            return getString(R.string.qso_editor_error_time_invalid);
         }
         return null;
     }
@@ -364,23 +389,25 @@ public final class QsoEditorActivity extends AppCompatActivity {
 
     private String renderSeedSummary() {
         if (isEditingConfirmedLog() && currentConfirmedLog != null) {
-            return "Editing saved QSO record for "
-                    + safeValue(currentConfirmedLog.remoteCallsign())
-                    + ".";
+            return getString(
+                    R.string.qso_editor_seed_summary_editing,
+                    safeValue(currentConfirmedLog.remoteCallsign())
+            );
         }
         if (currentDraftSnapshot == null) {
-            return "No draft seed. You can create a fresh manual QSO record here.";
+            return getString(R.string.qso_editor_seed_summary_empty);
         }
-        return "Seeded from current RX/TX context. Callsign/time fields can be adjusted before saving.";
+        return getString(R.string.qso_editor_seed_summary_seeded);
     }
 
     private String renderQsoTimeHint(@Nullable Long qsoTimeUtcEpochMs) {
         if (qsoTimeUtcEpochMs == null) {
-            return "Enter local time. CWCN will store UTC and export ADIF as UTC.";
+            return getString(R.string.qso_editor_time_hint_empty);
         }
-        return "UTC export: "
-                + CwTimeUtcFormatter.format(qsoTimeUtcEpochMs)
-                + "  |  Local display is editable.";
+        return getString(
+                R.string.qso_editor_time_hint_value,
+                CwTimeUtcFormatter.format(qsoTimeUtcEpochMs)
+        );
     }
 
     @Nullable
@@ -523,9 +550,9 @@ public final class QsoEditorActivity extends AppCompatActivity {
             return editorComment;
         }
         if (distanceKm != null && distanceKm > 0.0d) {
-            return "Distance: " + String.format(Locale.US, "%.0f km, QSO by CWCN", distanceKm);
+            return getString(R.string.qso_editor_comment_distance_seed, distanceKm);
         }
-        return "QSO by CWCN";
+        return getString(R.string.qso_editor_comment_default);
     }
 
     @Nullable
