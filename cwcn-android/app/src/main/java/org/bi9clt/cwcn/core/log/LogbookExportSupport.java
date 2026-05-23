@@ -1,5 +1,9 @@
 package org.bi9clt.cwcn.core.log;
 
+import android.content.Context;
+
+import org.bi9clt.cwcn.R;
+
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -55,6 +59,18 @@ public final class LogbookExportSupport {
                 + renderConfirmationScope(safeRequest.confirmationScope());
     }
 
+    public static String buildRequestSummary(Context context, LogbookExportRequest request) {
+        LogbookExportRequest safeRequest = request == null
+                ? new LogbookExportRequest(
+                LogbookExportRequest.ConfirmationScope.ALL,
+                LogbookExportRequest.TimeRangeScope.ALL
+        )
+                : request;
+        return renderTimeRangeScope(context, safeRequest.timeRangeScope())
+                + " / "
+                + renderConfirmationScope(context, safeRequest.confirmationScope());
+    }
+
     public static String buildExportComment(ConfirmedQsoLog log) {
         if (log == null) {
             return "QSO by CWCN";
@@ -88,6 +104,27 @@ public final class LogbookExportSupport {
         }
     }
 
+    public static String renderConfirmationScope(
+            Context context,
+            LogbookExportRequest.ConfirmationScope confirmationScope
+    ) {
+        if (context == null) {
+            return renderConfirmationScope(confirmationScope);
+        }
+        if (confirmationScope == null) {
+            return context.getString(R.string.qso_logbook_filter_all);
+        }
+        switch (confirmationScope) {
+            case CONFIRMED:
+                return context.getString(R.string.qso_logbook_filter_confirmed);
+            case UNCONFIRMED:
+                return context.getString(R.string.qso_logbook_filter_unconfirmed);
+            case ALL:
+            default:
+                return context.getString(R.string.qso_logbook_filter_all);
+        }
+    }
+
     public static String renderTimeRangeScope(LogbookExportRequest.TimeRangeScope timeRangeScope) {
         if (timeRangeScope == null) {
             return "All";
@@ -100,6 +137,27 @@ public final class LogbookExportSupport {
             case ALL:
             default:
                 return "All";
+        }
+    }
+
+    public static String renderTimeRangeScope(
+            Context context,
+            LogbookExportRequest.TimeRangeScope timeRangeScope
+    ) {
+        if (context == null) {
+            return renderTimeRangeScope(timeRangeScope);
+        }
+        if (timeRangeScope == null) {
+            return context.getString(R.string.qso_logbook_filter_all);
+        }
+        switch (timeRangeScope) {
+            case TODAY:
+                return context.getString(R.string.qso_logbook_filter_today);
+            case THIS_MONTH:
+                return context.getString(R.string.qso_logbook_filter_this_month);
+            case ALL:
+            default:
+                return context.getString(R.string.qso_logbook_filter_all);
         }
     }
 

@@ -2,6 +2,7 @@ package org.bi9clt.cwcn.core.log;
 
 import android.content.Context;
 
+import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.core.adif.CwAdifExporter;
 
 import java.io.BufferedReader;
@@ -228,7 +229,7 @@ public final class LogbookLanExportServer {
                     entries.add("<li><a href=\""
                             + href
                             + "\">"
-                            + escapeHtml(LogbookExportSupport.buildRequestSummary(request))
+                            + escapeHtml(LogbookExportSupport.buildRequestSummary(context, request))
                             + "</a> ("
                             + logs.size()
                             + ")</li>");
@@ -242,19 +243,33 @@ public final class LogbookLanExportServer {
         StringBuilder builder = new StringBuilder();
         builder.append("<!doctype html><html><head><meta charset=\"utf-8\">");
         builder.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-        builder.append("<title>CWCN LAN Export</title>");
+        builder.append("<title>")
+                .append(escapeHtml(getAppString(R.string.qso_logbook_lan_page_title)))
+                .append("</title>");
         builder.append("<style>");
         builder.append("body{font-family:sans-serif;padding:20px;background:#f4f5f7;color:#1d2433;}");
         builder.append("h1{margin:0 0 8px;font-size:24px;}p{margin:6px 0;}ul{padding-left:20px;}");
         builder.append("li{margin:8px 0;}a{color:#0b57d0;text-decoration:none;}a:hover{text-decoration:underline;}");
         builder.append(".box{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.08);}");
         builder.append("</style></head><body><div class=\"box\">");
-        builder.append("<h1>CWCN LAN Export</h1>");
-        builder.append("<p>Started: ").append(escapeHtml(startedText)).append("</p>");
-        builder.append("<p>Base URL: ").append(escapeHtml(getBaseUrl() == null ? "-" : getBaseUrl())).append("</p>");
-        builder.append("<p>Downloads:</p><ul>");
+        builder.append("<h1>")
+                .append(escapeHtml(getAppString(R.string.qso_logbook_lan_page_heading)))
+                .append("</h1>");
+        builder.append("<p>")
+                .append(escapeHtml(getAppString(R.string.qso_logbook_lan_page_started_label)))
+                .append(escapeHtml(startedText))
+                .append("</p>");
+        builder.append("<p>")
+                .append(escapeHtml(getAppString(R.string.qso_logbook_lan_page_base_url_label)))
+                .append(escapeHtml(getBaseUrl() == null ? "-" : getBaseUrl()))
+                .append("</p>");
+        builder.append("<p>")
+                .append(escapeHtml(getAppString(R.string.qso_logbook_lan_page_downloads_label)))
+                .append("</p><ul>");
         if (entries.isEmpty()) {
-            builder.append("<li>No QSO records.</li>");
+            builder.append("<li>")
+                    .append(escapeHtml(getAppString(R.string.qso_logbook_lan_page_empty)))
+                    .append("</li>");
         } else {
             for (String entry : entries) {
                 builder.append(entry);
@@ -370,6 +385,16 @@ public final class LogbookLanExportServer {
             default:
                 return "OK";
         }
+    }
+
+    private String getAppString(int resId, Object... formatArgs) {
+        Context context = appContext;
+        if (context == null) {
+            return "";
+        }
+        return formatArgs == null || formatArgs.length == 0
+                ? context.getString(resId)
+                : context.getString(resId, formatArgs);
     }
 
     private String resolveHostAddress() {
