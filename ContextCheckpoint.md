@@ -1,6 +1,6 @@
 # Context Checkpoint
 
-Last updated: 2026-04-27
+Last updated: 2026-05-23
 
 ## Purpose
 
@@ -8,16 +8,13 @@ This file is a compact handoff note for quickly resuming work without rereading 
 
 ## Current Git State
 
+- Latest mainline checkpoint commit: `0c07a65`
+- Commit message: `Stabilize live RX turn lifecycle baseline`
 - Latest mainline checkpoint commit: `eb0adbf`
 - Commit message: `milestone: checkpoint rig ui and tone acquisition refactor`
 - Newer focused RX timing experiment commit: `e534482`
 - Commit message: `milestone: speed up fast-cw timing convergence`
-- Current working tree is intentionally not clean:
-- modified: `ContextCheckpoint.md`
-- untracked experimental A/B files:
-- `cwcn-android/app/src/main/java/org/bi9clt/cwcn/core/timing/CwAdaptiveTimingModel.java`
-- `cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/timing/CwAdaptiveTimingModelTest.java`
-- `cwcn-android/app/src/test/java/org/bi9clt/cwcn/core/audio/CwTimingModelAbComparisonTest.java`
+- Current working tree is expected to be clean right after the `0c07a65` baseline checkpoint.
 
 ## What Is Already In Good Shape
 
@@ -144,6 +141,56 @@ If continuing coding immediately, do this next:
 
 When resuming, do not start by adding more generic TX UI controls.
 Start from real bench diagnostics or return to RX real-input stability work.
+
+## 2026-05-23 Live RX Baseline Note
+
+### What has just stabilized
+
+- Real-device `Operate` RX is currently noticeably more stable than the earlier broken state.
+- The current baseline commit is:
+- `0c07a65`
+- `Stabilize live RX turn lifecycle baseline`
+- Recent fixes on this line were mainly about:
+- turn lifecycle cleanup
+- preventing stale transcript/turn re-splitting
+- making committed decode activity keep the current turn alive longer
+
+### Open issue still not fully explained
+
+- There was an occasional real-device symptom where the displayed RX speed could lock around `14 WPM`.
+- During the latest phone testing session on `2026-05-23`, this issue did **not** reproduce again.
+- Therefore it should currently be treated as:
+- real but intermittent
+- not yet root-caused
+- not a good target for blind tuning while unreproducible
+
+### Current best hypotheses for the `14 WPM` lock
+
+- It may be coupled to the earlier dirty turn / pending-state problem rather than being a standalone WPM bug.
+- The most plausible remaining causes are:
+- `pre-trust` stage incorrectly accepting a slow raw estimate under a false-strong opening condition
+- `boundary / cadence bootstrap` occasionally initializing a wrong slow anchor
+- an only-partially-reset turn/timing state contaminating the second playback opening
+
+### What not to do next time
+
+- Do not resume by blindly tightening or relaxing generic `WPM floor` logic.
+- Do not assume the displayed `14 WPM` is only a UI rendering issue.
+- Do not treat this as solved unless it stays absent across more real-device replay sessions.
+
+### What to capture immediately if it happens again
+
+- Capture the developer front-end summary at the moment the displayed speed falls to `14`.
+- The three most important substrings to preserve are:
+- `tm ... sd=...`
+- `wpm sd... tr... raw... dsp... h...`
+- `anc dot=...`
+
+### How to interpret that capture next time
+
+- If it looks like `raw14 dsp14 tr-`, then the raw timing opening itself drifted slow before trust was established.
+- If it shows `tr14` or an anchor decision such as boundary/cadence init, then the issue is likely a wrong bootstrap anchor.
+- If neither is true, the next layer to inspect is the real-device audio/timestamp path rather than the WPM guard alone.
 
 ## 2026-04-27 RX / Rig Reality Check
 
