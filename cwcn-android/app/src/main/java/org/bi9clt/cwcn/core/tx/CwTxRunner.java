@@ -10,9 +10,22 @@ public final class CwTxRunner {
     }
 
     private final CwTxAudioOutput audioOutput;
+    private final Object pauseLock = new Object();
 
     private volatile boolean stopRequested;
+    private volatile boolean pauseRequested;
+    private volatile boolean paused;
     private volatile Thread workerThread;
+
+    private static final class PauseState {
+        private final int resumeElementIndex;
+        private final int elapsedMs;
+
+        private PauseState(int resumeElementIndex, int elapsedMs) {
+            this.resumeElementIndex = Math.max(0, resumeElementIndex);
+            this.elapsedMs = Math.max(0, elapsedMs);
+        }
+    }
 
     public CwTxRunner(CwTxAudioOutput audioOutput) {
         this.audioOutput = audioOutput;
@@ -35,11 +48,49 @@ public final class CwTxRunner {
 
     public void stop() {
         stopRequested = true;
+        pauseRequested = false;
+        paused = false;
+        synchronized (pauseLock) {
+            pauseLock.notifyAll();
+        }
         audioOutput.stop();
         Thread thread = workerThread;
         if (thread != null) {
             thread.interrupt();
         }
+    }
+
+    public boolean requestPauseFromCurrentCharacter() {
+        if (!isRunning() || stopRequested || paused) {
+            return false;
+        }
+        pauseRequested = true;
+        audioOutput.stop();
+        Thread thread = workerThread;
+        if (thread != null) {
+            thread.interrupt();
+        }
+        return true;
+    }
+
+    public boolean requestPauseAtCharacterBoundary() {
+        return requestPauseFromCurrentCharacter();
+    }
+
+    public boolean resume() {
+        if (!paused) {
+            return false;
+        }
+        pauseRequested = false;
+        paused = false;
+        synchronized (pauseLock) {
+            pauseLock.notifyAll();
+        }
+        return true;
+    }
+
+    public boolean isPaused() {
+        return paused;
     }
 
     public void runPlanBlocking(CwTxPlan plan, Listener listener) {
@@ -50,6 +101,7 @@ public final class CwTxRunner {
         int elapsedMs = 0;
         int completedElementCount = 0;
         List<CwTxElement> elements = plan.elements();
+        int elementIndex = 0;
         try {
             emitSnapshot(listener, buildSnapshot(
                     CwTxState.PLAYING,
@@ -59,7 +111,8 @@ public final class CwTxRunner {
                     elements.isEmpty() ? null : elements.get(0),
                     "TX 已启动"
             ));
-            for (CwTxElement element : elements) {
+            while (elementIndex < elements.size()) {
+                CwTxElement element = elements.get(elementIndex);
                 if (stopRequested) {
                     emitSnapshot(listener, buildSnapshot(
                             CwTxState.STOPPED,
@@ -71,19 +124,71 @@ public final class CwTxRunner {
                     ));
                     return;
                 }
-                playElement(plan, element);
-                completedElementCount += 1;
-                elapsedMs += element.durationMs();
-                emitSnapshot(listener, buildSnapshot(
-                        CwTxState.PLAYING,
-                        plan,
-                        completedElementCount,
-                        elapsedMs,
-                        nextElement(elements, completedElementCount),
-                        "TX 发射中"
-                ));
+                try {
+                    playElement(plan, element);
+                    completedElementCount = elementIndex + 1;
+                    elapsedMs += element.durationMs();
+                    CwTxElement nextElement = nextElement(elements, completedElementCount);
+                    emitSnapshot(listener, buildSnapshot(
+                            CwTxState.PLAYING,
+                            plan,
+                            completedElementCount,
+                            elapsedMs,
+                            nextElement,
+                            "TX 发射中"
+                    ));
+                    elementIndex += 1;
+                } catch (InterruptedException interruptedException) {
+                    if (pauseRequested && !stopRequested) {
+                        Thread.interrupted();
+                        PauseState pauseState = resolvePauseState(elements, elementIndex);
+                        completedElementCount = pauseState.resumeElementIndex;
+                        elapsedMs = pauseState.elapsedMs;
+                        paused = true;
+                        pauseRequested = false;
+                        CwTxElement resumeElement = nextElement(elements, completedElementCount);
+                        emitSnapshot(listener, buildSnapshot(
+                                CwTxState.PAUSED,
+                                plan,
+                                completedElementCount,
+                                elapsedMs,
+                                resumeElement,
+                                "TX 已暂停"
+                        ));
+                        waitUntilResumed();
+                        if (stopRequested) {
+                            emitSnapshot(listener, buildSnapshot(
+                                    CwTxState.STOPPED,
+                                    plan,
+                                    completedElementCount,
+                                    elapsedMs,
+                                    null,
+                                    "TX 已停止"
+                            ));
+                            return;
+                        }
+                        emitSnapshot(listener, buildSnapshot(
+                                CwTxState.PLAYING,
+                                plan,
+                                completedElementCount,
+                                elapsedMs,
+                                resumeElement,
+                                "TX 已继续"
+                        ));
+                        elementIndex = completedElementCount;
+                        continue;
+                    }
+                    throw interruptedException;
+                }
             }
-            audioOutput.finish();
+            try {
+                audioOutput.finish();
+            } catch (InterruptedException interruptedException) {
+                if (!(pauseRequested && !stopRequested)) {
+                    throw interruptedException;
+                }
+                Thread.interrupted();
+            }
             emitSnapshot(listener, buildSnapshot(
                     CwTxState.COMPLETED,
                     plan,
@@ -117,7 +222,54 @@ public final class CwTxRunner {
                 workerThread = null;
             }
             stopRequested = false;
+            pauseRequested = false;
+            paused = false;
+            synchronized (pauseLock) {
+                pauseLock.notifyAll();
+            }
         }
+    }
+
+    private void waitUntilResumed() throws InterruptedException {
+        synchronized (pauseLock) {
+            while (paused && !stopRequested) {
+                pauseLock.wait();
+            }
+        }
+    }
+
+    private PauseState resolvePauseState(List<CwTxElement> elements, int interruptedElementIndex) {
+        if (elements.isEmpty()) {
+            return new PauseState(0, 0);
+        }
+        int safeInterruptedIndex = Math.max(0, Math.min(interruptedElementIndex, elements.size() - 1));
+        int resumeElementIndex = findCharacterStartIndex(elements, safeInterruptedIndex);
+        return new PauseState(resumeElementIndex, elapsedBeforeElement(elements, resumeElementIndex));
+    }
+
+    private int findCharacterStartIndex(List<CwTxElement> elements, int elementIndex) {
+        if (elementIndex <= 0 || elementIndex >= elements.size()) {
+            return Math.max(0, Math.min(elementIndex, elements.size() - 1));
+        }
+        int sourceTextIndex = elements.get(elementIndex).sourceTextIndex();
+        if (sourceTextIndex < 0) {
+            return elementIndex;
+        }
+        int startIndex = elementIndex;
+        while (startIndex > 0
+                && elements.get(startIndex - 1).sourceTextIndex() == sourceTextIndex) {
+            startIndex -= 1;
+        }
+        return startIndex;
+    }
+
+    private int elapsedBeforeElement(List<CwTxElement> elements, int elementIndex) {
+        int elapsedMs = 0;
+        int safeIndex = Math.max(0, Math.min(elementIndex, elements.size()));
+        for (int index = 0; index < safeIndex; index++) {
+            elapsedMs += elements.get(index).durationMs();
+        }
+        return elapsedMs;
     }
 
     private void playElement(CwTxPlan plan, CwTxElement element) throws InterruptedException {

@@ -19,6 +19,7 @@ public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
 
     private AudioTrack audioTrack;
     private long framesWritten;
+    private volatile boolean stopRequested;
 
     @Override
     public void playTone(int frequencyHz, int durationMs) throws InterruptedException {
@@ -48,6 +49,7 @@ public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
 
     @Override
     public void stop() {
+        stopRequested = true;
         synchronized (lock) {
             releaseAudioTrack(true);
         }
@@ -103,6 +105,7 @@ public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
             if (audioTrack != null) {
                 return audioTrack;
             }
+            stopRequested = false;
             int minBufferSize = AudioTrack.getMinBufferSize(
                     SAMPLE_RATE_HZ,
                     CHANNEL_MASK,
@@ -134,11 +137,19 @@ public class AudioTrackTxAudioOutput implements CwTxAudioOutput {
         int chunkSamples = Math.max(1, SAMPLE_RATE_HZ * CHUNK_DURATION_MS / 1000);
         int offset = 0;
         while (offset < pcm.length) {
-            if (Thread.currentThread().isInterrupted()) {
+            if (stopRequested || Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException("TX 音频播放被中断");
             }
             int count = Math.min(chunkSamples, pcm.length - offset);
-            int written = track.write(pcm, offset, count);
+            int written;
+            try {
+                written = track.write(pcm, offset, count);
+            } catch (IllegalStateException exception) {
+                if (stopRequested || Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException("TX 音频播放被中断");
+                }
+                throw exception;
+            }
             if (written <= 0) {
                 throw new IllegalStateException("AudioTrack 写入失败：" + written);
             }

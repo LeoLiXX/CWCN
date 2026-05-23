@@ -171,6 +171,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private static final String PREF_SIDE_RAIL_Y = "side_rail_y";
     private static final String PREF_MIC_PERMISSION_ASKED = "mic_permission_asked";
     private static final String PREF_TRANSCRIPT_USE_UTC = "transcript_use_utc";
+    private static final String PREF_TX_REPEAT_ENABLED = "tx_repeat_enabled";
+    private static final String PREF_TX_REPEAT_INTERVAL_SECONDS = "tx_repeat_interval_seconds";
+    private static final int DEFAULT_TX_REPEAT_INTERVAL_SECONDS = 15;
     private static final String STATE_TRANSCRIPT_TIMELINE_ACTIVE = "transcript_timeline_active";
     private static final String STATE_TRANSCRIPT_NEXT_ID = "transcript_next_id";
     private static final String STATE_TRANSCRIPT_USE_UTC = "transcript_use_utc_state";
@@ -189,7 +192,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private static final String STATE_TRANSCRIPT_ENTRY_WPM = "wpm";
     private static final String STATE_SELECTED_OPERATE_REMOTE_CALLSIGN =
             "selected_operate_remote_callsign";
-    private static final boolean OPERATE_RX_RAW_ONLY_MODE = true;
     private static WeakReference<OperateActivity> sharedActiveInstance =
             new WeakReference<>(null);
 
@@ -208,6 +210,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private static final class StreamEntry {
         private final String label;
         private final String headline;
+        private final String headerNote;
         private final String meta;
         private final CharSequence body;
         private final int cardBackgroundRes;
@@ -220,6 +223,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         private StreamEntry(
                 String label,
                 String headline,
+                String headerNote,
                 String meta,
                 CharSequence body,
                 int cardBackgroundRes,
@@ -231,6 +235,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         ) {
             this.label = label;
             this.headline = headline;
+            this.headerNote = headerNote;
             this.meta = meta;
             this.body = body;
             this.cardBackgroundRes = cardBackgroundRes;
@@ -348,10 +353,13 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private final Runnable txProgressRefreshRunnable = new Runnable() {
         @Override
         public void run() {
-            if (!txSendInProgress) {
+            if (!shouldKeepTxTransportTicker()) {
                 return;
             }
-            syncActiveTxPlaybackSnapshot();
+            if (txSendInProgress) {
+                syncActiveTxPlaybackSnapshot();
+            }
+            updateRepeatCountdownState();
             updateComposerUi();
             refreshConversationOnly();
             mainHandler.postDelayed(this, TX_PROGRESS_REFRESH_INTERVAL_MS);
@@ -370,10 +378,19 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private boolean templateSelectorSyncing;
     private boolean txSendInProgress;
     private boolean txStopRequested;
+    private boolean txPauseRequested;
+    private boolean txResetRequested;
+    private boolean txRepeatEnabled;
+    private boolean txRepeatWaiting;
+    private boolean txRepeatCountdownPaused;
+    private int txRepeatIntervalSeconds = DEFAULT_TX_REPEAT_INTERVAL_SECONDS;
+    private long txRepeatNextStartAtElapsedMs = -1L;
+    private long txRepeatRemainingMs = -1L;
     private String txDeliveryStatus = "";
     private boolean suppressComposerWatcher;
     private RigControlAdapter activeTxAdapter;
     private String activeTxText = "";
+    private String repeatTxText = "";
     private String activeTxRouteLabel = "";
     private CwTxPlan activeTxPlan;
     private CwTxPlaybackSnapshot activeTxPlaybackSnapshot;
@@ -441,6 +458,13 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         initializeOperateRxPipeline();
         operateUiPreferences = getSharedPreferences(PREFS_OPERATE_UI, MODE_PRIVATE);
         transcriptUseUtc = operateUiPreferences.getBoolean(PREF_TRANSCRIPT_USE_UTC, true);
+        txRepeatEnabled = operateUiPreferences.getBoolean(PREF_TX_REPEAT_ENABLED, false);
+        txRepeatIntervalSeconds = sanitizeRepeatIntervalSeconds(
+                operateUiPreferences.getInt(
+                        PREF_TX_REPEAT_INTERVAL_SECONDS,
+                        DEFAULT_TX_REPEAT_INTERVAL_SECONDS
+                )
+        );
         sqlLevel = sqlLevelStore.load();
         syncOperateSql();
         consumeLaunchIntent(getIntent());
@@ -573,10 +597,11 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             startActivity(new Intent(this, RigSetupActivity.class));
         });
 
-        binding.sendTxButton.setOnClickListener(view -> startImmediateTx());
+        binding.sendTxButton.setOnClickListener(view -> handlePrimaryTxAction());
         binding.clearComposeButton.setOnClickListener(view -> binding.txComposeEditText.setText(""));
-        binding.repeatTxButton.setOnClickListener(view -> startImmediateTx());
-        binding.pauseTxButton.setOnClickListener(view -> stopImmediateTx());
+        binding.resetTxButton.setOnClickListener(view -> handleResetTxAction());
+        binding.repeatToggleButton.setOnClickListener(view -> toggleRepeatMode());
+        binding.repeatIntervalChip.setOnClickListener(view -> openRepeatIntervalPicker());
         binding.openTemplateLibraryButton.setOnClickListener(view ->
                 startActivity(new Intent(this, TxTemplateListActivity.class)));
 
@@ -878,6 +903,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         binding.callsignHintText.setBackgroundResource(callsignHintAvailable
                 ? R.drawable.operate_chip_active_background
                 : R.drawable.operate_chip_background);
+        setVisibleWhenHasText(binding.callsignHintText);
         setVisibleWhenHasText(binding.rxFootnoteText);
         binding.rxFootnoteText.setClickable(
                 (shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission())
@@ -912,30 +938,170 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         renderConversationCards(entries);
     }
 
+    private boolean shouldKeepTxTransportTicker() {
+        return txSendInProgress || isRepeatCountdownRunning();
+    }
+
+    private boolean isActiveTxPaused() {
+        return activeTxPlaybackSnapshot != null
+                && activeTxPlaybackSnapshot.state() == CwTxState.PAUSED;
+    }
+
+    private boolean isRepeatCountdownRunning() {
+        return txRepeatWaiting && !txRepeatCountdownPaused;
+    }
+
+    private boolean isRepeatCountdownPaused() {
+        return txRepeatWaiting && txRepeatCountdownPaused;
+    }
+
+    private long resolveRepeatRemainingMs() {
+        if (!txRepeatWaiting) {
+            return -1L;
+        }
+        if (txRepeatCountdownPaused) {
+            return Math.max(0L, txRepeatRemainingMs);
+        }
+        if (txRepeatNextStartAtElapsedMs <= 0L) {
+            return Math.max(0L, txRepeatRemainingMs);
+        }
+        return Math.max(0L, txRepeatNextStartAtElapsedMs - SystemClock.elapsedRealtime());
+    }
+
+    private int resolveRepeatRemainingSeconds() {
+        long remainingMs = resolveRepeatRemainingMs();
+        if (remainingMs <= 0L) {
+            return 0;
+        }
+        return (int) Math.ceil(remainingMs / 1000.0d);
+    }
+
+    private int repeatCountdownProgress() {
+        long totalMs = txRepeatIntervalSeconds * 1000L;
+        if (totalMs <= 0L) {
+            return 0;
+        }
+        long remainingMs = resolveRepeatRemainingMs();
+        long elapsedMs = Math.max(0L, totalMs - Math.max(0L, remainingMs));
+        return (int) Math.max(0L, Math.min(1000L, Math.round((elapsedMs * 1000.0d) / totalMs)));
+    }
+
+    private void updateRepeatCountdownState() {
+        if (!isRepeatCountdownRunning()) {
+            return;
+        }
+        long remainingMs = resolveRepeatRemainingMs();
+        txRepeatRemainingMs = remainingMs;
+        if (remainingMs > 0L || txSendInProgress) {
+            return;
+        }
+        txRepeatWaiting = false;
+        txRepeatCountdownPaused = false;
+        txRepeatNextStartAtElapsedMs = -1L;
+        txRepeatRemainingMs = -1L;
+        startImmediateTx(repeatTxText);
+    }
+
     private void updateComposerUi() {
-        String composeText = safeValue(binding.txComposeEditText.getText() == null
-                ? null
-                : binding.txComposeEditText.getText().toString());
-        boolean hasComposeText = !"-".equals(composeText);
-        boolean showPlaybackControls = txSendInProgress || hasRepeatableTxText();
-        binding.txPlaybackControlsRow.setVisibility(showPlaybackControls ? View.VISIBLE : View.GONE);
+        String composeText = binding.txComposeEditText.getText() == null
+                ? ""
+                : binding.txComposeEditText.getText().toString();
+        boolean hasComposeText = hasMeaningfulText(composeText);
         binding.templatePreviewText.setText(renderTemplatePreview());
         binding.selectedTemplateChip.setText(renderTxSourceChip(hasComposeText));
         setVisibleWhenHasText(binding.selectedTemplateChip);
         binding.txRouteChip.setText(renderTxRouteChip());
         binding.txStageChip.setText(renderTxContentChip(hasComposeText, composeText));
         binding.sqlQuickChip.setText(renderSqlQuickChipText());
-        binding.sendTxButton.setEnabled(!txSendInProgress);
-        binding.sendTxButton.setAlpha(txSendInProgress ? 0.55f : 1.0f);
-        binding.clearComposeButton.setVisibility(hasComposeText ? View.VISIBLE : View.GONE);
-        binding.clearComposeButton.setEnabled(hasComposeText && !txSendInProgress);
-        binding.pauseTxButton.setEnabled(txSendInProgress && activeTxStopSupported);
-        binding.pauseTxButton.setAlpha(txSendInProgress && activeTxStopSupported ? 1.0f : 0.45f);
-        binding.repeatTxButton.setVisibility(txSendInProgress ? View.GONE : View.VISIBLE);
-        binding.repeatTxButton.setEnabled(!txSendInProgress && hasRepeatableTxText());
-        binding.repeatTxButton.setAlpha(!txSendInProgress && hasRepeatableTxText() ? 1.0f : 0.45f);
-        binding.txStatusText.setText(renderTxStatus(hasComposeText));
-        setVisibleWhenHasText(binding.txStatusText);
+        int primaryIconRes = R.drawable.ic_ui_send;
+        int primaryCdRes = R.string.operate_tx_send_cd;
+        boolean primaryEnabled = hasComposeText;
+        float primaryAlpha = primaryEnabled ? 1.0f : 0.42f;
+        if (isRepeatCountdownRunning()) {
+            primaryIconRes = R.drawable.ic_ui_pause;
+            primaryCdRes = R.string.operate_tx_pause_cd;
+            primaryEnabled = true;
+            primaryAlpha = 1.0f;
+        } else if (isRepeatCountdownPaused()) {
+            primaryIconRes = R.drawable.ic_ui_play;
+            primaryCdRes = R.string.operate_tx_resume_cd;
+            primaryEnabled = true;
+            primaryAlpha = 1.0f;
+        } else if (txSendInProgress) {
+            if (txPauseRequested) {
+                primaryIconRes = R.drawable.ic_ui_pause;
+                primaryCdRes = R.string.operate_tx_pause_cd;
+                primaryEnabled = false;
+                primaryAlpha = 0.52f;
+            } else if (isActiveTxPaused()) {
+                primaryIconRes = R.drawable.ic_ui_play;
+                primaryCdRes = R.string.operate_tx_resume_cd;
+                primaryEnabled = true;
+                primaryAlpha = 1.0f;
+            } else {
+                primaryIconRes = R.drawable.ic_ui_pause;
+                primaryCdRes = R.string.operate_tx_pause_cd;
+                primaryEnabled = true;
+                primaryAlpha = 1.0f;
+            }
+        }
+        binding.sendTxButton.setEnabled(primaryEnabled);
+        binding.sendTxButton.setAlpha(primaryAlpha);
+        binding.sendTxButton.setImageResource(primaryIconRes);
+        binding.sendTxButton.setContentDescription(getString(primaryCdRes));
+        binding.sendTxButton.setBackgroundResource(R.drawable.operate_action_button_primary_background);
+        binding.sendTxButton.setColorFilter(ContextCompat.getColor(this, R.color.cwcn_tx_line));
+
+        boolean clearComposeEnabled = hasComposeText && !txSendInProgress && !txRepeatWaiting;
+        binding.clearComposeButton.setVisibility(View.VISIBLE);
+        binding.clearComposeButton.setEnabled(clearComposeEnabled);
+        binding.clearComposeButton.setAlpha(clearComposeEnabled ? 1.0f : 0.42f);
+
+        boolean resetEnabled = txSendInProgress
+                || txRepeatWaiting
+                || activeTxPlaybackSnapshot != null
+                || hasMeaningfulText(txDeliveryStatus);
+        binding.resetTxButton.setEnabled(resetEnabled);
+        binding.resetTxButton.setAlpha(resetEnabled ? 1.0f : 0.42f);
+
+        boolean repeatEnabled = hasComposeText
+                || txSendInProgress
+                || txRepeatWaiting
+                || hasMeaningfulText(repeatTxText);
+        binding.repeatToggleButton.setEnabled(repeatEnabled);
+        binding.repeatToggleButton.setAlpha(repeatEnabled ? 1.0f : 0.42f);
+        binding.repeatToggleButton.setBackgroundResource(txRepeatEnabled
+                ? R.drawable.operate_action_button_primary_background
+                : R.drawable.operate_action_button_secondary_background);
+        binding.repeatToggleButton.setColorFilter(ContextCompat.getColor(
+                this,
+                txRepeatEnabled ? R.color.cwcn_tx_line : R.color.cwcn_body
+        ));
+
+        boolean repeatIntervalEnabled = repeatEnabled && !txSendInProgress;
+        binding.repeatIntervalChip.setEnabled(repeatIntervalEnabled);
+        binding.repeatIntervalChip.setAlpha(repeatIntervalEnabled ? 1.0f : 0.42f);
+        binding.repeatIntervalChip.setText(renderRepeatIntervalChipText());
+        binding.repeatIntervalChip.setBackgroundResource(txRepeatEnabled
+                ? R.drawable.operate_chip_active_background
+                : R.drawable.operate_chip_background);
+
+        String txStatusText = renderTxStatus(hasComposeText);
+        String repeatCountdownText = renderRepeatCountdownText();
+        binding.txStatusText.setText(txStatusText);
+        binding.repeatCountdownText.setText(repeatCountdownText);
+        binding.repeatCountdownText.setVisibility(
+                hasMeaningfulText(repeatCountdownText) ? View.VISIBLE : View.GONE
+        );
+        binding.txStatusRow.setVisibility(
+                hasMeaningfulText(txStatusText) || hasMeaningfulText(repeatCountdownText)
+                        ? View.VISIBLE
+                        : View.GONE
+        );
+        binding.repeatCountdownProgressBar.setProgress(repeatCountdownProgress());
+        binding.repeatCountdownProgressBar.setVisibility(
+                txRepeatWaiting ? View.VISIBLE : View.INVISIBLE
+        );
         renderComposerPlaybackHighlight();
     }
 
@@ -1048,8 +1214,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 + " | "
                 + positiveOrDash(resolveDisplayWpm(snapshot)) + "WPM"
                 + " | "
-                + positiveOrDash(tone) + "Hz"
-                + " | " + getString(R.string.operate_status_raw_suffix);
+                + positiveOrDash(tone) + "Hz";
     }
 
     private String renderStatusDetail(@Nullable RxSessionSnapshot snapshot) {
@@ -1220,13 +1385,16 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
         TextView headlineView = new TextView(this);
         LinearLayout.LayoutParams headlineParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         );
+        headlineParams.weight = 1f;
         headlineParams.leftMargin = px(8);
         headlineView.setLayoutParams(headlineParams);
         headlineView.setText(entry.headline);
         headlineView.setTextSize(entry.compact ? 8.5f : 9.25f);
+        headlineView.setMaxLines(1);
+        headlineView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         headlineView.setTextColor(ContextCompat.getColor(
                 this,
                 entry.active ? entry.labelColorRes : R.color.cwcn_title
@@ -1235,28 +1403,51 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 entry.active ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
         topRow.addView(headlineView);
 
-        TextView metaView = new TextView(this);
-        LinearLayout.LayoutParams metaParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        metaParams.topMargin = px(entry.compact ? 2 : 3);
-        metaView.setLayoutParams(metaParams);
-        metaView.setText(entry.meta);
-        metaView.setTextSize(entry.compact ? 7.5f : 8.5f);
-        metaView.setTextColor(ContextCompat.getColor(
-                this,
-                entry.active ? entry.labelColorRes : R.color.cwcn_subtitle
-        ));
-        metaView.setAlpha(entry.active ? 0.94f : 0.8f);
-        card.addView(metaView);
+        boolean hasHeaderNote = hasMeaningfulText(entry.headerNote)
+                && !"-".equals(entry.headerNote.trim());
+        if (hasHeaderNote) {
+            TextView headerNoteView = new TextView(this);
+            LinearLayout.LayoutParams headerNoteParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            headerNoteParams.leftMargin = px(8);
+            headerNoteView.setLayoutParams(headerNoteParams);
+            headerNoteView.setText(entry.headerNote);
+            headerNoteView.setTextSize(entry.compact ? 7.5f : 8.25f);
+            headerNoteView.setMaxLines(1);
+            headerNoteView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            headerNoteView.setTextColor(ContextCompat.getColor(this, R.color.cwcn_subtitle));
+            headerNoteView.setAlpha(entry.active ? 0.9f : 0.8f);
+            topRow.addView(headerNoteView);
+        }
+
+        boolean hasMetaLine = hasMeaningfulText(entry.meta)
+                && !"-".equals(entry.meta.trim());
+        if (hasMetaLine) {
+            TextView metaView = new TextView(this);
+            LinearLayout.LayoutParams metaParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            metaParams.topMargin = px(entry.compact ? 2 : 3);
+            metaView.setLayoutParams(metaParams);
+            metaView.setText(entry.meta);
+            metaView.setTextSize(entry.compact ? 7.5f : 8.5f);
+            metaView.setTextColor(ContextCompat.getColor(
+                    this,
+                    entry.active ? entry.labelColorRes : R.color.cwcn_subtitle
+            ));
+            metaView.setAlpha(entry.active ? 0.94f : 0.8f);
+            card.addView(metaView);
+        }
 
         TextView bodyView = new TextView(this);
         LinearLayout.LayoutParams bodyParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        bodyParams.topMargin = px(entry.compact ? 2 : 4);
+        bodyParams.topMargin = px(hasMetaLine ? (entry.compact ? 2 : 4) : (entry.compact ? 1 : 3));
         bodyView.setLayoutParams(bodyParams);
         bodyView.setText(entry.body);
         bodyView.setTextSize(entry.compact ? 11f : 14f);
@@ -1399,18 +1590,19 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (shouldShowDeveloperFrontEndSummary(snapshot)) {
             return snapshot.developerFrontEndSummary();
         }
-        if (isOperateRxRawOnlyMode()) {
-            return getString(R.string.operate_rx_hint_raw_only);
-        }
         return "";
     }
 
     private String renderTxStatus(boolean hasComposeText) {
+        if (txRepeatWaiting && txRepeatCountdownPaused) {
+            return getString(R.string.operate_tx_status_repeat_paused);
+        }
         if (txSendInProgress) {
-            if (txStopRequested) {
-                return activeTxStopSupported
-                        ? getString(R.string.operate_tx_status_stopping)
-                        : getString(R.string.operate_tx_status_stop_requested);
+            if (txPauseRequested) {
+                return getString(R.string.operate_tx_status_pause_requested);
+            }
+            if (isActiveTxPaused()) {
+                return getString(R.string.operate_tx_status_paused);
             }
             if (activeTxPlaybackSnapshot != null && hasMeaningfulText(activeTxPlaybackSnapshot.statusMessage())) {
                 return renderPlaybackSnapshotStatus(activeTxPlaybackSnapshot);
@@ -1419,17 +1611,32 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     ? getString(R.string.operate_tx_status_sending_input)
                     : getString(R.string.operate_tx_status_sending_template);
         }
+        if (txRepeatWaiting) {
+            return hasMeaningfulText(txDeliveryStatus)
+                    ? txDeliveryStatus
+                    : getString(R.string.operate_tx_status_stopped);
+        }
         if (txDeliveryStatus != null && !txDeliveryStatus.trim().isEmpty()) {
             return txDeliveryStatus;
         }
         return "";
     }
 
+    private String renderRepeatCountdownText() {
+        if (!txRepeatWaiting) {
+            return "";
+        }
+        return getString(
+                R.string.operate_tx_repeat_countdown_compact,
+                resolveRepeatRemainingSeconds()
+        );
+    }
+
     private String renderTxRouteChip() {
         int wpm = resolveOperateWpm();
         RigProfile profile = rigSelectionStore.selectedProfile();
         String route;
-        if (txSendInProgress && hasMeaningfulText(activeTxRouteLabel)) {
+        if ((txSendInProgress || txRepeatWaiting) && hasMeaningfulText(activeTxRouteLabel)) {
             route = safeCompact(activeTxRouteLabel, 12);
         } else if (usePhoneFallbackRoute(profile)) {
             route = getString(R.string.operate_tx_route_phone_audio);
@@ -1442,6 +1649,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private String renderTxSourceChip(boolean hasComposeText) {
+        if (txRepeatWaiting) {
+            return getString(R.string.operate_tx_source_repeat_waiting);
+        }
         if (txSendInProgress) {
             return hasMeaningfulText(activeTxText)
                     ? getString(R.string.operate_tx_source_sending)
@@ -1454,12 +1664,17 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private String renderTxContentChip(boolean hasComposeText, String composeText) {
+        if (txRepeatWaiting) {
+            return getString(
+                    R.string.operate_tx_content_repeat_waiting,
+                    resolveRepeatRemainingSeconds()
+            );
+        }
         if (txSendInProgress && activeTxPlaybackSnapshot != null) {
             return renderPlaybackProgressSummary(activeTxPlaybackSnapshot);
         }
         if (!hasComposeText) {
-            String templateText = buildTemplateText(selectedTemplateId);
-            return getString(R.string.operate_tx_content_template_len, templateText.length());
+            return getString(R.string.operate_tx_content_input_len, 0);
         }
         int length = composeText == null || "-".equals(composeText) ? 0 : composeText.length();
         return getString(R.string.operate_tx_content_input_len, length);
@@ -1945,43 +2160,20 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     R.string.operate_callsign_selected_prefix,
                     selectedCallsign
             ));
-            builder.append("  |  ").append(getString(R.string.operate_callsign_selected_manual));
-            if (!candidates.isEmpty()) {
-                if (candidates.contains(selectedCallsign)) {
-                    if (candidates.size() > 1) {
-                        builder.append("  |  ")
-                                .append(getString(
-                                        R.string.operate_callsign_other_candidates,
-                                        candidates.size() - 1
-                                ));
-                    }
-                } else {
-                    builder.append("  |  ")
-                            .append(getString(
-                                    R.string.operate_callsign_current_rx_candidate,
-                                    candidates.get(0)
-                            ));
-                    if (candidates.size() > 1) {
-                        builder.append(" ")
-                                .append(getString(
-                                        R.string.operate_callsign_current_rx_candidates_more,
-                                        candidates.size()
-                                ));
-                    }
-                }
+            int additionalCount = candidates.contains(selectedCallsign)
+                    ? Math.max(0, candidates.size() - 1)
+                    : candidates.size();
+            if (additionalCount > 0) {
+                builder.append("  |  ")
+                        .append(getString(
+                                R.string.operate_callsign_other_candidates,
+                                additionalCount
+                        ));
             }
-            String context = renderCallsignHintContext(snapshot);
-            if (hasMeaningfulText(context)) {
-                builder.append("  |  ").append(context.trim());
-            }
-            builder.append("  |  ")
-                    .append(getString(R.string.operate_callsign_tap_switch))
-                    .append("  |  ")
-                    .append(getString(R.string.operate_callsign_long_press_log));
             return builder.toString();
         }
         if (candidates.isEmpty()) {
-            return getString(R.string.operate_callsign_waiting);
+            return "";
         }
         String primary = candidates.get(0);
         StringBuilder builder = new StringBuilder(getString(
@@ -1995,16 +2187,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                             candidates.size() - 1
                     ));
         }
-        String context = renderCallsignHintContext(snapshot);
-        if (hasMeaningfulText(context)) {
-            builder.append("  |  ").append(context.trim());
-        }
-        builder.append("  |  ")
-                .append(candidates.size() > 1
-                        ? getString(R.string.operate_callsign_tap_switch)
-                        : getString(R.string.operate_callsign_tap_set))
-                .append("  |  ")
-                .append(getString(R.string.operate_callsign_long_press_log));
         return builder.toString();
     }
 
@@ -2102,21 +2284,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 normalized,
                 scoreByCandidate.getOrDefault(normalized, 0) + Math.max(1, score)
         );
-    }
-
-    private String renderCallsignHintContext(@Nullable RxSessionSnapshot snapshot) {
-        if (snapshot == null) {
-            return "";
-        }
-        ArrayList<String> parts = new ArrayList<>();
-        if (snapshot.effectiveToneFrequencyHz() > 0) {
-            parts.add(snapshot.effectiveToneFrequencyHz() + "Hz");
-        }
-        int displayWpm = resolveDisplayWpm(snapshot);
-        if (displayWpm > 0) {
-            parts.add(displayWpm + "WPM");
-        }
-        return parts.isEmpty() ? "" : String.join("  |  ", parts);
     }
 
     private boolean isUiFriendlyCallsignCandidate(@Nullable String candidate) {
@@ -2520,16 +2687,17 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     private String renderReceiveMeta(RxSessionSnapshot snapshot) {
         ArrayList<String> parts = new ArrayList<>();
-        if (snapshot.captureActive()) {
-            parts.add(getString(R.string.operate_transcript_meta_live));
+        if (!snapshot.captureActive()) {
+            parts.add(renderAge(snapshot.updatedAtEpochMs()));
         }
-        parts.add(renderFriendlyOperateSourceLabel(snapshot.sourceLabel()));
-        parts.add(renderAge(snapshot.updatedAtEpochMs()));
         return String.join("  |  ", parts);
     }
 
-    private boolean isOperateRxRawOnlyMode() {
-        return OPERATE_RX_RAW_ONLY_MODE;
+    private String renderReceiveHeaderNote(RxSessionSnapshot snapshot) {
+        if (snapshot.captureActive()) {
+            return renderFriendlyOperateSourceLabel(snapshot.sourceLabel());
+        }
+        return "";
     }
 
     private void consumeOperateDecodeEvent(@Nullable CwDecodeEvent decodeEvent) {
@@ -4018,12 +4186,53 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return " | " + snapshot.developerFrontEndSummary();
     }
 
-    private void startImmediateTx() {
-        if (txSendInProgress) {
+    private void handlePrimaryTxAction() {
+        if (isRepeatCountdownRunning()) {
+            pauseRepeatCountdown();
             return;
         }
-        String txText = resolveImmediateTxText();
-        if (txText == null || txText.trim().isEmpty()) {
+        if (isRepeatCountdownPaused()) {
+            resumeRepeatCountdown();
+            return;
+        }
+        if (txSendInProgress) {
+            if (txPauseRequested) {
+                return;
+            }
+            if (isActiveTxPaused()) {
+                resumeImmediateTx();
+            } else {
+                pauseImmediateTx();
+            }
+            return;
+        }
+        startImmediateTx();
+    }
+
+    private void handleResetTxAction() {
+        if (txRepeatWaiting) {
+            cancelRepeatCountdown();
+            clearTxProgressState();
+            return;
+        }
+        if (txSendInProgress) {
+            txResetRequested = true;
+            stopImmediateTx();
+            return;
+        }
+        clearTxProgressState();
+    }
+
+    private void startImmediateTx() {
+        startImmediateTx(resolveImmediateTxText());
+    }
+
+    private void startImmediateTx(@Nullable String explicitText) {
+        if (txSendInProgress || txRepeatWaiting) {
+            return;
+        }
+        String txText = explicitText == null ? "" : explicitText.trim();
+        if (txText.isEmpty()) {
             setTxDeliveryStatus(getString(R.string.operate_tx_status_no_text));
             return;
         }
@@ -4043,9 +4252,13 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         CwTxPlan txPlan = buildActiveTxPlan(txText, profile);
         txSendInProgress = true;
         txStopRequested = false;
+        txPauseRequested = false;
+        txResetRequested = false;
+        cancelRepeatCountdown();
         txDeliveryStatus = "";
         activeTxAdapter = adapter;
         activeTxText = txText;
+        repeatTxText = txText;
         activeTxRouteLabel = adapter.displayName();
         activeTxPlan = txPlan;
         activeTxPlaybackSnapshot = initialPlaybackSnapshot(txPlan);
@@ -4068,28 +4281,31 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         updateComposerUi();
         new Thread(() -> {
             boolean sent = adapter.sendText(txText);
-            String status;
-            if (txStopRequested) {
-                status = getString(R.string.operate_tx_status_stopped);
-            } else {
-                status = sent
+            runOnUiThread(() -> {
+                mainHandler.removeCallbacks(txProgressRefreshRunnable);
+                syncActiveTxPlaybackSnapshot();
+                boolean resetRequested = txResetRequested;
+                String status = txStopRequested
+                        ? getString(R.string.operate_tx_status_stopped)
+                        : sent
                         ? getString(R.string.operate_tx_status_sent_via, adapter.displayName())
                         : getString(
                                 R.string.operate_tx_status_send_failed,
                                 adapter.displayName(),
                                 adapter.describeAvailability()
                         );
-            }
-            runOnUiThread(() -> {
-                mainHandler.removeCallbacks(txProgressRefreshRunnable);
-                syncActiveTxPlaybackSnapshot();
                 txSendInProgress = false;
                 txStopRequested = false;
-                txDeliveryStatus = status;
+                txPauseRequested = false;
+                txDeliveryStatus = resetRequested ? "" : status;
                 activeTxAdapter = null;
-                activeTxPlaybackSnapshot = finalizePlaybackSnapshot(activeTxPlaybackSnapshot, sent, status);
+                activeTxPlaybackSnapshot = resetRequested
+                        ? null
+                        : finalizePlaybackSnapshot(activeTxPlaybackSnapshot, sent, status);
                 activeTxStopSupported = false;
-                finalizeActiveTxTranscriptEntry(status);
+                finalizeActiveTxTranscriptEntry(resetRequested
+                        ? getString(R.string.operate_tx_status_stopped)
+                        : status);
                 transcriptRxSuppressedDuringTx = false;
                 if (immediateTxPausedRxCapture) {
                     immediateTxPausedRxCapture = false;
@@ -4097,10 +4313,46 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                         syncOperateRxEngine();
                     }
                 }
+                activeTxPlan = null;
+                if (resetRequested) {
+                    txResetRequested = false;
+                    activeTxRouteLabel = "";
+                    repeatTxText = "";
+                    updateComposerUi();
+                    refreshConversationOnly();
+                    return;
+                }
+                if (sent && txRepeatEnabled && hasMeaningfulText(repeatTxText)) {
+                    startRepeatCountdown(repeatTxText);
+                } else {
+                    activeTxRouteLabel = "";
+                }
                 updateComposerUi();
                 refreshConversationOnly();
             });
         }, "operate-immediate-tx").start();
+    }
+
+    private void pauseImmediateTx() {
+        RigControlAdapter adapter = activeTxAdapter;
+        if (!txSendInProgress || adapter == null) {
+            return;
+        }
+        if (adapter.supportsPauseResumeTextTransmission() && adapter.pauseTextTransmission()) {
+            txPauseRequested = true;
+            updateComposerUi();
+        }
+    }
+
+    private void resumeImmediateTx() {
+        RigControlAdapter adapter = activeTxAdapter;
+        if (!txSendInProgress || adapter == null) {
+            return;
+        }
+        if (adapter.supportsPauseResumeTextTransmission() && adapter.resumeTextTransmission()) {
+            txPauseRequested = false;
+            updateComposerUi();
+        }
     }
 
     private void stopImmediateTx() {
@@ -4109,6 +4361,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             return;
         }
         txStopRequested = true;
+        txPauseRequested = false;
         syncActiveTxPlaybackSnapshot();
         if (activeTxStopSupported) {
             adapter.stopTextTransmission();
@@ -4119,12 +4372,137 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private void stopImmediateTxForLifecycle() {
         RigControlAdapter adapter = activeTxAdapter;
         if (!txSendInProgress || adapter == null) {
+            cancelRepeatCountdown();
             return;
         }
         txStopRequested = true;
+        txPauseRequested = false;
         if (adapterSupportsStop(adapter)) {
             adapter.stopTextTransmission();
         }
+    }
+
+    private void startRepeatCountdown(String txText) {
+        if (!hasMeaningfulText(txText)) {
+            return;
+        }
+        repeatTxText = txText.trim();
+        txRepeatWaiting = true;
+        txRepeatCountdownPaused = false;
+        txRepeatRemainingMs = txRepeatIntervalSeconds * 1000L;
+        txRepeatNextStartAtElapsedMs = SystemClock.elapsedRealtime() + txRepeatRemainingMs;
+        mainHandler.removeCallbacks(txProgressRefreshRunnable);
+        mainHandler.post(txProgressRefreshRunnable);
+    }
+
+    private void cancelRepeatCountdown() {
+        txRepeatWaiting = false;
+        txRepeatCountdownPaused = false;
+        txRepeatNextStartAtElapsedMs = -1L;
+        txRepeatRemainingMs = -1L;
+        if (!txSendInProgress) {
+            mainHandler.removeCallbacks(txProgressRefreshRunnable);
+        }
+    }
+
+    private void pauseRepeatCountdown() {
+        if (!isRepeatCountdownRunning()) {
+            return;
+        }
+        txRepeatRemainingMs = resolveRepeatRemainingMs();
+        txRepeatCountdownPaused = true;
+        txRepeatNextStartAtElapsedMs = -1L;
+        updateComposerUi();
+    }
+
+    private void resumeRepeatCountdown() {
+        if (!isRepeatCountdownPaused()) {
+            return;
+        }
+        txRepeatCountdownPaused = false;
+        txRepeatRemainingMs = Math.max(0L, txRepeatRemainingMs);
+        txRepeatNextStartAtElapsedMs = SystemClock.elapsedRealtime() + txRepeatRemainingMs;
+        mainHandler.removeCallbacks(txProgressRefreshRunnable);
+        mainHandler.post(txProgressRefreshRunnable);
+        updateComposerUi();
+    }
+
+    private void toggleRepeatMode() {
+        boolean wasEnabled = txRepeatEnabled;
+        txRepeatEnabled = !txRepeatEnabled;
+        persistRepeatSettings();
+        if (!txRepeatEnabled && txRepeatWaiting) {
+            cancelRepeatCountdown();
+        } else if (!wasEnabled && !txSendInProgress && !txRepeatWaiting) {
+            startImmediateTx();
+        }
+        updateComposerUi();
+    }
+
+    private void openRepeatIntervalPicker() {
+        final int[] options = new int[] {5, 10, 15, 20, 30, 45, 60};
+        int checkedIndex = 0;
+        for (int index = 0; index < options.length; index++) {
+            if (options[index] == txRepeatIntervalSeconds) {
+                checkedIndex = index;
+                break;
+            }
+        }
+        CharSequence[] labels = new CharSequence[options.length];
+        for (int index = 0; index < options.length; index++) {
+            labels[index] = options[index] + "s";
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.operate_tx_repeat_interval_cd))
+                .setSingleChoiceItems(labels, checkedIndex, (dialog, which) -> {
+                    txRepeatIntervalSeconds = sanitizeRepeatIntervalSeconds(options[which]);
+                    persistRepeatSettings();
+                    if (txRepeatWaiting) {
+                        txRepeatRemainingMs = txRepeatIntervalSeconds * 1000L;
+                        if (txRepeatCountdownPaused) {
+                            txRepeatNextStartAtElapsedMs = -1L;
+                        } else {
+                            txRepeatNextStartAtElapsedMs = SystemClock.elapsedRealtime() + txRepeatRemainingMs;
+                        }
+                    }
+                    updateComposerUi();
+                    dialog.dismiss();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void persistRepeatSettings() {
+        if (operateUiPreferences == null) {
+            return;
+        }
+        operateUiPreferences.edit()
+                .putBoolean(PREF_TX_REPEAT_ENABLED, txRepeatEnabled)
+                .putInt(PREF_TX_REPEAT_INTERVAL_SECONDS, txRepeatIntervalSeconds)
+                .apply();
+    }
+
+    private int sanitizeRepeatIntervalSeconds(int seconds) {
+        return Math.max(5, Math.min(120, seconds));
+    }
+
+    private String renderRepeatIntervalChipText() {
+        return txRepeatIntervalSeconds + "s";
+    }
+
+    private void clearTxProgressState() {
+        cancelRepeatCountdown();
+        txPauseRequested = false;
+        txResetRequested = false;
+        txStopRequested = false;
+        txDeliveryStatus = "";
+        activeTxPlaybackSnapshot = null;
+        activeTxPlan = null;
+        activeTxRouteLabel = "";
+        repeatTxText = "";
+        activeTxText = "";
+        updateComposerUi();
+        refreshConversationOnly();
     }
 
     public static void requestSharedOperateRxStop() {
@@ -4175,6 +4553,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         CwTxPlaybackSnapshot snapshot = adapter.currentTxPlaybackSnapshot();
         if (snapshot != null) {
             activeTxPlaybackSnapshot = snapshot;
+            if (snapshot.state() == CwTxState.PAUSED || snapshot.state() == CwTxState.PLAYING) {
+                txPauseRequested = false;
+            }
         }
         refreshActiveTxTranscriptEntry();
     }
@@ -4184,11 +4565,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         String composeText = binding.txComposeEditText.getText() == null
                 ? ""
                 : binding.txComposeEditText.getText().toString().trim();
-        if (!composeText.isEmpty()) {
-            return renderTemplateVariables(composeText).trim();
-        }
-        String templateText = buildTemplateText(selectedTemplateId);
-        return templateText == null ? "" : templateText.trim();
+        return composeText.isEmpty() ? "" : renderTemplateVariables(composeText).trim();
     }
 
     @Nullable
@@ -4347,10 +4724,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return throwable.getMessage().trim();
     }
 
-    private boolean hasRepeatableTxText() {
-        return hasMeaningfulText(activeTxText) || hasMeaningfulText(resolveImmediateTxText());
-    }
-
     private String renderPlaybackProgressSummary(@Nullable CwTxPlaybackSnapshot snapshot) {
         if (snapshot == null) {
             return getString(R.string.operate_tx_progress_label);
@@ -4432,11 +4805,13 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     private String renderActiveTxStreamMeta() {
         String route = hasMeaningfulText(activeTxRouteLabel) ? activeTxRouteLabel : renderTxRouteChip();
-        String stage = activeTxPlaybackSnapshot == null
-                ? getString(R.string.operate_tx_stage_transmitting)
-                : renderPlaybackProgressChip(activeTxPlaybackSnapshot);
-        if (activeTxPlaybackSnapshot == null) {
+        String stage;
+        if (txRepeatWaiting) {
+            stage = getString(R.string.operate_tx_stage_repeat_waiting);
+        } else if (activeTxPlaybackSnapshot == null) {
             stage = getString(R.string.operate_tx_stage_transmitting);
+        } else {
+            stage = renderPlaybackProgressChip(activeTxPlaybackSnapshot);
         }
         return route + "  |  " + stage;
     }
@@ -4503,6 +4878,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (snapshot == null) {
             return getString(R.string.operate_tx_progress_idle);
         }
+        if (snapshot.state() == CwTxState.PAUSED) {
+            return getString(R.string.operate_tx_stage_paused);
+        }
         if (snapshot.state() == CwTxState.STOPPED) {
             return getString(R.string.operate_tx_progress_stopped);
         }
@@ -4518,6 +4896,17 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private String renderPlaybackSnapshotStatus(@Nullable CwTxPlaybackSnapshot snapshot) {
         if (snapshot == null) {
             return "";
+        }
+        if (snapshot.state() == CwTxState.PAUSED) {
+            StringBuilder pausedBuilder = new StringBuilder(getString(R.string.operate_tx_status_paused));
+            if (snapshot.currentElementLabel() != null && !snapshot.currentElementLabel().trim().isEmpty()) {
+                pausedBuilder.append("  |  ")
+                        .append(getString(
+                                R.string.operate_tx_snapshot_current_char,
+                                snapshot.currentElementLabel().trim()
+                        ));
+            }
+            return pausedBuilder.toString();
         }
         StringBuilder builder = new StringBuilder();
         if (hasMeaningfulText(snapshot.statusMessage())) {
@@ -5222,6 +5611,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         boolean outgoing = transcriptEntry.type == TranscriptEntryType.TX;
         String label = outgoing ? "TX" : "RX";
         String headline = renderTranscriptTimestamp(transcriptEntry.startedAtEpochMs);
+        String headerNote = renderTranscriptHeaderNote(transcriptEntry);
         String meta = renderTranscriptMeta(transcriptEntry);
         CharSequence body = outgoing
                 ? renderTranscriptTxBody(transcriptEntry)
@@ -5232,6 +5622,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return new StreamEntry(
                 label,
                 headline,
+                headerNote,
                 meta,
                 body,
                 backgroundRes,
@@ -5243,31 +5634,32 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         );
     }
 
+    private String renderTranscriptHeaderNote(TranscriptEntry transcriptEntry) {
+        if (!transcriptEntry.active || !hasMeaningfulText(transcriptEntry.sourceOrRouteLabel)) {
+            return "";
+        }
+        if (transcriptEntry.type == TranscriptEntryType.RX) {
+            return renderFriendlyOperateSourceLabel(transcriptEntry.sourceOrRouteLabel);
+        }
+        if (transcriptEntry.type == TranscriptEntryType.TX) {
+            return safeCompact(transcriptEntry.sourceOrRouteLabel.trim(), 18);
+        }
+        return "";
+    }
+
     private String renderTranscriptMeta(TranscriptEntry transcriptEntry) {
         if (transcriptEntry.type == TranscriptEntryType.RX) {
-            ArrayList<String> parts = new ArrayList<>();
-            if (transcriptEntry.active) {
-                parts.add(getString(R.string.operate_transcript_meta_live));
-            }
-            if (hasMeaningfulText(transcriptEntry.sourceOrRouteLabel)) {
-                parts.add(renderFriendlyOperateSourceLabel(transcriptEntry.sourceOrRouteLabel));
-            }
-            return parts.isEmpty() ? "-" : String.join("  |  ", parts);
+            return "";
         }
-        ArrayList<String> parts = new ArrayList<>();
-        if (hasMeaningfulText(transcriptEntry.stateLabel)) {
-            parts.add(transcriptEntry.stateLabel.trim());
+        String stateLabel = trimToNull(transcriptEntry.stateLabel);
+        if (stateLabel == null) {
+            return "";
         }
-        if (hasMeaningfulText(transcriptEntry.sourceOrRouteLabel)) {
-            parts.add(transcriptEntry.sourceOrRouteLabel.trim());
+        if (transcriptEntry.active
+                && stateLabel.equals(getString(R.string.operate_tx_stage_transmitting))) {
+            return "";
         }
-        if (transcriptEntry.type == TranscriptEntryType.TX
-                && transcriptEntry.active
-                && hasMeaningfulText(transcriptEntry.bodyText)
-                && transcriptEntry.progressIndex >= 0) {
-            parts.add(renderTranscriptProgressMeta(transcriptEntry));
-        }
-        return parts.isEmpty() ? "-" : String.join("  |  ", parts);
+        return stateLabel;
     }
 
     private CharSequence renderTranscriptRxBody(TranscriptEntry transcriptEntry) {
@@ -5434,6 +5826,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             entries.add(new StreamEntry(
                     "RX",
                     getString(R.string.operate_transcript_empty_headline),
+                    "",
                     getString(R.string.operate_transcript_empty_meta),
                     getString(R.string.operate_transcript_empty_body),
                     R.drawable.operate_stream_card_rx,
@@ -5451,6 +5844,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             entries.add(new StreamEntry(
                     "RX",
                     getString(R.string.operate_transcript_waiting_headline),
+                    "",
                     shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission()
                             ? getString(R.string.operate_transcript_waiting_meta_permission)
                             : shouldUsePhoneMicrophoneRx()
@@ -5473,6 +5867,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             entries.add(new StreamEntry(
                     "RX",
                     renderTranscriptTimestamp(snapshot.updatedAtEpochMs()),
+                    renderReceiveHeaderNote(snapshot),
                     renderReceiveMeta(snapshot),
                     safeValue(rawText),
                     R.drawable.operate_stream_card_rx,
@@ -5488,6 +5883,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             entries.add(new StreamEntry(
                     "RX",
                     "-",
+                    "",
                     "-",
                     "-",
                     R.drawable.operate_stream_card_rx,

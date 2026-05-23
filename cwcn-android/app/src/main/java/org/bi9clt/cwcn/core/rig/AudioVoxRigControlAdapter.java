@@ -102,6 +102,21 @@ public final class AudioVoxRigControlAdapter implements RigControlAdapter {
         return lastSnapshot != null && lastSnapshot.state() == CwTxState.COMPLETED;
     }
 
+    @Override
+    public boolean supportsPauseResumeTextTransmission() {
+        return true;
+    }
+
+    @Override
+    public boolean pauseTextTransmission() {
+        return txRunner.requestPauseFromCurrentCharacter();
+    }
+
+    @Override
+    public boolean resumeTextTransmission() {
+        return txRunner.resume();
+    }
+
     CwTxPlaybackSnapshot lastSnapshot() {
         return lastSnapshot;
     }

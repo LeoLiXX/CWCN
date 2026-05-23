@@ -29,6 +29,18 @@ public interface RigControlAdapter {
         return keyUp();
     }
 
+    default boolean supportsPauseResumeTextTransmission() {
+        return false;
+    }
+
+    default boolean pauseTextTransmission() {
+        return false;
+    }
+
+    default boolean resumeTextTransmission() {
+        return false;
+    }
+
     default boolean supportsConfigurableTextToCwProfile() {
         return false;
     }

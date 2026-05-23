@@ -179,6 +179,23 @@ public final class UsbSerialKeyerRigControlAdapter implements RigControlAdapter 
         return lastSnapshot != null && lastSnapshot.state() == CwTxState.COMPLETED;
     }
 
+    @Override
+    public boolean supportsPauseResumeTextTransmission() {
+        return true;
+    }
+
+    @Override
+    public boolean pauseTextTransmission() {
+        CwTxRunner runner = txRunner;
+        return runner != null && runner.requestPauseFromCurrentCharacter();
+    }
+
+    @Override
+    public boolean resumeTextTransmission() {
+        CwTxRunner runner = txRunner;
+        return runner != null && runner.resume();
+    }
+
     CwTxPlaybackSnapshot lastSnapshot() {
         return lastSnapshot;
     }

@@ -236,6 +236,23 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
     }
 
     @Override
+    public boolean supportsPauseResumeTextTransmission() {
+        return true;
+    }
+
+    @Override
+    public boolean pauseTextTransmission() {
+        CwTxRunner runner = txRunner;
+        return runner != null && runner.requestPauseFromCurrentCharacter();
+    }
+
+    @Override
+    public boolean resumeTextTransmission() {
+        CwTxRunner runner = txRunner;
+        return runner != null && runner.resume();
+    }
+
+    @Override
     public boolean supportsConfigurableTextToCwProfile() {
         ActiveConfiguration configuration = configurationProvider.activeConfiguration();
         return configuration != null && supportsNativeCwProfile(configuration);
