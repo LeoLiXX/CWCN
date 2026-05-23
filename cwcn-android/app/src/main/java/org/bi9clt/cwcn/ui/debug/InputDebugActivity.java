@@ -11,10 +11,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.text.Editable;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
-import android.text.TextWatcher;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.StyleSpan;
 import android.text.style.UnderlineSpan;
@@ -22,14 +20,12 @@ import android.graphics.Typeface;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -37,8 +33,6 @@ import androidx.documentfile.provider.DocumentFile;
 
 import org.bi9clt.cwcn.BuildConfig;
 import org.bi9clt.cwcn.R;
-import org.bi9clt.cwcn.core.adif.CwAdifExporter;
-import org.bi9clt.cwcn.core.adif.CwAdifFileWriter;
 import org.bi9clt.cwcn.core.app.RxInputSettingsStore;
 import org.bi9clt.cwcn.core.audio.AudioFrame;
 import org.bi9clt.cwcn.core.audio.AudioInputHealthFormatter;
@@ -63,10 +57,8 @@ import org.bi9clt.cwcn.core.interpreter.CwInterpretationEvent;
 import org.bi9clt.cwcn.core.interpreter.CwInterpretedToken;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreter;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreterSnapshot;
-import org.bi9clt.cwcn.core.log.ConfirmedQsoLog;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
-import org.bi9clt.cwcn.core.qso.QsoStateEvent;
 import org.bi9clt.cwcn.core.qso.QsoStateMachine;
 import org.bi9clt.cwcn.core.rx.RxCommittedDecodeController;
 import org.bi9clt.cwcn.core.rx.RxCommittedOutputController;
@@ -107,8 +99,6 @@ import org.bi9clt.cwcn.core.timing.CwHybridTimingModel;
 import org.bi9clt.cwcn.core.timing.CwTimingSnapshot;
 import org.bi9clt.cwcn.databinding.ActivityInputDebugBinding;
 import org.bi9clt.cwcn.ui.developer.DeveloperToolsActivity;
-import org.bi9clt.cwcn.ui.qso.QsoEditorActivity;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -171,12 +161,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private long receivedSampleCount;
     private int lastPeakAmplitude;
     private double lastRmsAmplitude;
-    private QsoDraftSnapshot persistedDraftSnapshot;
-    private int confirmedLogCount;
-    private String qsoStorageStatusMessage = "";
-    private String adifExportStatusMessage = "";
-    private String qsoEditorStatusMessage = "";
-    private String callsignCandidateStatusMessage = "";
     private int localReplayAnalysisSqlPercent = -1;
     private String localReplayAnalysisKey = "";
     private String localReplayAnalysisSummary = "";
@@ -190,8 +174,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private boolean fixtureReplayInProgress;
     private boolean hypothesisGuardExperimentEnabled;
     private boolean batchRunInProgress;
-    private boolean syncingDraftEditor;
-    private boolean draftEditorDirty;
     private boolean detailedPanelsVisible;
     private boolean activityResumed;
     private boolean liveUiRefreshPosted;
@@ -293,13 +275,11 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         restoreSelectedLocalFile();
         consumeDeveloperTraceIntent(getIntent());
         restoreSelectedLocalFolder();
-        restorePersistedDraftIfAvailable();
         refreshStoredState();
 
         binding.versionText.setText(getString(R.string.bootstrap_version, BuildConfig.VERSION_NAME));
         binding.summaryText.setText(getString(R.string.bootstrap_summary));
         binding.moduleListText.setText(renderModuleList(BootstrapRegistry.defaultModules()));
-        setupDraftEditor();
         setupInputSourceSelector();
         setupFixtureScenarioSelector();
         setupPreferredToneControls();
@@ -391,24 +371,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         });
     }
 
-    private void setupDraftEditor() {
-        TextWatcher watcher = new SimpleTextWatcher() {
-            @Override
-            public void afterTextChanged(Editable editable) {
-                if (!syncingDraftEditor) {
-                    draftEditorDirty = true;
-                    binding.qsoEditorStatusText.setText(renderQsoEditorStatus());
-                }
-            }
-        };
-        binding.stationCallsignEditText.addTextChangedListener(watcher);
-        binding.remoteCallsignEditText.addTextChangedListener(watcher);
-        binding.rstSentEditText.addTextChangedListener(watcher);
-        binding.rstRcvdEditText.addTextChangedListener(watcher);
-        binding.nameEditText.addTextChangedListener(watcher);
-        binding.qthEditText.addTextChangedListener(watcher);
-    }
-
     private void setupActions() {
         binding.refreshStatusButton.setOnClickListener(view -> refreshUiSnapshot());
         binding.requestPermissionButton.setOnClickListener(view -> requestMissingPermissions());
@@ -423,8 +385,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.selectLocalFileButton.setOnClickListener(view -> launchLocalFilePicker());
         binding.selectLocalFolderButton.setOnClickListener(view -> launchLocalFolderPicker());
         binding.runBatchAnalysisButton.setOnClickListener(view -> startBatchAnalysis());
-        binding.applyDraftEditsButton.setOnClickListener(view -> applyDraftEditorEdits());
-        binding.resetDraftEditsButton.setOnClickListener(view -> resetDraftEditorEdits());
     }
 
     private void setupPreferredToneControls() {
@@ -457,7 +417,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         RxAudioSource selectedSource = sourceForOption(selectedOption);
         CwInterpreterSnapshot interpreterSnapshot = cwInterpreter.snapshot();
         CwInterpreterSnapshot committedInterpreterSnapshot = currentCommittedInterpreterSnapshot();
-        QsoDraftSnapshot qsoSnapshot = currentQsoSnapshot();
         binding.fixtureScenarioSpinner.setEnabled(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE);
         binding.fixtureScenarioLabelText.setVisibility(selectedOption == InputSourceOption.SYNTHETIC_FIXTURE
                 ? View.VISIBLE
@@ -516,18 +475,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.interpreterCallsignsText.setText(renderInterpreterCallsigns(interpreterSnapshot));
         binding.interpreterHintsText.setText(renderInterpreterHints(interpreterSnapshot));
         binding.lastInterpreterEventText.setText(renderLastInterpreterEvent());
-        binding.qsoPhaseText.setText(renderQsoPhase(qsoSnapshot));
-        setStableText(binding.qsoDraftText, renderQsoDraft(qsoSnapshot));
-        syncDraftEditorFromSnapshot(qsoSnapshot, false);
-        binding.qsoEditorStatusText.setText(renderQsoEditorStatus());
-        refreshCallsignCandidateButtons(committedInterpreterSnapshot);
-        binding.callsignCandidateStatusText.setText(renderCallsignCandidateStatus(committedInterpreterSnapshot));
-        binding.qsoReadinessText.setText(renderQsoReadiness(qsoSnapshot));
-        binding.lastQsoEventText.setText(renderLastQsoEvent(qsoSnapshot));
-        binding.qsoStorageStatusText.setText(renderQsoStorageStatus());
-        binding.adifFieldMapText.setText(renderAdifFieldMap());
-        binding.adifPreviewText.setText(renderAdifPreview());
-        binding.adifExportStatusText.setText(renderAdifExportStatus());
 
         boolean canStartSelectedSource = false;
         if (selectedSource != null) {
@@ -549,12 +496,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.stopCaptureButton.setEnabled(anySourceActive());
         binding.rxFocusStopCaptureButton.setEnabled(anySourceActive());
         binding.runBatchAnalysisButton.setEnabled(!anySourceActive() && !batchRunInProgress);
-        binding.applyDraftEditsButton.setEnabled(draftEditorDirty);
-        binding.resetDraftEditsButton.setEnabled(hasManualCorrections(qsoSnapshot));
-        binding.saveDraftButton.setEnabled(hasDraftContent(qsoSnapshot) || draftEditorDirty);
-        binding.confirmLogButton.setEnabled(hasConfirmableDraft(qsoSnapshot) || hasRemoteCallsignInEditor());
-        binding.exportAdifButton.setEnabled(confirmedLogCount > 0);
-        publishRxSessionSnapshot(interpreterSnapshot, qsoSnapshot);
+        publishRxSessionSnapshot(interpreterSnapshot);
     }
 
     private void toggleDebugDetails() {
@@ -568,8 +510,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 ? "收起深度诊断面板"
                 : "展开深度诊断面板");
         binding.deviceStatusPanel.setVisibility(detailedVisibility);
-        binding.adifPanel.setVisibility(View.GONE);
-        binding.qsoPanel.setVisibility(View.GONE);
         binding.interpreterPanel.setVisibility(detailedVisibility);
         binding.decoderPanel.setVisibility(detailedVisibility);
         binding.timingPanel.setVisibility(detailedVisibility);
@@ -609,15 +549,22 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + ", frame-gap resets " + snapshot.frameGapResetCount();
     }
 
-    private String renderRxFocusDecode(CwInterpreterSnapshot interpreterSnapshot) {
-        return "Decoded: " + renderDecoderOutput()
-                + "\nNormalized: " + renderInterpreterNormalizedText(interpreterSnapshot)
-                + "\nCallsigns: " + renderInterpreterCallsigns(interpreterSnapshot);
+    private String renderRxFocusDecode(@Nullable CwInterpreterSnapshot interpreterSnapshot) {
+        return getString(R.string.interpreter_raw_prefix)
+                + debugDisplayText(interpreterSnapshot == null ? null : interpreterSnapshot.rawText())
+                + "\n"
+                + getString(R.string.interpreter_normalized_prefix)
+                + debugDisplayText(interpreterSnapshot == null ? null : interpreterSnapshot.normalizedText())
+                + "\n"
+                + getString(
+                R.string.interpreter_callsign_value,
+                summarizeCallsignCandidates(interpreterSnapshot)
+        );
     }
 
     private String renderRawCommitGateSummary() {
-        return (debugRawCommitGate.gateOpenInCurrentTurn() ? "open" : "buffering")
-                + " | pending " + debugRawCommitGate.pendingFinalEventCount();
+        return (debugRawCommitGate.gateOpenInCurrentTurn() ? "已打开" : "缓冲中")
+                + " | 待提交 " + debugRawCommitGate.pendingFinalEventCount();
     }
 
     private CwInterpreterSnapshot currentCommittedInterpreterSnapshot() {
@@ -2411,6 +2358,30 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         return value == null ? "" : value;
     }
 
+    private String currentTurnDebugSummary() {
+        if (debugRxCore == null || debugRxCore.turnController() == null) {
+            return "-";
+        }
+        String summary = debugRxCore.turnController().compactDebugSummary();
+        return summary == null || summary.trim().isEmpty() ? "-" : summary.trim();
+    }
+
+    private String debugDisplayText(@Nullable String value) {
+        String normalized = safeText(value).trim();
+        return normalized.isEmpty() ? "-" : normalized;
+    }
+
+    private String summarizeCallsignCandidates(@Nullable CwInterpreterSnapshot snapshot) {
+        if (snapshot == null || snapshot.callsignCandidates().isEmpty()) {
+            return "-";
+        }
+        return getString(
+                R.string.interpreter_callsign_summary,
+                debugDisplayText(snapshot.primaryCallsignCandidate()),
+                String.join(", ", snapshot.callsignCandidates())
+        );
+    }
+
     private String renderTimingEventStats() {
         CwTimingSnapshot snapshot = cwTimingModel.snapshot();
         return getString(
@@ -2493,7 +2464,12 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         String sequence = snapshot.currentSequence().isEmpty()
                 ? getString(R.string.decoder_sequence_empty)
                 : snapshot.currentSequence();
-        return getString(R.string.decoder_state_value, sequence);
+        return getString(
+                R.string.decoder_state_value,
+                currentTurnDebugSummary(),
+                renderRawCommitGateSummary(),
+                sequence
+        );
     }
 
     private String renderDecoderEventStats() {
@@ -2535,26 +2511,23 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         if (snapshot.rawText().isEmpty()) {
             return getString(R.string.interpreter_raw_empty);
         }
-        return buildHighlightedInterpreterText("Raw Text: ", snapshot, false);
+        return buildHighlightedInterpreterText(getString(R.string.interpreter_raw_prefix), snapshot, false);
     }
 
     private CharSequence renderInterpreterNormalizedText(CwInterpreterSnapshot snapshot) {
         if (snapshot.normalizedText().isEmpty()) {
             return getString(R.string.interpreter_normalized_empty);
         }
-        return buildHighlightedInterpreterText("Normalized Text: ", snapshot, true);
+        return buildHighlightedInterpreterText(getString(R.string.interpreter_normalized_prefix), snapshot, true);
     }
 
     private String renderInterpreterCallsigns(CwInterpreterSnapshot snapshot) {
         if (snapshot.callsignCandidates().isEmpty()) {
             return getString(R.string.interpreter_callsign_empty);
         }
-        String primary = snapshot.primaryCallsignCandidate() == null
-                ? "(none)"
-                : snapshot.primaryCallsignCandidate();
         return getString(
                 R.string.interpreter_callsign_value,
-                "Primary: " + primary + " | All: " + String.join(", ", snapshot.callsignCandidates())
+                summarizeCallsignCandidates(snapshot)
         );
     }
 
@@ -2576,7 +2549,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             if (builder.length() > 0) {
                 builder.append('\n');
             }
-            builder.append("Recovered/normalized: ").append(normalizedSummary);
+            builder.append(getString(R.string.interpreter_normalized_summary_value, normalizedSummary));
         }
         return builder.toString();
     }
@@ -2668,258 +2641,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         return normalizedPairs.isEmpty() ? "" : String.join(" / ", normalizedPairs);
     }
 
-    private String renderQsoPhase(QsoDraftSnapshot snapshot) {
-        return getString(R.string.qso_phase_value, snapshot.phase().displayName());
-    }
-
-    private String renderQsoDraft(QsoDraftSnapshot snapshot) {
-        String myCall = snapshot.stationCallsignUsed() == null
-                ? getString(R.string.qso_draft_none)
-                : snapshot.stationCallsignUsed();
-        String callsign = snapshot.remoteCallsignCandidate() == null
-                ? getString(R.string.qso_draft_none)
-                : snapshot.remoteCallsignCandidate();
-        String rstSent = snapshot.rstSentCandidate() == null
-                ? getString(R.string.qso_draft_none)
-                : snapshot.rstSentCandidate();
-        String rstRcvd = snapshot.rstRcvdCandidate() == null
-                ? getString(R.string.qso_draft_none)
-                : snapshot.rstRcvdCandidate();
-        String name = snapshot.nameCandidate() == null
-                ? getString(R.string.qso_draft_none)
-                : snapshot.nameCandidate();
-        String qth = snapshot.qthCandidate() == null
-                ? getString(R.string.qso_draft_none)
-                : snapshot.qthCandidate();
-        String hints = snapshot.hints().isEmpty()
-                ? getString(R.string.qso_draft_none)
-                : String.join(" / ", snapshot.hints());
-        return getString(R.string.qso_draft_value, myCall, callsign, rstSent, rstRcvd, name, qth, hints);
-    }
-
-    private String renderQsoReadiness(QsoDraftSnapshot snapshot) {
-        return snapshot.readyForDraftConfirmation()
-                ? getString(R.string.qso_ready_yes)
-                : getString(R.string.qso_ready_no);
-    }
-
-    private String renderLastQsoEvent(QsoDraftSnapshot snapshot) {
-        QsoStateEvent event = snapshot.lastEvent();
-        if (event == null) {
-            return getString(R.string.qso_event_empty);
-        }
-        return getString(
-                R.string.qso_event_value,
-                event.phase().displayName(),
-                event.summary()
-        );
-    }
-
-    private String renderAdifFieldMap() {
-        List<String> mappings = CwAdifExporter.previewMappedFields(currentQsoSnapshot());
-        if (mappings.isEmpty()) {
-            return getString(R.string.adif_field_map_empty);
-        }
-        return getString(R.string.adif_field_map_value, String.join(" / ", mappings));
-    }
-
-    private String renderAdifPreview() {
-        String preview = CwAdifExporter.buildPreview(currentQsoSnapshot());
-        if (preview.isEmpty()) {
-            return getString(R.string.adif_preview_empty);
-        }
-        return getString(R.string.adif_preview_value, preview);
-    }
-
-    private String renderQsoEditorStatus() {
-        QsoDraftSnapshot snapshot = currentQsoSnapshot();
-        StringBuilder builder = new StringBuilder();
-        builder.append(hasManualCorrections(snapshot) ? "Manual override active." : "Using live decoded draft.");
-        if (draftEditorDirty) {
-            builder.append("\nEditor has unapplied changes.");
-        }
-        if (!qsoEditorStatusMessage.isEmpty()) {
-            builder.append("\nLast edit: ").append(qsoEditorStatusMessage);
-        }
-        return builder.toString();
-    }
-
-    private String renderCallsignCandidateStatus(CwInterpreterSnapshot snapshot) {
-        StringBuilder builder = new StringBuilder();
-        if (snapshot.callsignCandidates().isEmpty()) {
-            builder.append("No callsign candidates detected yet.");
-        } else {
-            builder.append("Primary candidate: ")
-                    .append(snapshot.primaryCallsignCandidate() == null ? "(none)" : snapshot.primaryCallsignCandidate())
-                    .append("\nTap a candidate to fill the remote callsign.");
-        }
-        if (!callsignCandidateStatusMessage.isEmpty()) {
-            builder.append("\nLast candidate action: ").append(callsignCandidateStatusMessage);
-        }
-        return builder.toString();
-    }
-
-    private void refreshCallsignCandidateButtons(CwInterpreterSnapshot snapshot) {
-        binding.callsignCandidateContainer.removeAllViews();
-        List<String> candidates = snapshot.callsignCandidates();
-        if (candidates.isEmpty()) {
-            AppCompatButton button = createCandidateButton("(none)");
-            button.setEnabled(false);
-            binding.callsignCandidateContainer.addView(button);
-            return;
-        }
-
-        for (String candidate : candidates) {
-            AppCompatButton button = createCandidateButton(candidate);
-            button.setOnClickListener(view -> applyCallsignCandidate(candidate));
-            binding.callsignCandidateContainer.addView(button);
-        }
-    }
-
-    private AppCompatButton createCandidateButton(String label) {
-        AppCompatButton button = new AppCompatButton(this);
-        button.setText(label);
-        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        layoutParams.setMarginEnd(dpToPx(8));
-        button.setLayoutParams(layoutParams);
-        return button;
-    }
-
-    private void applyCallsignCandidate(String callsign) {
-        syncingDraftEditor = true;
-        binding.remoteCallsignEditText.setText(callsign);
-        syncingDraftEditor = false;
-        draftEditorDirty = true;
-        callsignCandidateStatusMessage = "Filled remote callsign with " + callsign + ".";
-        applyDraftEditorEdits();
-    }
-
-    private void syncDraftEditorFromSnapshot(QsoDraftSnapshot snapshot, boolean force) {
-        if (!force && draftEditorDirty) {
-            return;
-        }
-        syncingDraftEditor = true;
-        binding.stationCallsignEditText.setText(valueOrEmpty(snapshot.stationCallsignUsed()));
-        binding.remoteCallsignEditText.setText(valueOrEmpty(snapshot.remoteCallsignCandidate()));
-        binding.rstSentEditText.setText(valueOrEmpty(snapshot.rstSentCandidate()));
-        binding.rstRcvdEditText.setText(valueOrEmpty(snapshot.rstRcvdCandidate()));
-        binding.nameEditText.setText(valueOrEmpty(snapshot.nameCandidate()));
-        binding.qthEditText.setText(valueOrEmpty(snapshot.qthCandidate()));
-        syncingDraftEditor = false;
-        draftEditorDirty = false;
-    }
-
-    private void applyDraftEditorEdits() {
-        qsoStateMachine.applyManualCorrections(
-                normalizedEditorValue(binding.stationCallsignEditText.getText()),
-                normalizedEditorValue(binding.remoteCallsignEditText.getText()),
-                normalizedEditorValue(binding.rstSentEditText.getText()),
-                normalizedEditorValue(binding.rstRcvdEditText.getText()),
-                normalizedEditorValue(binding.nameEditText.getText()),
-                normalizedEditorValue(binding.qthEditText.getText()),
-                System.currentTimeMillis()
-        );
-        draftEditorDirty = false;
-        qsoEditorStatusMessage = "Applied manual draft corrections.";
-        refreshUiSnapshot();
-    }
-
-    private void resetDraftEditorEdits() {
-        qsoStateMachine.clearManualCorrections(System.currentTimeMillis());
-        draftEditorDirty = false;
-        qsoEditorStatusMessage = "Cleared manual draft corrections.";
-        syncDraftEditorFromSnapshot(qsoStateMachine.snapshot(), true);
-        refreshUiSnapshot();
-    }
-
-    private String renderQsoStorageStatus() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("Stored draft: ");
-        if (persistedDraftSnapshot != null && hasDraftContent(persistedDraftSnapshot)) {
-            String label = persistedDraftSnapshot.remoteCallsignCandidate();
-            if (label == null || label.isEmpty()) {
-                label = persistedDraftSnapshot.phase().displayName();
-            }
-            builder.append(label);
-        } else {
-            builder.append("none");
-        }
-        if (!qsoStorageStatusMessage.isEmpty()) {
-            builder.append("\nLast action: ").append(qsoStorageStatusMessage);
-        }
-        return builder.toString();
-    }
-
-    private String renderAdifExportStatus() {
-        return "QSO/ADIF workflow entries are hidden for now so this screen can stay focused on RX analysis.";
-    }
-
-    private void restorePersistedDraftIfAvailable() {
-        QsoDraftSnapshot storedDraft = localLogRepository.loadDraft();
-        if (storedDraft == null) {
-            return;
-        }
-        qsoStateMachine.restoreDraft(storedDraft);
-        qsoStorageStatusMessage = "Restored saved draft from local storage.";
-    }
-
     private void refreshStoredState() {
-        persistedDraftSnapshot = localLogRepository.loadDraft();
         recentFixtureEvaluationResults = localLogRepository.loadRecentFixtureEvaluations(4);
-    }
-
-    private void applyDraftEditorIfNeeded() {
-        if (draftEditorDirty) {
-            applyDraftEditorEdits();
-        }
-    }
-
-    private boolean hasDraftContent(QsoDraftSnapshot snapshot) {
-        if (snapshot == null) {
-            return false;
-        }
-        return (snapshot.remoteCallsignCandidate() != null && !snapshot.remoteCallsignCandidate().isEmpty())
-                || (snapshot.normalizedText() != null && !snapshot.normalizedText().isEmpty())
-                || snapshot.rstSentCandidate() != null
-                || snapshot.rstRcvdCandidate() != null
-                || snapshot.nameCandidate() != null
-                || snapshot.qthCandidate() != null
-                || !snapshot.hints().isEmpty();
-    }
-
-    private boolean hasConfirmableDraft(QsoDraftSnapshot snapshot) {
-        return snapshot != null
-                && snapshot.remoteCallsignCandidate() != null
-                && !snapshot.remoteCallsignCandidate().isEmpty();
-    }
-
-    private boolean hasManualCorrections(QsoDraftSnapshot snapshot) {
-        return snapshot.stationCallsignManuallySet()
-                || snapshot.remoteCallsignManuallySet()
-                || snapshot.rstSentManuallySet()
-                || snapshot.rstRcvdManuallySet()
-                || snapshot.nameManuallySet()
-                || snapshot.qthManuallySet();
-    }
-
-    private boolean hasRemoteCallsignInEditor() {
-        String remoteCallsign = normalizedEditorValue(binding.remoteCallsignEditText.getText());
-        return remoteCallsign != null && !remoteCallsign.isEmpty();
-    }
-
-    private String normalizedEditorValue(Editable editable) {
-        if (editable == null) {
-            return null;
-        }
-        String raw = editable.toString().trim();
-        return raw.isEmpty() ? null : raw;
-    }
-
-    private String valueOrEmpty(String value) {
-        return value == null ? "" : value;
     }
 
     private void setStableText(TextView textView, CharSequence text) {
@@ -3488,7 +3211,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         lastLiveUiRefreshAtMs = SystemClock.elapsedRealtime();
         CwInterpreterSnapshot interpreterSnapshot = cwInterpreter.snapshot();
         CwInterpreterSnapshot committedInterpreterSnapshot = currentCommittedInterpreterSnapshot();
-        QsoDraftSnapshot qsoSnapshot = currentQsoSnapshot();
         binding.frameStatsText.setText(renderFrameStats());
         updateLevelViews(lastPeakAmplitude, lastRmsAmplitude);
         refreshAudioSpectrumView();
@@ -3513,24 +3235,10 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         binding.interpreterCallsignsText.setText(renderInterpreterCallsigns(interpreterSnapshot));
         binding.interpreterHintsText.setText(renderInterpreterHints(interpreterSnapshot));
         binding.lastInterpreterEventText.setText(renderLastInterpreterEvent());
-        binding.qsoPhaseText.setText(renderQsoPhase(qsoSnapshot));
-        setStableText(binding.qsoDraftText, renderQsoDraft(qsoSnapshot));
         binding.fixtureEvaluationText.setText(renderFixtureEvaluationStatus());
-        syncDraftEditorFromSnapshot(qsoSnapshot, false);
-        binding.qsoEditorStatusText.setText(renderQsoEditorStatus());
-        refreshCallsignCandidateButtons(committedInterpreterSnapshot);
-        binding.callsignCandidateStatusText.setText(renderCallsignCandidateStatus(committedInterpreterSnapshot));
-        binding.qsoReadinessText.setText(renderQsoReadiness(qsoSnapshot));
-        binding.lastQsoEventText.setText(renderLastQsoEvent(qsoSnapshot));
-        binding.qsoStorageStatusText.setText(renderQsoStorageStatus());
-        binding.adifFieldMapText.setText(renderAdifFieldMap());
-        binding.adifPreviewText.setText(renderAdifPreview());
-        binding.adifExportStatusText.setText(renderAdifExportStatus());
-        binding.applyDraftEditsButton.setEnabled(draftEditorDirty);
-        binding.resetDraftEditsButton.setEnabled(hasManualCorrections(qsoSnapshot));
         binding.rxFocusStopCaptureButton.setEnabled(anySourceActive());
         binding.runBatchAnalysisButton.setEnabled(!anySourceActive() && !batchRunInProgress);
-        publishRxSessionSnapshot(committedInterpreterSnapshot, qsoSnapshot);
+        publishRxSessionSnapshot(committedInterpreterSnapshot);
     }
 
     private void feedExperimentalFrontEnd(
@@ -3595,10 +3303,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         );
     }
 
-    private void publishRxSessionSnapshot(
-            CwInterpreterSnapshot interpreterSnapshot,
-            QsoDraftSnapshot qsoSnapshot
-    ) {
+    private void publishRxSessionSnapshot(CwInterpreterSnapshot interpreterSnapshot) {
         if (rxSessionStore == null) {
             return;
         }
@@ -3623,15 +3328,15 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 timingSnapshot.estimatedWpm(),
                 timingSnapshot.estimatedWpm(),
                 interpreterSnapshot == null ? "" : interpreterSnapshot.rawText(),
-                "",
-                "",
                 interpreterSnapshot == null ? "" : interpreterSnapshot.normalizedText(),
                 primaryCallsignCandidate,
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.summaryLabel(inputHealthSnapshot),
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.coachHint(inputHealthSnapshot),
                 inputHealthSnapshot != null && inputHealthSnapshot.recentHotFrameRatio() >= 0.50d,
                 inputHealthSnapshot != null && inputHealthSnapshot.recentClippingFrameRatio() >= 0.10d,
-                ""
+                currentTurnDebugSummary(),
+                renderRawCommitGateSummary(),
+                renderExperimentalFrontEndDetail()
         ));
     }
 
@@ -3732,16 +3437,6 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
 
         String displayLabel() {
             return label;
-        }
-    }
-
-    private abstract static class SimpleTextWatcher implements TextWatcher {
-        @Override
-        public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-        }
-
-        @Override
-        public void onTextChanged(CharSequence s, int start, int before, int count) {
         }
     }
 }

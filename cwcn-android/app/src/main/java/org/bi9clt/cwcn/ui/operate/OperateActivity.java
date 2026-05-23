@@ -88,7 +88,6 @@ import org.bi9clt.cwcn.core.rx.RxTrailingWindowRepair;
 import org.bi9clt.cwcn.core.rx.RxTurnController;
 import org.bi9clt.cwcn.core.rx.RxTurnSessionCoordinator;
 import org.bi9clt.cwcn.core.rx.RxTurnSessionFinalizer;
-import org.bi9clt.cwcn.core.rx.RxUnknownFallbackSuggestion;
 import org.bi9clt.cwcn.core.rx.RxUnknownFallbackTracker;
 import org.bi9clt.cwcn.core.rx.TimingAnchorController;
 import org.bi9clt.cwcn.core.rig.AudioVoxRigControlAdapter;
@@ -2117,9 +2116,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (displayWpm > 0) {
             parts.add(displayWpm + "WPM");
         }
-        if (snapshot.hasDistinctFallbackSuggestedText()) {
-            parts.add(getString(R.string.operate_callsign_context_fallback));
-        }
         return parts.isEmpty() ? "" : String.join("  |  ", parts);
     }
 
@@ -2506,9 +2502,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (rawText != null) {
             return rawText;
         }
-        String fallbackText = normalizedTextOrNull(snapshot.fallbackSuggestedText());
-        if (fallbackText != null) {
-            return fallbackText;
+        String normalizedText = normalizedTextOrNull(snapshot.normalizedText());
+        if (normalizedText != null) {
+            return normalizedText;
         }
         return null;
     }
@@ -3816,9 +3812,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         CwInterpreterSnapshot rawSnapshot = operateCommittedOutputController == null
                 ? null
                 : operateCommittedOutputController.rawSnapshot();
-        RxUnknownFallbackSuggestion fallbackSuggestion = operateCommittedOutputController == null
-                ? RxUnknownFallbackSuggestion.none(rawSnapshot == null ? "" : rawSnapshot.rawText())
-                : operateCommittedOutputController.fallbackSuggestion();
         AudioInputHealthSnapshot inputHealthSnapshot = operateAudioInputHealthTracker == null
                 ? null
                 : operateAudioInputHealthTracker.snapshot();
@@ -3842,14 +3835,14 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 timingSnapshot.estimatedWpm(),
                 stableEstimatedWpm,
                 rawSnapshot == null ? "" : rawSnapshot.rawText(),
-                fallbackSuggestion == null ? "" : fallbackSuggestion.suggestedText(),
-                fallbackSuggestion == null ? "" : fallbackSuggestion.notesText(),
                 rawSnapshot == null ? "" : rawSnapshot.normalizedText(),
                 rawPrimaryCallsign == null ? "" : rawPrimaryCallsign,
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.summaryLabel(inputHealthSnapshot),
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.coachHint(inputHealthSnapshot),
                 inputHealthSnapshot != null && inputHealthSnapshot.recentHotFrameRatio() >= 0.50d,
                 inputHealthSnapshot != null && inputHealthSnapshot.recentClippingFrameRatio() >= 0.10d,
+                renderOperateTurnSummary(),
+                renderOperateRawGateSummary(),
                 renderDeveloperFrontEndSummary(signalSnapshot, timingSnapshot, nowElapsedMs)
         );
         rxSessionStore.save(sessionSnapshot);
@@ -3897,7 +3890,31 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             }
             builder.append(operateToneEventStabilizer.stats().compactSummary());
         }
+        String rawGateSummary = renderOperateRawGateSummary();
+        if (!rawGateSummary.isEmpty()) {
+            if (builder.length() > 0) {
+                builder.append(" | ");
+            }
+            builder.append(rawGateSummary);
+        }
         return builder.toString();
+    }
+
+    private String renderOperateTurnSummary() {
+        if (operateRxTurnController == null) {
+            return "";
+        }
+        String summary = operateRxTurnController.compactDebugSummary();
+        return summary == null ? "" : summary.trim();
+    }
+
+    private String renderOperateRawGateSummary() {
+        if (operateRawCommitGate == null) {
+            return "";
+        }
+        return (operateRawCommitGate.gateOpenInCurrentTurn() ? "gate open" : "gate buffering")
+                + " | pending "
+                + operateRawCommitGate.pendingFinalEventCount();
     }
 
     private void startOperateLiveTraceSession(@Nullable RxAudioSource source) {

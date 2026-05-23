@@ -33,14 +33,14 @@ public final class RxSessionStore {
             object.put("estimatedWpm", snapshot.estimatedWpm());
             object.put("stableEstimatedWpm", snapshot.stableEstimatedWpm());
             object.put("rawText", snapshot.rawText());
-            object.put("fallbackSuggestedText", snapshot.fallbackSuggestedText());
-            object.put("fallbackNotesText", snapshot.fallbackNotesText());
             object.put("normalizedText", snapshot.normalizedText());
             object.put("primaryCallsignCandidate", snapshot.primaryCallsignCandidate());
             object.put("inputHealthLabel", snapshot.inputHealthLabel());
             object.put("inputHealthHint", snapshot.inputHealthHint());
             object.put("inputLevelHot", snapshot.inputLevelHot());
             object.put("inputLevelClipping", snapshot.inputLevelClipping());
+            object.put("currentTurnSummary", snapshot.currentTurnSummary());
+            object.put("rawGateSummary", snapshot.rawGateSummary());
             object.put("developerFrontEndSummary", snapshot.developerFrontEndSummary());
         } catch (JSONException exception) {
             throw new IllegalStateException("Failed to serialize RX session snapshot", exception);
@@ -66,14 +66,14 @@ public final class RxSessionStore {
                     object.optInt("estimatedWpm", 0),
                     object.optInt("stableEstimatedWpm", object.optInt("estimatedWpm", 0)),
                     object.optString("rawText", ""),
-                    object.optString("fallbackSuggestedText", ""),
-                    object.optString("fallbackNotesText", ""),
                     object.optString("normalizedText", ""),
                     object.optString("primaryCallsignCandidate", ""),
                     object.optString("inputHealthLabel", ""),
                     object.optString("inputHealthHint", ""),
                     object.optBoolean("inputLevelHot", false),
                     object.optBoolean("inputLevelClipping", false),
+                    object.optString("currentTurnSummary", ""),
+                    object.optString("rawGateSummary", ""),
                     object.optString("developerFrontEndSummary", "")
             );
         } catch (JSONException ignored) {

@@ -11,14 +11,14 @@ public final class RxSessionSnapshot {
     private final int estimatedWpm;
     private final int stableEstimatedWpm;
     private final String rawText;
-    private final String fallbackSuggestedText;
-    private final String fallbackNotesText;
     private final String normalizedText;
     private final String primaryCallsignCandidate;
     private final String inputHealthLabel;
     private final String inputHealthHint;
     private final boolean inputLevelHot;
     private final boolean inputLevelClipping;
+    private final String currentTurnSummary;
+    private final String rawGateSummary;
     private final String developerFrontEndSummary;
 
     public RxSessionSnapshot(
@@ -32,14 +32,14 @@ public final class RxSessionSnapshot {
             int estimatedWpm,
             int stableEstimatedWpm,
             String rawText,
-            String fallbackSuggestedText,
-            String fallbackNotesText,
             String normalizedText,
             String primaryCallsignCandidate,
             String inputHealthLabel,
             String inputHealthHint,
             boolean inputLevelHot,
             boolean inputLevelClipping,
+            String currentTurnSummary,
+            String rawGateSummary,
             String developerFrontEndSummary
     ) {
         this.updatedAtEpochMs = updatedAtEpochMs;
@@ -52,14 +52,14 @@ public final class RxSessionSnapshot {
         this.estimatedWpm = estimatedWpm;
         this.stableEstimatedWpm = stableEstimatedWpm;
         this.rawText = safeText(rawText);
-        this.fallbackSuggestedText = safeText(fallbackSuggestedText);
-        this.fallbackNotesText = safeText(fallbackNotesText);
         this.normalizedText = safeText(normalizedText);
         this.primaryCallsignCandidate = safeText(primaryCallsignCandidate);
         this.inputHealthLabel = safeText(inputHealthLabel);
         this.inputHealthHint = safeText(inputHealthHint);
         this.inputLevelHot = inputLevelHot;
         this.inputLevelClipping = inputLevelClipping;
+        this.currentTurnSummary = safeText(currentTurnSummary);
+        this.rawGateSummary = safeText(rawGateSummary);
         this.developerFrontEndSummary = safeText(developerFrontEndSummary);
     }
 
@@ -107,27 +107,6 @@ public final class RxSessionSnapshot {
         return !rawText.trim().isEmpty();
     }
 
-    public String fallbackSuggestedText() {
-        return fallbackSuggestedText;
-    }
-
-    public boolean hasFallbackSuggestedText() {
-        return !fallbackSuggestedText.isEmpty();
-    }
-
-    public boolean hasDistinctFallbackSuggestedText() {
-        return hasFallbackSuggestedText()
-                && !fallbackSuggestedText.trim().equals(rawText.trim());
-    }
-
-    public String fallbackNotesText() {
-        return fallbackNotesText;
-    }
-
-    public boolean hasFallbackNotesText() {
-        return !fallbackNotesText.isEmpty();
-    }
-
     public String normalizedText() {
         return normalizedText;
     }
@@ -163,6 +142,22 @@ public final class RxSessionSnapshot {
 
     public boolean inputLevelClipping() {
         return inputLevelClipping;
+    }
+
+    public String currentTurnSummary() {
+        return currentTurnSummary;
+    }
+
+    public boolean hasCurrentTurnSummary() {
+        return !currentTurnSummary.trim().isEmpty();
+    }
+
+    public String rawGateSummary() {
+        return rawGateSummary;
+    }
+
+    public boolean hasRawGateSummary() {
+        return !rawGateSummary.trim().isEmpty();
     }
 
     public String developerFrontEndSummary() {
