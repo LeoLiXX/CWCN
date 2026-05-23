@@ -913,7 +913,7 @@ public final class TxActivity extends AppCompatActivity {
         rebuildPlanPreview();
         logSessionEvent(
                 "USB",
-                getString(R.string.tx_log_usb_validation_loaded, preset.name(), recommendedWpm)
+                getString(R.string.tx_log_usb_validation_loaded, preset.displayName(), recommendedWpm)
         );
         Toast.makeText(
                 this,
@@ -1186,7 +1186,7 @@ public final class TxActivity extends AppCompatActivity {
         lastPlaybackSnapshot = null;
         lastLoggedPlaybackState = null;
         rebuildPlanPreview();
-        logSessionEvent("TX", getString(R.string.tx_log_preset_loaded, preset.name()));
+        logSessionEvent("TX", getString(R.string.tx_log_preset_loaded, preset.displayName()));
     }
 
     private String normalizedStationCallsign() {

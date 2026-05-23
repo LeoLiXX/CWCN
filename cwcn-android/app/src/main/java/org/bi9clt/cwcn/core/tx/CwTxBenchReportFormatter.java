@@ -15,14 +15,14 @@ public final class CwTxBenchReportFormatter {
             String benchLog
     ) {
         StringBuilder builder = new StringBuilder();
-        appendSection(builder, "Bench Summary", benchSummary);
-        appendOptionalSection(builder, "Recent USB Issue", recentUsbIssue);
-        appendSection(builder, "Backend", backendSummary);
-        appendSection(builder, "Plan", planSummary);
-        appendSection(builder, "USB Route", usbSummary);
-        appendSection(builder, "Playback Status", txStatus);
-        appendSection(builder, "Playback Progress", txProgress);
-        appendSection(builder, "Bench Log", benchLog);
+        appendSection(builder, "联调摘要", benchSummary);
+        appendOptionalSection(builder, "最近 USB 问题", recentUsbIssue);
+        appendSection(builder, "发射路径", backendSummary);
+        appendSection(builder, "发射计划", planSummary);
+        appendSection(builder, "USB 链路", usbSummary);
+        appendSection(builder, "发射状态", txStatus);
+        appendSection(builder, "发射进度", txProgress);
+        appendSection(builder, "联调日志", benchLog);
         return builder.toString();
     }
 
@@ -38,8 +38,8 @@ public final class CwTxBenchReportFormatter {
         if (builder.length() > 0) {
             builder.append("\n\n");
         }
-        builder.append("== ").append(normalize(title, "Section")).append(" ==\n");
-        builder.append(normalize(body, "(none)"));
+        builder.append("== ").append(normalize(title, "区块")).append(" ==\n");
+        builder.append(normalize(body, "（空）"));
     }
 
     private static String normalize(String value, String fallback) {
