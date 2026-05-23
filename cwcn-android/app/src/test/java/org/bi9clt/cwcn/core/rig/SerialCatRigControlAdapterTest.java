@@ -259,6 +259,11 @@ public final class SerialCatRigControlAdapterTest {
         int openCount;
 
         @Override
+        public PortAvailability availability(String portHint) {
+            return new PortAvailability(PortAvailability.Stage.READY, "permission is available");
+        }
+
+        @Override
         public String describeAvailability(String portHint) {
             return "permission is available";
         }
@@ -301,6 +306,11 @@ public final class SerialCatRigControlAdapterTest {
     private static final class FakeDedicatedKeyingPortFactory implements DedicatedKeyingPortFactory {
         int openCount;
         final FakeSerialKeyerPort port = new FakeSerialKeyerPort();
+
+        @Override
+        public PortAvailability availability(String portHint) {
+            return new PortAvailability(PortAvailability.Stage.READY, "permission is available");
+        }
 
         @Override
         public String describeAvailability(String portHint) {

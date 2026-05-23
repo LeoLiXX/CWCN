@@ -175,6 +175,11 @@ public final class SerialCatProbeTest {
                 ),
                 new SerialCatSessionFactory() {
                     @Override
+                    public PortAvailability availability(String portHint) {
+                        return new PortAvailability(PortAvailability.Stage.READY, "fake");
+                    }
+
+                    @Override
                     public String describeAvailability(String portHint) {
                         return "fake";
                     }
@@ -200,6 +205,11 @@ public final class SerialCatProbeTest {
 
         private FakeSerialCatSessionFactory(byte[] response) {
             this.response = response;
+        }
+
+        @Override
+        public PortAvailability availability(String portHint) {
+            return new PortAvailability(PortAvailability.Stage.READY, "fake");
         }
 
         @Override

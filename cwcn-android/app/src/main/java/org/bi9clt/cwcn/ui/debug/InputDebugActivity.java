@@ -3416,9 +3416,12 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             return;
         }
         CwTimingSnapshot timingSnapshot = cwTimingModel.rawSnapshot();
+        boolean hasPendingCharacter = debugTimingDecodeRunner != null
+                ? debugTimingDecodeRunner.hasPendingCharacter()
+                : cwDecoder != null && cwDecoder.hasPendingCharacter();
         RxTurnSessionCoordinator.Observation observation = debugTurnSessionCoordinator.observe(
                 signalSnapshot,
-                false,
+                hasPendingCharacter,
                 timestampMs,
                 resolveDebugTimingReferenceWpm(timingSnapshot)
         );

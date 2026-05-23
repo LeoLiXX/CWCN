@@ -115,5 +115,9 @@ public final class RxTurnSessionFinalizer {
         public List<CwDecodeEvent> sessionDecodeEvents() {
             return repairApplication.sessionDecodeEvents();
         }
+
+        public List<CwDecodeEvent> currentTurnDecodeEvents() {
+            return repairApplication.currentTurnDecodeEvents();
+        }
     }
 }

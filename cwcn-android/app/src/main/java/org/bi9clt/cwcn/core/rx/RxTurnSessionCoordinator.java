@@ -15,6 +15,9 @@ import org.bi9clt.cwcn.core.timing.CwHybridTimingModel;
  * with callers.</p>
  */
 public final class RxTurnSessionCoordinator {
+    private static final long MIN_STALE_ACTIVE_WITH_COMMITTED_DECODE_MS = 2600L;
+    private static final double STALE_ACTIVE_WITH_COMMITTED_DECODE_DOT_RATIO = 44.0d;
+
     @Nullable private final CwSignalProcessor signalProcessor;
     @Nullable private final CwHybridTimingModel timingModel;
     @Nullable private final LiveRxWpmGuard wpmGuard;
@@ -125,6 +128,23 @@ public final class RxTurnSessionCoordinator {
                 || timestampMs <= 0L) {
             return Observation.none();
         }
+        if (turnController.phase() == RxTurnController.Phase.ACTIVE
+                && shouldForceEndStaleCommittedTurn(signalSnapshot, turnController, timestampMs)) {
+            RxTurnController.Transition forcedEndTransition = turnController.forceEnd(
+                    timestampMs,
+                    "turn-end(stale-active-after-decode)"
+            );
+            TurnEndResult turnEndResult = endCurrentTurn(
+                    signalSnapshot,
+                    forcedEndTransition,
+                    timestampMs
+            );
+            return new Observation(
+                    forcedEndTransition,
+                    turnEndResult.frontEndResetApplied,
+                    turnEndResult.turnFinalization
+            );
+        }
         boolean turnActivity;
         if (turnController.phase() == RxTurnController.Phase.ACTIVE) {
             boolean hasCommittedDecodeThisTurn = turnSessionFinalizer != null
@@ -158,6 +178,59 @@ public final class RxTurnSessionCoordinator {
             );
         }
         return Observation.none();
+    }
+
+    private boolean shouldForceEndStaleCommittedTurn(
+            CwSignalSnapshot signalSnapshot,
+            RxTurnController turnController,
+            long timestampMs
+    ) {
+        if (signalSnapshot == null
+                || turnController == null
+                || turnSessionFinalizer == null
+                || !turnSessionFinalizer.currentTurnHasCommittedDecodeEvents()) {
+            return false;
+        }
+        long decodeIdleMs = turnController.decodeIdleMs(timestampMs);
+        long stableDecodeIdleMs = turnController.stableDecodeIdleMs(timestampMs);
+        long staleCommittedTurnThresholdMs =
+                resolveStaleCommittedTurnThresholdMs(turnController);
+        if (decodeIdleMs < staleCommittedTurnThresholdMs) {
+            return false;
+        }
+        if (stableDecodeIdleMs < staleCommittedTurnThresholdMs) {
+            return false;
+        }
+        if (signalSnapshot.targetToneLocked()) {
+            return false;
+        }
+        if (signalSnapshot.consecutiveLockedFrames() >= 2) {
+            return false;
+        }
+        if (signalSnapshot.recentLockedFrameRatio() >= 0.08d) {
+            return false;
+        }
+        if (signalSnapshot.toneDominanceRatio() >= 0.18d
+                && signalSnapshot.narrowbandIsolationRatio() >= 0.18d) {
+            return false;
+        }
+        return true;
+    }
+
+    private long resolveStaleCommittedTurnThresholdMs(RxTurnController turnController) {
+        if (turnController == null) {
+            return MIN_STALE_ACTIVE_WITH_COMMITTED_DECODE_MS;
+        }
+        int anchorWpm = turnController.currentTurnAnchorWpm();
+        anchorWpm = Math.max(anchorWpm, turnController.retainedTurnAnchorWpm());
+        if (anchorWpm <= 0) {
+            return MIN_STALE_ACTIVE_WITH_COMMITTED_DECODE_MS;
+        }
+        long dotEstimateMs = Math.max(1L, Math.round(1200.0d / anchorWpm));
+        return Math.max(
+                MIN_STALE_ACTIVE_WITH_COMMITTED_DECODE_MS,
+                Math.round(dotEstimateMs * STALE_ACTIVE_WITH_COMMITTED_DECODE_DOT_RATIO)
+        );
     }
 
     private void beginNewTurn(int turnSeedWpm, long timestampMs) {

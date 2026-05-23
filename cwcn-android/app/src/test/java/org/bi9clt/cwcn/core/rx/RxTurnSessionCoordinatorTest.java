@@ -440,6 +440,172 @@ public final class RxTurnSessionCoordinatorTest {
         assertEquals(RxTurnController.Phase.ACTIVE, turnController.phase());
     }
 
+    @Test
+    public void staleWeakNoiseAfterCommittedDecodeForcesTurnEnd() {
+        CwSignalProcessor signalProcessor = new CwSignalProcessor();
+        CwHybridTimingModel timingModel = new CwHybridTimingModel();
+        LiveRxWpmGuard wpmGuard = new LiveRxWpmGuard();
+        RxTurnController turnController = new RxTurnController();
+        turnController.setTxSeedWpm(18);
+        TimingAnchorController timingAnchorController = new TimingAnchorController();
+        RxRawCommitGate rawCommitGate = new RxRawCommitGate();
+        RxTurnTailRepairController turnTailRepairController = new RxTurnTailRepairController();
+        RxTurnSessionFinalizer turnSessionFinalizer = new RxTurnSessionFinalizer(
+                turnTailRepairController,
+                null
+        );
+        RxTurnSessionCoordinator coordinator = new RxTurnSessionCoordinator(
+                signalProcessor,
+                timingModel,
+                wpmGuard,
+                turnController,
+                timingAnchorController,
+                rawCommitGate,
+                turnSessionFinalizer,
+                null,
+                null
+        );
+
+        coordinator.observe(startSignalSnapshot(), false, 1000L, 0);
+        turnController.noteStableDecode(1400L, 24, true);
+        turnSessionFinalizer.processCommittedDecodeEvent(decodedCharacterEvent(1400L, "C"));
+
+        RxTurnSessionCoordinator.Observation observation = coordinator.observe(
+                weakUnlockedNoiseSnapshot(),
+                false,
+                4200L,
+                24
+        );
+
+        assertTrue(observation.endedTurn());
+        assertEquals(RxTurnController.Phase.IDLE, turnController.phase());
+    }
+
+    @Test
+    public void slowCommittedTurnWordGapDoesNotEndAtFormerFastTimeout() {
+        CwSignalProcessor signalProcessor = new CwSignalProcessor();
+        CwHybridTimingModel timingModel = new CwHybridTimingModel();
+        LiveRxWpmGuard wpmGuard = new LiveRxWpmGuard();
+        RxTurnController turnController = new RxTurnController();
+        turnController.setTxSeedWpm(18);
+        TimingAnchorController timingAnchorController = new TimingAnchorController();
+        RxRawCommitGate rawCommitGate = new RxRawCommitGate();
+        RxTurnTailRepairController turnTailRepairController = new RxTurnTailRepairController();
+        RxTurnSessionFinalizer turnSessionFinalizer = new RxTurnSessionFinalizer(
+                turnTailRepairController,
+                null
+        );
+        RxTurnSessionCoordinator coordinator = new RxTurnSessionCoordinator(
+                signalProcessor,
+                timingModel,
+                wpmGuard,
+                turnController,
+                timingAnchorController,
+                rawCommitGate,
+                turnSessionFinalizer,
+                null,
+                null
+        );
+
+        coordinator.observe(startSignalSnapshot(), false, 1000L, 18);
+        turnController.noteStableDecode(1400L, 18, true);
+        turnSessionFinalizer.processCommittedDecodeEvent(decodedCharacterEvent(1400L, "C"));
+
+        RxTurnSessionCoordinator.Observation observation = coordinator.observe(
+                weakUnlockedNoiseSnapshot(),
+                false,
+                3200L,
+                18
+        );
+
+        assertFalse(observation.endedTurn());
+        assertEquals(RxTurnController.Phase.ACTIVE, turnController.phase());
+    }
+
+    @Test
+    public void recentUnknownDecodeActivityPreventsPrematureTurnEnd() {
+        CwSignalProcessor signalProcessor = new CwSignalProcessor();
+        CwHybridTimingModel timingModel = new CwHybridTimingModel();
+        LiveRxWpmGuard wpmGuard = new LiveRxWpmGuard();
+        RxTurnController turnController = new RxTurnController();
+        turnController.setTxSeedWpm(18);
+        TimingAnchorController timingAnchorController = new TimingAnchorController();
+        RxRawCommitGate rawCommitGate = new RxRawCommitGate();
+        RxTurnTailRepairController turnTailRepairController = new RxTurnTailRepairController();
+        RxTurnSessionFinalizer turnSessionFinalizer = new RxTurnSessionFinalizer(
+                turnTailRepairController,
+                null
+        );
+        RxTurnSessionCoordinator coordinator = new RxTurnSessionCoordinator(
+                signalProcessor,
+                timingModel,
+                wpmGuard,
+                turnController,
+                timingAnchorController,
+                rawCommitGate,
+                turnSessionFinalizer,
+                null,
+                null
+        );
+
+        coordinator.observe(startSignalSnapshot(), false, 1000L, 18);
+        turnController.noteStableDecode(1400L, 18, true);
+        turnController.noteDecodeActivity(2400L);
+        turnSessionFinalizer.processCommittedDecodeEvent(decodedUnknownCharacterEvent(2400L));
+
+        RxTurnSessionCoordinator.Observation observation = coordinator.observe(
+                weakUnlockedNoiseSnapshot(),
+                false,
+                3700L,
+                18
+        );
+
+        assertFalse(observation.endedTurn());
+        assertEquals(RxTurnController.Phase.ACTIVE, turnController.phase());
+    }
+
+    @Test
+    public void staleUnknownDecodeActivityEventuallyEndsTurn() {
+        CwSignalProcessor signalProcessor = new CwSignalProcessor();
+        CwHybridTimingModel timingModel = new CwHybridTimingModel();
+        LiveRxWpmGuard wpmGuard = new LiveRxWpmGuard();
+        RxTurnController turnController = new RxTurnController();
+        turnController.setTxSeedWpm(18);
+        TimingAnchorController timingAnchorController = new TimingAnchorController();
+        RxRawCommitGate rawCommitGate = new RxRawCommitGate();
+        RxTurnTailRepairController turnTailRepairController = new RxTurnTailRepairController();
+        RxTurnSessionFinalizer turnSessionFinalizer = new RxTurnSessionFinalizer(
+                turnTailRepairController,
+                null
+        );
+        RxTurnSessionCoordinator coordinator = new RxTurnSessionCoordinator(
+                signalProcessor,
+                timingModel,
+                wpmGuard,
+                turnController,
+                timingAnchorController,
+                rawCommitGate,
+                turnSessionFinalizer,
+                null,
+                null
+        );
+
+        coordinator.observe(startSignalSnapshot(), false, 1000L, 18);
+        turnController.noteStableDecode(1400L, 18, true);
+        turnController.noteDecodeActivity(2400L);
+        turnSessionFinalizer.processCommittedDecodeEvent(decodedUnknownCharacterEvent(2400L));
+
+        RxTurnSessionCoordinator.Observation observation = coordinator.observe(
+                weakUnlockedNoiseSnapshot(),
+                false,
+                5800L,
+                18
+        );
+
+        assertTrue(observation.endedTurn());
+        assertEquals(RxTurnController.Phase.IDLE, turnController.phase());
+    }
+
     private static CwSignalSnapshot startSignalSnapshot() {
         return signalSnapshot(
                 true,
@@ -497,6 +663,21 @@ public final class RxTurnSessionCoordinatorTest {
                 3,
                 0.34d,
                 0.38d
+        );
+    }
+
+    private static CwSignalSnapshot weakUnlockedNoiseSnapshot() {
+        return signalSnapshot(
+                true,
+                false,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0.10d,
+                0.10d
         );
     }
 
@@ -600,6 +781,18 @@ public final class RxTurnSessionCoordinatorTest {
                 emittedValue,
                 ".-",
                 false
+        );
+    }
+
+    private static CwDecodeEvent decodedUnknownCharacterEvent(long timestampMs) {
+        return new CwDecodeEvent(
+                CwDecodeEvent.Type.CHARACTER_DECODED,
+                timestampMs,
+                ".-.-",
+                "\u25A1",
+                "\u25A1",
+                ".-.-",
+                true
         );
     }
 

@@ -115,7 +115,6 @@ public final class RxTurnActivityDecider {
                 || Math.abs(targetToneHz - effectiveTrackedToneHz) > MAX_CONTINUATION_TARGET_DRIFT_HZ) {
             return false;
         }
-
         boolean sqlQualified = sqlClearRatio(signalSnapshot) >= MIN_CONTINUATION_SQL_CLEAR_RATIO
                 || signalFloorClearRatio(signalSnapshot) >= MIN_CONTINUATION_SIGNAL_FLOOR_CLEAR_RATIO;
         boolean toneShapeQualified = signalSnapshot.toneDominanceRatio() >= MIN_CONTINUATION_TONE_DOMINANCE_RATIO
@@ -209,4 +208,5 @@ public final class RxTurnActivityDecider {
         return signalSnapshot.signalFloorEstimate()
                 / Math.max(1.0d, signalSnapshot.releaseThreshold());
     }
+
 }

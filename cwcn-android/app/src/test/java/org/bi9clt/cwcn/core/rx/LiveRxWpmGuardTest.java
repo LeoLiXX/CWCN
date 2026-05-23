@@ -602,6 +602,23 @@ public final class LiveRxWpmGuardTest {
     }
 
     @Test
+    public void startupWeakLowRawWpmStaysNearSeedBeforeTrustExists() {
+        LiveRxWpmGuard guard = new LiveRxWpmGuard();
+        guard.beginNewTurn(18, 100L);
+
+        CwSignalSnapshot weakSignal = signalSnapshot(
+                false,
+                "uuuuuuuuuuuu........LLLL",
+                60,
+                0.18d,
+                0.22d
+        );
+
+        assertEquals(16, guard.resolveDisplayWpm(weakSignal, timingSnapshot(14.0d), 800L));
+        assertFalse(guard.shouldAllowTimingLearning(weakSignal, timingSnapshot(14.0d), 800L));
+    }
+
+    @Test
     public void startupAllowsTimingLearningAcrossFastRawWpmBeforeTrustedWpmExists() {
         LiveRxWpmGuard guard = new LiveRxWpmGuard();
         guard.setSeedWpm(15);

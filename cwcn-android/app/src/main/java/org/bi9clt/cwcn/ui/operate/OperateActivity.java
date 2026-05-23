@@ -31,6 +31,7 @@ import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.activity.result.ActivityResultLauncher;
@@ -138,6 +139,7 @@ import java.util.regex.Pattern;
 import android.widget.Toast;
 
 public final class OperateActivity extends AppCompatActivity implements RxAudioSource.Callback {
+    private static final String TAG = "OperateActivity";
     private static final String ACTION_USB_KEYER_PERMISSION =
             "org.bi9clt.cwcn.action.OPERATE_USB_KEYER_PERMISSION";
     private static final long LIVE_RX_REFRESH_INTERVAL_MS = 700L;
@@ -162,6 +164,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private static final double OPERATE_RX_SHORT_TONE_MAX_DOT_RATIO = 0.52d;
     private static final double OPERATE_RX_SHORT_TONE_MAX_ABSOLUTE_MS = 30.0d;
     private static final float SIDE_RAIL_DRAG_THRESHOLD_PX = 12f;
+    private final Object operateRxRuntimeLock = new Object();
     public static final String EXTRA_START_OVERLAY = "org.bi9clt.cwcn.ui.operate.extra.START_OVERLAY";
     public static final String START_OVERLAY_CHART = "chart";
     private static final String PREFS_OPERATE_UI = "operate_ui";
@@ -356,8 +359,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
     };
 
-    private RxSessionSnapshot lastRxSessionSnapshot;
-    private SpectrumSnapshotData lastUiSpectrumSnapshot;
+    private volatile RxSessionSnapshot lastRxSessionSnapshot;
+    private volatile SpectrumSnapshotData lastUiSpectrumSnapshot;
     private OverlayMode overlayMode = OverlayMode.NONE;
     private OverlayMode pendingLaunchOverlayMode = OverlayMode.NONE;
     private final ArrayList<TxTemplateEntry> operateTxTemplates = new ArrayList<>();
@@ -397,6 +400,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private long activeRxTranscriptEntryId = -1L;
     private long activeRxTranscriptStartedAtEpochMs;
     private String activeRxTranscriptBaselineText = "";
+    private final ArrayList<CwDecodeEvent> activeRxTranscriptDecodeEvents = new ArrayList<>();
+    private long activeRxTranscriptLastDecodeTimestampMs = -1L;
     private long activeTxTranscriptEntryId = -1L;
     private boolean transcriptUseUtc = true;
     private boolean transcriptTimelineActive;
@@ -511,11 +516,13 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     @Override
     protected void onSaveInstanceState(@androidx.annotation.NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        outState.putBoolean(STATE_TRANSCRIPT_TIMELINE_ACTIVE, transcriptTimelineActive);
-        outState.putLong(STATE_TRANSCRIPT_NEXT_ID, nextTranscriptEntryId);
-        outState.putBoolean(STATE_TRANSCRIPT_USE_UTC, transcriptUseUtc);
-        outState.putParcelableArrayList(STATE_TRANSCRIPT_ENTRIES, saveTranscriptEntries());
-        outState.putString(STATE_SELECTED_OPERATE_REMOTE_CALLSIGN, selectedOperateRemoteCallsign);
+        synchronized (operateRxRuntimeLock) {
+            outState.putBoolean(STATE_TRANSCRIPT_TIMELINE_ACTIVE, transcriptTimelineActive);
+            outState.putLong(STATE_TRANSCRIPT_NEXT_ID, nextTranscriptEntryId);
+            outState.putBoolean(STATE_TRANSCRIPT_USE_UTC, transcriptUseUtc);
+            outState.putParcelableArrayList(STATE_TRANSCRIPT_ENTRIES, saveTranscriptEntries());
+            outState.putString(STATE_SELECTED_OPERATE_REMOTE_CALLSIGN, selectedOperateRemoteCallsign);
+        }
     }
 
     private void setupActions() {
@@ -856,7 +863,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void refreshUi() {
-        lastRxSessionSnapshot = rxSessionStore.load();
+        synchronized (operateRxRuntimeLock) {
+            lastRxSessionSnapshot = rxSessionStore.load();
+        }
         lastUiSpectrumSnapshot = latestSpectrumSnapshotForUi();
         binding.statusMainText.setText(renderStatusMain(lastRxSessionSnapshot));
         binding.statusDetailText.setText(renderStatusDetail(lastRxSessionSnapshot));
@@ -897,7 +906,11 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void refreshConversationOnly() {
-        renderConversationCards(buildOperateStreamEntries(lastRxSessionSnapshot));
+        List<StreamEntry> entries;
+        synchronized (operateRxRuntimeLock) {
+            entries = buildOperateStreamEntries(lastRxSessionSnapshot);
+        }
+        renderConversationCards(entries);
     }
 
     private void updateComposerUi() {
@@ -1612,20 +1625,24 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void syncOperatePreferredTone() {
-        if (operateSignalProcessor == null || rigSelectionStore == null) {
-            return;
+        synchronized (operateRxRuntimeLock) {
+            if (operateSignalProcessor == null || rigSelectionStore == null) {
+                return;
+            }
+            RigProfileSettings settings = rigSelectionStore.loadSettings(rigSelectionStore.selectedProfile());
+            operateSignalProcessor.setPreferredToneFrequencyHz(settings.defaultToneFrequencyHz());
         }
-        RigProfileSettings settings = rigSelectionStore.loadSettings(rigSelectionStore.selectedProfile());
-        operateSignalProcessor.setPreferredToneFrequencyHz(settings.defaultToneFrequencyHz());
     }
 
     private void syncOperateFixedToneLearningWindow() {
-        if (operateSignalProcessor == null || rxInputSettingsStore == null) {
-            return;
+        synchronized (operateRxRuntimeLock) {
+            if (operateSignalProcessor == null || rxInputSettingsStore == null) {
+                return;
+            }
+            operateSignalProcessor.setFixedToneLearningWindowHz(
+                    rxInputSettingsStore.fixedToneLearningWindowHz()
+            );
         }
-        operateSignalProcessor.setFixedToneLearningWindowHz(
-                rxInputSettingsStore.fixedToneLearningWindowHz()
-        );
     }
 
     private void syncOperateRxToneMode() {
@@ -1633,10 +1650,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void syncOperateRxToneMode(long nowElapsedMs) {
-        if (operateSignalProcessor == null || rxInputSettingsStore == null) {
-            return;
+        synchronized (operateRxRuntimeLock) {
+            if (operateSignalProcessor == null || rxInputSettingsStore == null) {
+                return;
+            }
+            operateSignalProcessor.setRxToneMode(resolveEffectiveOperateRxToneMode(nowElapsedMs));
         }
-        operateSignalProcessor.setRxToneMode(resolveEffectiveOperateRxToneMode(nowElapsedMs));
     }
 
     private CwSignalProcessor.RxToneMode resolveEffectiveOperateRxToneMode(long nowElapsedMs) {
@@ -1660,10 +1679,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void syncOperateSql() {
-        if (operateSignalProcessor == null) {
-            return;
+        synchronized (operateRxRuntimeLock) {
+            if (operateSignalProcessor == null) {
+                return;
+            }
+            operateSignalProcessor.setSqlPercent(sqlLevel);
         }
-        operateSignalProcessor.setSqlPercent(sqlLevel);
     }
 
     private void startOperateRxCapture() {
@@ -1695,10 +1716,13 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 operateAudioInputHealthTracker == null ? null : operateAudioInputHealthTracker.snapshot()
         );
         flushOperatePendingDecode(nowElapsedMs);
-        traceOperateTurnFinalization(
+        RxTurnSessionFinalizer.TurnFinalization stopTurnFinalization =
                 operateTurnSessionFinalizer == null
                         ? null
-                        : operateTurnSessionFinalizer.finalizeCurrentTurn(nowElapsedMs),
+                        : operateTurnSessionFinalizer.finalizeCurrentTurn(nowElapsedMs);
+        applyTurnFinalizationToActiveTranscript(stopTurnFinalization);
+        traceOperateTurnFinalization(
+                stopTurnFinalization,
                 nowElapsedMs,
                 "stop"
         );
@@ -1788,71 +1812,73 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void clearOperateRxPresentationState() {
-        if (rxSessionStore != null) {
-            rxSessionStore.clear();
+        synchronized (operateRxRuntimeLock) {
+            if (rxSessionStore != null) {
+                rxSessionStore.clear();
+            }
+            if (operateAudioInputHealthTracker != null) {
+                operateAudioInputHealthTracker.reset();
+            }
+            if (operateRxCore != null) {
+                operateRxCore.resetRuntimeState(resolveOperateWpm());
+                syncOperatePreferredTone();
+                syncOperateRxToneMode();
+                syncOperateSql();
+            }
+            if (operateCommittedOutputController != null) {
+                operateCommittedOutputController.reset();
+            }
+            finishOperateLiveTraceSession("clear");
+            lastOperateStableDecodeAtElapsedMs = -1L;
+            lastOperateTimingResetAtElapsedMs = -1L;
+            lastRxSessionSnapshot = null;
+            resetActiveRxTranscriptRuntime();
+            transcriptRxSuppressedDuringTx = false;
+            immediateTxPausedRxCapture = false;
         }
-        if (operateAudioInputHealthTracker != null) {
-            operateAudioInputHealthTracker.reset();
-        }
-        if (operateRxCore != null) {
-            operateRxCore.resetRuntimeState(resolveOperateWpm());
-            syncOperatePreferredTone();
-            syncOperateRxToneMode();
-            syncOperateSql();
-        }
-        if (operateCommittedOutputController != null) {
-            operateCommittedOutputController.reset();
-        }
-        finishOperateLiveTraceSession("clear");
-        lastOperateStableDecodeAtElapsedMs = -1L;
-        lastOperateTimingResetAtElapsedMs = -1L;
-        lastRxSessionSnapshot = null;
-        activeRxTranscriptEntryId = -1L;
-        activeRxTranscriptStartedAtEpochMs = 0L;
-        activeRxTranscriptBaselineText = "";
-        transcriptRxSuppressedDuringTx = false;
-        immediateTxPausedRxCapture = false;
     }
 
     private void clearOperateRxCarryoverForFreshTurn() {
-        if (rxSessionStore != null) {
-            rxSessionStore.clear();
+        synchronized (operateRxRuntimeLock) {
+            if (rxSessionStore != null) {
+                rxSessionStore.clear();
+            }
+            if (operateCommittedOutputController != null) {
+                operateCommittedOutputController.reset();
+            }
+            lastRxSessionSnapshot = null;
+            lastOperateRxPublishAtElapsedMs = 0L;
+            resetActiveRxTranscriptRuntime();
         }
-        if (operateCommittedOutputController != null) {
-            operateCommittedOutputController.reset();
-        }
-        lastRxSessionSnapshot = null;
-        lastOperateRxPublishAtElapsedMs = 0L;
-        activeRxTranscriptBaselineText = "";
     }
 
     private void prepareOperateRxForFreshCaptureStart() {
-        if (!isRxTranscriptSuppressed()) {
-            finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
+        synchronized (operateRxRuntimeLock) {
+            if (!isRxTranscriptSuppressed()) {
+                finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
+            }
+            if (rxSessionStore != null) {
+                rxSessionStore.clear();
+            }
+            if (operateAudioInputHealthTracker != null) {
+                operateAudioInputHealthTracker.reset();
+            }
+            if (operateRxCore != null) {
+                operateRxCore.resetRuntimeState(resolveOperateWpm());
+                syncOperatePreferredTone();
+                syncOperateFixedToneLearningWindow();
+                syncOperateRxToneMode();
+                syncOperateSql();
+            }
+            if (operateCommittedOutputController != null) {
+                operateCommittedOutputController.reset();
+            }
+            lastOperateStableDecodeAtElapsedMs = -1L;
+            lastOperateTimingResetAtElapsedMs = -1L;
+            lastOperateRxPublishAtElapsedMs = 0L;
+            lastRxSessionSnapshot = null;
+            resetActiveRxTranscriptRuntime();
         }
-        if (rxSessionStore != null) {
-            rxSessionStore.clear();
-        }
-        if (operateAudioInputHealthTracker != null) {
-            operateAudioInputHealthTracker.reset();
-        }
-        if (operateRxCore != null) {
-            operateRxCore.resetRuntimeState(resolveOperateWpm());
-            syncOperatePreferredTone();
-            syncOperateFixedToneLearningWindow();
-            syncOperateRxToneMode();
-            syncOperateSql();
-        }
-        if (operateCommittedOutputController != null) {
-            operateCommittedOutputController.reset();
-        }
-        lastOperateStableDecodeAtElapsedMs = -1L;
-        lastOperateTimingResetAtElapsedMs = -1L;
-        lastOperateRxPublishAtElapsedMs = 0L;
-        lastRxSessionSnapshot = null;
-        activeRxTranscriptEntryId = -1L;
-        activeRxTranscriptStartedAtEpochMs = 0L;
-        activeRxTranscriptBaselineText = "";
     }
 
     private boolean isRxTranscriptSuppressed() {
@@ -2996,62 +3022,91 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     @Override
     public void onStateChanged(RxAudioSource.State state, String detail) {
-        operateRxState = state == null ? RxAudioSource.State.IDLE : state;
-        if (operateLiveRxTraceRecorder != null) {
-            operateLiveRxTraceRecorder.recordState(
-                    operateRxState.name(),
-                    detail,
-                    SystemClock.elapsedRealtime()
-            );
-            if (operateRxState == RxAudioSource.State.IDLE || operateRxState == RxAudioSource.State.ERROR) {
-                finishOperateLiveTraceSession(operateRxState == RxAudioSource.State.ERROR ? "error" : "idle");
+        try {
+            synchronized (operateRxRuntimeLock) {
+                operateRxState = state == null ? RxAudioSource.State.IDLE : state;
+                if (operateLiveRxTraceRecorder != null) {
+                    operateLiveRxTraceRecorder.recordState(
+                            operateRxState.name(),
+                            detail,
+                            SystemClock.elapsedRealtime()
+                    );
+                    if (operateRxState == RxAudioSource.State.IDLE || operateRxState == RxAudioSource.State.ERROR) {
+                        finishOperateLiveTraceSession(operateRxState == RxAudioSource.State.ERROR ? "error" : "idle");
+                    }
+                }
+                if (operateRxState == RxAudioSource.State.IDLE
+                        && activeOperateRxAudioSource != null
+                        && (!shouldUsePhoneMicrophoneRx() || hasMicrophonePermission())) {
+                    publishOperateSessionSnapshot(false, true);
+                } else if (operateRxState == RxAudioSource.State.ERROR) {
+                    publishOperateSessionSnapshot(false, true);
+                }
             }
-        }
-        if (operateRxState == RxAudioSource.State.IDLE
-                && activeOperateRxAudioSource != null
-                && (!shouldUsePhoneMicrophoneRx() || hasMicrophonePermission())) {
-            publishOperateSessionSnapshot(false, true);
-        } else if (operateRxState == RxAudioSource.State.ERROR) {
-            publishOperateSessionSnapshot(false, true);
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "Operate RX state callback crashed", exception);
+            synchronized (operateRxRuntimeLock) {
+                operateRxState = RxAudioSource.State.ERROR;
+                finishOperateLiveTraceSession("state-callback-crash");
+            }
         }
         mainHandler.post(this::refreshUi);
     }
 
     @Override
     public void onAudioFrame(AudioFrame frame) {
-        if (frame == null
-                || operateFrameSignalRunner == null
-                || operateSignalProcessor == null
-                || operateTimingModel == null
-                || operateDecoder == null
-                || operateRawInterpreter == null) {
-            return;
-        }
-        RxFrameSignalRunner.Result frameSignalResult = operateFrameSignalRunner.processFrame(
-                frame,
-                SystemClock.elapsedRealtime()
-        );
-        if (frameSignalResult == null) {
-            return;
-        }
-        AudioInputHealthSnapshot inputHealthSnapshot = frameSignalResult.inputHealthSnapshot();
-        traceOperateFrame(frame, inputHealthSnapshot);
+        try {
+            synchronized (operateRxRuntimeLock) {
+                if (frame == null
+                        || operateFrameSignalRunner == null
+                        || operateSignalProcessor == null
+                        || operateTimingModel == null
+                        || operateDecoder == null
+                        || operateRawInterpreter == null) {
+                    return;
+                }
+                RxFrameSignalRunner.Result frameSignalResult = operateFrameSignalRunner.processFrame(
+                        frame,
+                        SystemClock.elapsedRealtime()
+                );
+                if (frameSignalResult == null) {
+                    return;
+                }
+                AudioInputHealthSnapshot inputHealthSnapshot = frameSignalResult.inputHealthSnapshot();
+                traceOperateFrame(frame, inputHealthSnapshot);
 
-        long frameEndTimestampMs = frameSignalResult.frameEndTimestampMs();
-        syncOperateRxToneMode(frameEndTimestampMs);
-        maybeHandleOperateTurnTransition(
-                frameSignalResult.signalSnapshotAfterProcess(),
-                frameEndTimestampMs
-        );
-        captureOperateSpectrumSnapshot(frame);
-        for (CwToneEvent toneEvent : frameSignalResult.toneEvents()) {
-            routeOperateToneEvent(toneEvent, inputHealthSnapshot);
+                long frameEndTimestampMs = frameSignalResult.frameEndTimestampMs();
+                syncOperateRxToneMode(frameEndTimestampMs);
+                maybeHandleOperateTurnTransition(
+                        frameSignalResult.signalSnapshotAfterProcess(),
+                        frameEndTimestampMs
+                );
+                captureOperateSpectrumSnapshot(frame);
+                for (CwToneEvent toneEvent : frameSignalResult.toneEvents()) {
+                    routeOperateToneEvent(toneEvent, inputHealthSnapshot);
+                }
+                flushOperateToneEventStabilizer(frameEndTimestampMs, inputHealthSnapshot);
+                maybeFlushPendingCharacterDuringSilence(frame, frameEndTimestampMs);
+                operateTimingModel.observeClock(frameEndTimestampMs);
+                maybeResetOperateTimingAfterIdle(frame, frameEndTimestampMs);
+                publishOperateSessionSnapshot(true, false);
+            }
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "Operate RX audio frame callback crashed", exception);
+            synchronized (operateRxRuntimeLock) {
+                operateRxState = RxAudioSource.State.ERROR;
+                if (operateLiveRxTraceRecorder != null) {
+                    operateLiveRxTraceRecorder.recordState(
+                            RxAudioSource.State.ERROR.name(),
+                            "audio-frame-callback-crash: " + safeThrowableMessage(exception),
+                            SystemClock.elapsedRealtime()
+                    );
+                }
+                finishOperateLiveTraceSession("audio-frame-callback-crash");
+                publishOperateSessionSnapshot(false, true);
+            }
+            mainHandler.post(this::refreshUi);
         }
-        flushOperateToneEventStabilizer(frameEndTimestampMs, inputHealthSnapshot);
-        maybeFlushPendingCharacterDuringSilence(frame, frameEndTimestampMs);
-        operateTimingModel.observeClock(frameEndTimestampMs);
-        maybeResetOperateTimingAfterIdle(frame, frameEndTimestampMs);
-        publishOperateSessionSnapshot(true, false);
     }
 
     private void captureOperateSpectrumSnapshot(AudioFrame frame) {
@@ -3094,16 +3149,22 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     @Override
     public void onError(String message, Throwable throwable) {
-        operateRxState = RxAudioSource.State.ERROR;
-        if (operateLiveRxTraceRecorder != null) {
-            operateLiveRxTraceRecorder.recordState(
-                    RxAudioSource.State.ERROR.name(),
-                    message,
-                    SystemClock.elapsedRealtime()
-            );
+        try {
+            synchronized (operateRxRuntimeLock) {
+                operateRxState = RxAudioSource.State.ERROR;
+                if (operateLiveRxTraceRecorder != null) {
+                    operateLiveRxTraceRecorder.recordState(
+                            RxAudioSource.State.ERROR.name(),
+                            message,
+                            SystemClock.elapsedRealtime()
+                    );
+                }
+                finishOperateLiveTraceSession("error");
+                publishOperateSessionSnapshot(false, true);
+            }
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "Operate RX error callback crashed", exception);
         }
-        finishOperateLiveTraceSession("error");
-        publishOperateSessionSnapshot(false, true);
         mainHandler.post(this::refreshUi);
     }
 
@@ -3557,9 +3618,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
         CwTimingSnapshot timingSnapshot = operateTimingModel.rawSnapshot();
         int referenceWpm = resolveOperateTimingReferenceWpm(timingSnapshot);
+        boolean hasPendingCharacter = operateTimingDecodeRunner != null
+                ? operateTimingDecodeRunner.hasPendingCharacter()
+                : operateDecoder != null && operateDecoder.hasPendingCharacter();
         RxTurnSessionCoordinator.Observation observation = operateTurnSessionCoordinator.observe(
                 signalSnapshot,
-                false,
+                hasPendingCharacter,
                 nowElapsedMs,
                 referenceWpm
         );
@@ -3572,6 +3636,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             beginActiveRxTranscriptTurn(System.currentTimeMillis());
             traceOperateMarker("turn-start", observation.reason(), nowElapsedMs);
         } else if (observation.endedTurn()) {
+            applyTurnFinalizationToActiveTranscript(observation.turnFinalization());
             traceOperateTurnFinalization(
                     observation.turnFinalization(),
                     nowElapsedMs,
@@ -4069,7 +4134,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (activeInstance == null || activeInstance.operateSignalProcessor == null) {
             return;
         }
-        activeInstance.operateSignalProcessor.setPreferredToneFrequencyHz(frequencyHz);
+        synchronized (activeInstance.operateRxRuntimeLock) {
+            activeInstance.operateSignalProcessor.setPreferredToneFrequencyHz(frequencyHz);
+        }
     }
 
     public static void requestSharedOperateSqlUpdate(int sqlLevel) {
@@ -4077,8 +4144,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (activeInstance == null || activeInstance.operateSignalProcessor == null) {
             return;
         }
-        activeInstance.sqlLevel = Math.max(0, Math.min(100, sqlLevel));
-        activeInstance.operateSignalProcessor.setSqlPercent(activeInstance.sqlLevel);
+        synchronized (activeInstance.operateRxRuntimeLock) {
+            activeInstance.sqlLevel = Math.max(0, Math.min(100, sqlLevel));
+            activeInstance.operateSignalProcessor.setSqlPercent(activeInstance.sqlLevel);
+        }
     }
 
     private void syncActiveTxPlaybackSnapshot() {
@@ -4528,39 +4597,49 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void clearTranscriptDisplay() {
-        operateTranscriptEntries.clear();
-        transcriptTimelineActive = true;
-        activeTxTranscriptEntryId = -1L;
-        resetOperateRxRuntimeForManualClear();
-        conversationAutoScrollPending = true;
-        markConversationDirty();
+        synchronized (operateRxRuntimeLock) {
+            operateTranscriptEntries.clear();
+            transcriptTimelineActive = true;
+            activeTxTranscriptEntryId = -1L;
+            resetOperateRxRuntimeForManualClear();
+            conversationAutoScrollPending = true;
+            markConversationDirty();
+        }
         refreshUi();
     }
 
     private void resetOperateRxRuntimeForManualClear() {
-        if (rxSessionStore != null) {
-            rxSessionStore.clear();
+        synchronized (operateRxRuntimeLock) {
+            if (rxSessionStore != null) {
+                rxSessionStore.clear();
+            }
+            if (operateAudioInputHealthTracker != null) {
+                operateAudioInputHealthTracker.reset();
+            }
+            if (operateRxCore != null) {
+                operateRxCore.resetRuntimeState(resolveOperateWpm());
+                syncOperatePreferredTone();
+                syncOperateFixedToneLearningWindow();
+                syncOperateRxToneMode();
+                syncOperateSql();
+            }
+            if (operateCommittedOutputController != null) {
+                operateCommittedOutputController.reset();
+            }
+            lastOperateStableDecodeAtElapsedMs = -1L;
+            lastOperateTimingResetAtElapsedMs = -1L;
+            lastOperateRxPublishAtElapsedMs = 0L;
+            lastRxSessionSnapshot = null;
+            resetActiveRxTranscriptRuntime();
         }
-        if (operateAudioInputHealthTracker != null) {
-            operateAudioInputHealthTracker.reset();
-        }
-        if (operateRxCore != null) {
-            operateRxCore.resetRuntimeState(resolveOperateWpm());
-            syncOperatePreferredTone();
-            syncOperateFixedToneLearningWindow();
-            syncOperateRxToneMode();
-            syncOperateSql();
-        }
-        if (operateCommittedOutputController != null) {
-            operateCommittedOutputController.reset();
-        }
-        lastOperateStableDecodeAtElapsedMs = -1L;
-        lastOperateTimingResetAtElapsedMs = -1L;
-        lastOperateRxPublishAtElapsedMs = 0L;
-        lastRxSessionSnapshot = null;
+    }
+
+    private void resetActiveRxTranscriptRuntime() {
         activeRxTranscriptEntryId = -1L;
         activeRxTranscriptStartedAtEpochMs = 0L;
         activeRxTranscriptBaselineText = "";
+        activeRxTranscriptDecodeEvents.clear();
+        activeRxTranscriptLastDecodeTimestampMs = -1L;
     }
 
     private void beginActiveRxTranscriptTurn(long startedAtEpochMs) {
@@ -4618,6 +4697,72 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
     }
 
+    private void appendActiveRxTranscriptDecodeEvent(@Nullable CwDecodeEvent decodeEvent) {
+        if (decodeEvent == null) {
+            return;
+        }
+        activeRxTranscriptDecodeEvents.add(decodeEvent);
+        if (decodeEvent.timestampMs() > 0L) {
+            activeRxTranscriptLastDecodeTimestampMs = decodeEvent.timestampMs();
+        }
+    }
+
+    private String renderTranscriptTextFromDecodeEvents(@Nullable List<CwDecodeEvent> decodeEvents) {
+        if (decodeEvents == null || decodeEvents.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (CwDecodeEvent decodeEvent : decodeEvents) {
+            if (decodeEvent == null) {
+                continue;
+            }
+            if (decodeEvent.type() == CwDecodeEvent.Type.WORD_BREAK) {
+                if (builder.length() > 0 && builder.charAt(builder.length() - 1) != ' ') {
+                    builder.append(' ');
+                }
+                continue;
+            }
+            if (decodeEvent.type() == CwDecodeEvent.Type.CHARACTER_DECODED) {
+                builder.append(safeValue(decodeEvent.emittedValue()));
+            }
+        }
+        return safeTranscriptText(builder.toString());
+    }
+
+    private void replaceActiveRxTranscriptDecodeEvents(@Nullable List<CwDecodeEvent> decodeEvents) {
+        activeRxTranscriptDecodeEvents.clear();
+        activeRxTranscriptLastDecodeTimestampMs = -1L;
+        if (decodeEvents == null || decodeEvents.isEmpty()) {
+            return;
+        }
+        for (CwDecodeEvent decodeEvent : decodeEvents) {
+            if (decodeEvent == null) {
+                continue;
+            }
+            activeRxTranscriptDecodeEvents.add(decodeEvent);
+            if (decodeEvent.timestampMs() > 0L) {
+                activeRxTranscriptLastDecodeTimestampMs = decodeEvent.timestampMs();
+            }
+        }
+    }
+
+    private void applyTurnFinalizationToActiveTranscript(
+            @Nullable RxTurnSessionFinalizer.TurnFinalization turnFinalization
+    ) {
+        if (turnFinalization == null) {
+            return;
+        }
+        replaceActiveRxTranscriptDecodeEvents(turnFinalization.currentTurnDecodeEvents());
+        if (activeRxTranscriptEntryId == -1L) {
+            return;
+        }
+        TranscriptEntry entry = findTranscriptEntry(activeRxTranscriptEntryId);
+        if (entry == null) {
+            return;
+        }
+        entry.bodyText = renderTranscriptTextFromDecodeEvents(activeRxTranscriptDecodeEvents);
+    }
+
     private String resolveDecodeBootstrapBaselineText(@Nullable CwDecodeEvent decodeEvent) {
         if (decodeEvent != null) {
             String outputText = decodeEvent.outputText() == null ? "" : decodeEvent.outputText();
@@ -4631,10 +4776,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 );
             }
         }
-        if (lastRxSessionSnapshot != null && hasMeaningfulText(lastRxSessionSnapshot.rawText())) {
-            return safeTranscriptText(lastRxSessionSnapshot.rawText());
-        }
-        return resolveActiveRxTranscriptBaselineText();
+        return "";
     }
 
     private void restoreOperateUiState(@Nullable Bundle savedInstanceState) {
@@ -4672,9 +4814,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (!operateTranscriptEntries.isEmpty()) {
             transcriptTimelineActive = true;
         }
-        activeRxTranscriptEntryId = -1L;
-        activeRxTranscriptStartedAtEpochMs = 0L;
-        activeRxTranscriptBaselineText = "";
+        resetActiveRxTranscriptRuntime();
         activeTxTranscriptEntryId = -1L;
         conversationAutoScrollPending = true;
     }
@@ -4766,13 +4906,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (entry == null) {
             return;
         }
-        entry.bodyText = chooseTurnScopedTranscriptText(
-                entry.bodyText,
-                extractTurnTranscriptText(
-                        activeRxTranscriptBaselineText,
-                        decodeEvent.outputText()
-                )
-        );
+        appendActiveRxTranscriptDecodeEvent(decodeEvent);
+        entry.bodyText = renderTranscriptTextFromDecodeEvents(activeRxTranscriptDecodeEvents);
         entry.updatedAtEpochMs = updatedAtEpochMs;
         entry.active = true;
         entry.stateLabel = getString(R.string.operate_status_capture_active);
@@ -4792,13 +4927,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (entry == null) {
             return;
         }
-        entry.bodyText = chooseTurnScopedTranscriptText(
-                entry.bodyText,
-                extractTurnTranscriptText(
-                        activeRxTranscriptBaselineText,
-                        snapshot.rawText()
-                )
-        );
+        if (!activeRxTranscriptDecodeEvents.isEmpty()) {
+            entry.bodyText = renderTranscriptTextFromDecodeEvents(activeRxTranscriptDecodeEvents);
+        }
         entry.updatedAtEpochMs = Math.max(
                 entry.updatedAtEpochMs,
                 snapshot.updatedAtEpochMs()
@@ -4820,25 +4951,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (activeRxTranscriptEntryId == -1L) {
             return;
         }
-        CwInterpreterSnapshot rawSnapshot = operateCommittedOutputController == null
-                ? null
-                : operateCommittedOutputController.rawSnapshot();
         TranscriptEntry entry = findTranscriptEntry(activeRxTranscriptEntryId);
         if (entry == null) {
-            activeRxTranscriptEntryId = -1L;
-            activeRxTranscriptStartedAtEpochMs = 0L;
-            activeRxTranscriptBaselineText = "";
+            resetActiveRxTranscriptRuntime();
             return;
         }
-        if (rawSnapshot != null) {
-            entry.bodyText = chooseTurnScopedTranscriptText(
-                    entry.bodyText,
-                    extractTurnTranscriptText(
-                            activeRxTranscriptBaselineText,
-                            rawSnapshot.rawText()
-                    )
-            );
-        }
+        entry.bodyText = renderTranscriptTextFromDecodeEvents(activeRxTranscriptDecodeEvents);
         entry.callsignCandidates = new ArrayList<>(resolveUiFriendlyCallsignCandidates(lastRxSessionSnapshot));
         entry.updatedAtEpochMs = finalizedAtEpochMs;
         entry.active = false;
@@ -4847,9 +4965,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (entry.bodyText.trim().isEmpty()) {
             operateTranscriptEntries.remove(entry);
         }
-        activeRxTranscriptEntryId = -1L;
-        activeRxTranscriptStartedAtEpochMs = 0L;
-        activeRxTranscriptBaselineText = "";
+        resetActiveRxTranscriptRuntime();
         markConversationDirty();
     }
 

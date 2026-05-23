@@ -89,6 +89,7 @@ public final class RxTurnController {
     private long currentTurnStartedAtMs = -1L;
     private long lastTurnActivityTimestampMs = -1L;
     private long lastTurnStableDecodeTimestampMs = -1L;
+    private long lastTurnDecodeTimestampMs = -1L;
     private long lastTurnEndedAtMs = -1L;
     private String lastTransitionReason = "init";
 
@@ -105,6 +106,7 @@ public final class RxTurnController {
         currentTurnStartedAtMs = -1L;
         lastTurnActivityTimestampMs = -1L;
         lastTurnStableDecodeTimestampMs = -1L;
+        lastTurnDecodeTimestampMs = -1L;
         lastTurnEndedAtMs = -1L;
         lastTransitionReason = "reset";
     }
@@ -138,6 +140,7 @@ public final class RxTurnController {
             currentTurnStartedAtMs = timestampMs;
             lastTurnActivityTimestampMs = timestampMs;
             lastTurnStableDecodeTimestampMs = -1L;
+            lastTurnDecodeTimestampMs = -1L;
             currentTurnAnchorWpm = 0.0d;
             currentTurnStableDecodeCount = 0;
             currentTurnRejectedAnchorCount = 0;
@@ -165,7 +168,7 @@ public final class RxTurnController {
         long silenceMs = lastTurnActivityTimestampMs <= 0L
                 ? Long.MAX_VALUE
                 : Math.max(0L, timestampMs - lastTurnActivityTimestampMs);
-        long turnEndSilenceMs = resolveTurnEndSilenceMs(currentReferenceWpm);
+        long turnEndSilenceMs = resolveTurnEndSilenceMsForReference(currentReferenceWpm);
         if (silenceMs < turnEndSilenceMs) {
             return Transition.none();
         }
@@ -178,6 +181,36 @@ public final class RxTurnController {
         currentTurnStartedAtMs = -1L;
         lastTurnActivityTimestampMs = -1L;
         lastTurnStableDecodeTimestampMs = -1L;
+        lastTurnDecodeTimestampMs = -1L;
+        currentTurnAnchorWpm = 0.0d;
+        currentTurnStableDecodeCount = 0;
+        currentTurnRejectedAnchorCount = 0;
+        bootstrapAutoTrackFallbackLatched = false;
+        bootstrapFixedProgressObservedThisTurn = false;
+        trustedTimingEstablishedAtMs = -1L;
+        return new Transition(
+                false,
+                true,
+                false,
+                0,
+                lastTransitionReason
+        );
+    }
+
+    public Transition forceEnd(long timestampMs, String reason) {
+        if (phase != Phase.ACTIVE || timestampMs <= 0L) {
+            return Transition.none();
+        }
+        retainedTurnAnchorWpm = deriveRetainedTurnAnchorWpm();
+        phase = Phase.IDLE;
+        lastTurnEndedAtMs = timestampMs;
+        lastTransitionReason = reason == null || reason.trim().isEmpty()
+                ? "turn-end(forced,carry=" + formatWpm(retainedTurnAnchorWpm) + ")"
+                : reason;
+        currentTurnStartedAtMs = -1L;
+        lastTurnActivityTimestampMs = -1L;
+        lastTurnStableDecodeTimestampMs = -1L;
+        lastTurnDecodeTimestampMs = -1L;
         currentTurnAnchorWpm = 0.0d;
         currentTurnStableDecodeCount = 0;
         currentTurnRejectedAnchorCount = 0;
@@ -199,6 +232,7 @@ public final class RxTurnController {
         }
         lastTurnActivityTimestampMs = timestampMs;
         lastTurnStableDecodeTimestampMs = timestampMs;
+        lastTurnDecodeTimestampMs = timestampMs;
         if (!carryEligible) {
             return;
         }
@@ -225,6 +259,14 @@ public final class RxTurnController {
                 TURN_ANCHOR_BLEND
         );
         currentTurnStableDecodeCount += 1;
+    }
+
+    public void noteDecodeActivity(long timestampMs) {
+        if (phase != Phase.ACTIVE || timestampMs <= 0L) {
+            return;
+        }
+        lastTurnActivityTimestampMs = timestampMs;
+        lastTurnDecodeTimestampMs = timestampMs;
     }
 
     public Phase phase() {
@@ -284,6 +326,26 @@ public final class RxTurnController {
         return phase == Phase.ACTIVE ? trustedTimingEstablishedAtMs : -1L;
     }
 
+    public long stableDecodeIdleMs(long timestampMs) {
+        if (phase != Phase.ACTIVE
+                || timestampMs <= 0L
+                || lastTurnStableDecodeTimestampMs <= 0L
+                || timestampMs < lastTurnStableDecodeTimestampMs) {
+            return Long.MAX_VALUE;
+        }
+        return Math.max(0L, timestampMs - lastTurnStableDecodeTimestampMs);
+    }
+
+    public long decodeIdleMs(long timestampMs) {
+        if (phase != Phase.ACTIVE
+                || timestampMs <= 0L
+                || lastTurnDecodeTimestampMs <= 0L
+                || timestampMs < lastTurnDecodeTimestampMs) {
+            return Long.MAX_VALUE;
+        }
+        return Math.max(0L, timestampMs - lastTurnDecodeTimestampMs);
+    }
+
     public String lastTransitionReason() {
         return lastTransitionReason;
     }
@@ -320,7 +382,7 @@ public final class RxTurnController {
         return 0.0d;
     }
 
-    private long resolveTurnEndSilenceMs(int currentReferenceWpm) {
+    long resolveTurnEndSilenceMsForReference(int currentReferenceWpm) {
         long candidateMs = DEFAULT_TURN_END_SILENCE_MS;
         if (currentReferenceWpm > 0) {
             long dotEstimateMs = Math.max(1L, Math.round(1200.0d / currentReferenceWpm));

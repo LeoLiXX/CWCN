@@ -95,6 +95,17 @@ public final class RxCommittedDecodeController {
         if (admittedEvents == null || admittedEvents.isEmpty()) {
             return Collections.emptyList();
         }
+        if (turnController != null) {
+            for (CwDecodeEvent admittedEvent : admittedEvents) {
+                if (admittedEvent == null) {
+                    continue;
+                }
+                if (admittedEvent.type() == CwDecodeEvent.Type.CHARACTER_DECODED
+                        || admittedEvent.type() == CwDecodeEvent.Type.WORD_BREAK) {
+                    turnController.noteDecodeActivity(admittedEvent.timestampMs());
+                }
+            }
+        }
         if (wpmGuard == null) {
             return admittedEvents;
         }

@@ -92,9 +92,16 @@ public final class RxTurnTailRepairController {
             sessionCommittedDecodeEvents.remove(sessionCommittedDecodeEvents.size() - 1);
         }
         sessionCommittedDecodeEvents.addAll(repairResult.repairedDecodeEvents());
+        ArrayList<CwDecodeEvent> repairedCurrentTurnDecodeEvents = new ArrayList<>(
+                sessionCommittedDecodeEvents.subList(
+                        currentTurnDecodeStartIndex,
+                        sessionCommittedDecodeEvents.size()
+                )
+        );
         return new RepairApplication(
                 repairResult,
-                new ArrayList<>(sessionCommittedDecodeEvents)
+                new ArrayList<>(sessionCommittedDecodeEvents),
+                repairedCurrentTurnDecodeEvents
         );
     }
 
@@ -110,13 +117,16 @@ public final class RxTurnTailRepairController {
     public static final class RepairApplication {
         private final RxTrailingWindowRepair.RepairResult repairResult;
         private final List<CwDecodeEvent> sessionDecodeEvents;
+        private final List<CwDecodeEvent> currentTurnDecodeEvents;
 
         private RepairApplication(
                 RxTrailingWindowRepair.RepairResult repairResult,
-                List<CwDecodeEvent> sessionDecodeEvents
+                List<CwDecodeEvent> sessionDecodeEvents,
+                List<CwDecodeEvent> currentTurnDecodeEvents
         ) {
             this.repairResult = repairResult;
             this.sessionDecodeEvents = Collections.unmodifiableList(sessionDecodeEvents);
+            this.currentTurnDecodeEvents = Collections.unmodifiableList(currentTurnDecodeEvents);
         }
 
         public RxTrailingWindowRepair.RepairResult repairResult() {
@@ -125,6 +135,10 @@ public final class RxTurnTailRepairController {
 
         public List<CwDecodeEvent> sessionDecodeEvents() {
             return sessionDecodeEvents;
+        }
+
+        public List<CwDecodeEvent> currentTurnDecodeEvents() {
+            return currentTurnDecodeEvents;
         }
     }
 }

@@ -34,6 +34,7 @@ public final class LiveRxWpmGuard {
     private static final double HOLD_DOWN_RATIO = 0.88d;
     private static final double HOLD_DOWN_WPM = 2.00d;
     private static final double BOOTSTRAP_BOUNDARY_SEED_FLOOR_RATIO = 0.84d;
+    private static final double PRE_TRUST_WEAK_SIGNAL_SEED_FLOOR_RATIO = 0.88d;
     private static final double ACTIVE_SIGNAL_LOCKED_RATIO_MIN = 0.08d;
     private static final double ACTIVE_SIGNAL_NEAR_TARGET_RATIO_MIN = 0.12d;
     private static final double ACTIVE_SIGNAL_UNLOCKED_RATIO_MIN = 0.08d;
@@ -326,7 +327,13 @@ public final class LiveRxWpmGuard {
         }
         Sample sample = Sample.from(signalSnapshot, timingSnapshot);
         if (trustedWpm <= 0.0d) {
-            return sample.rawWpm > 0.0d;
+            if (sample.rawWpm <= 0.0d) {
+                return false;
+            }
+            if (seedWpm <= 0 || isBootstrapConfidence(sample)) {
+                return true;
+            }
+            return sample.rawWpm >= (seedWpm * PRE_TRUST_WEAK_SIGNAL_SEED_FLOOR_RATIO);
         }
         if (!isStrongConfidence(sample) || sample.rawWpm <= 0.0d) {
             return false;
@@ -379,6 +386,9 @@ public final class LiveRxWpmGuard {
         if (anchorWpm <= 0.0d) {
             holding = false;
             if (rawWpm > 0.0d) {
+                if (!strongConfidence && seedWpm > 0) {
+                    rawWpm = Math.max(rawWpm, seedWpm * PRE_TRUST_WEAK_SIGNAL_SEED_FLOOR_RATIO);
+                }
                 return rawWpm;
             }
             if (retainedWpm > 0.0d) {
