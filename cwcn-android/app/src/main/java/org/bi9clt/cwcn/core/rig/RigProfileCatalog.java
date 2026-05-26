@@ -121,9 +121,10 @@ public final class RigProfileCatalog {
                             RigCapability.MODE_SET
                     ),
                     "这是基于共享 CAT 骨架承接 Yaesu 风格串口命令族的具体 profile 占位。",
-                    "先在电台配置中选择 Yaesu 风格 CAT，再固定波特率和串口提示，最后做机型级验证。",
+                    "先在电台配置中选择 Yaesu 风格 CAT，再固定波特率和串口提示，最后做机型级验证。FT-891 这类双虚拟串口机型，通常 Enhanced 端口用于 CAT，Standard 端口用于 TX 控制；其原生 USB 不提供音频输入。",
                     Arrays.asList(
                             "共享原生串口 CAT 适配器已接入就绪和探测流程。",
+                            "FT-891 的 USB 原生不带音频输入，RX 需要走手机麦克风或独立 USB 音频接口。",
                             "不同代际电台的命令细节仍可能存在差异。"
                     ),
                     new RigProfileSettings(

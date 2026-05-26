@@ -49,6 +49,21 @@
                     android:textSize="7sp" />
             </LinearLayout>
 
+            <TextView
+                android:id="@+id/rigFrequencyChip"
+                android:layout_width="wrap_content"
+                android:layout_height="24dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/operate_chip_background"
+                android:gravity="center"
+                android:minWidth="48dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:textColor="@color/cwcn_title"
+                android:textSize="8sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
             <ImageButton
                 android:id="@+id/openRigSetupButton"
                 android:layout_width="34dp"

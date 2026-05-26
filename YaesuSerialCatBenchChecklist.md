@@ -79,3 +79,52 @@ This path does **not** yet mean full native Yaesu TX/CW support is complete.
 - keying-port result text
 - radio model
 - anything notable on the radio side
+
+## Cross-rig support snapshot
+
+### FT-891
+
+- Recommended current CWCN route:
+  - `CAT over USB serial`
+  - `TX via dedicated keying/control`
+  - `RX via phone microphone`
+- Why:
+  - the radio exposes a workable CAT/control path
+  - its native USB path does not reliably give Android a usable audio-input device
+- Current CWCN status:
+  - serial CAT probe path exists
+  - PTT / keyed TX path exists
+  - frequency read path exists
+  - hybrid route `CAT over USB + RX from phone mic` is now modeled explicitly
+- If a separate Android-visible USB audio interface is attached:
+  - RX can move to `USB external audio`
+  - otherwise stay on `phone microphone`
+
+### FT-710
+
+- Recommended current CWCN route:
+  - keep the existing Yaesu serial CAT path that already works on bench
+  - do not force the FT-891-style hybrid route unless the real device lacks usable USB audio input
+- Current CWCN status:
+  - CAT / PTT / frequency-read path is the best current Yaesu native-serial baseline
+  - FT-710 should remain on its current working path unless a device-specific issue is proven
+
+### IC-7300
+
+- Recommended current CWCN route today:
+  - safest formal path: `Icom family (rigctld)`
+  - native serial `Icom CI-V` is now wired for probe / PTT / frequency read, but still needs more real-device validation
+- Current CWCN status:
+  - CI-V probe path exists
+  - CI-V PTT path exists
+  - CI-V frequency-read path exists
+  - RX audio is still separate from CAT:
+    - if Android sees a usable USB audio input device, use `USB external audio`
+    - otherwise use `phone microphone`
+
+## FT8CN reference note
+
+- FT8CN does not appear to have FT-891-specific USB audio routing logic.
+- For non-network Yaesu paths such as `FT-891`, FT8CN RX falls back to generic `AudioRecord(DEFAULT)`.
+- FT8CN TX audio is generic `AudioTrack` playback through the Android-selected output path.
+- FT8CN only switches away from mic RX when the rig path itself supports wave/audio-over-CAT or a network-audio path.

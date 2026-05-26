@@ -31,6 +31,7 @@ import androidx.core.content.ContextCompat;
 import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.BuildConfig;
 import org.bi9clt.cwcn.core.app.DeveloperModeStore;
+import org.bi9clt.cwcn.core.app.OperateRouteModeStore;
 import org.bi9clt.cwcn.core.app.RouteFallbackStore;
 import org.bi9clt.cwcn.core.app.RxInputSettingsStore;
 import org.bi9clt.cwcn.core.app.StationProfileStore;
@@ -61,6 +62,7 @@ import org.bi9clt.cwcn.ui.tx.TxTemplateListActivity;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public final class SettingsActivity extends AppCompatActivity {
     private static final String ACTION_USB_KEYER_PERMISSION =
@@ -132,6 +134,7 @@ public final class SettingsActivity extends AppCompatActivity {
     private DeveloperModeStore developerModeStore;
     private StationProfileStore stationProfileStore;
     private RigSelectionStore rigSelectionStore;
+    private OperateRouteModeStore operateRouteModeStore;
     private RouteFallbackStore routeFallbackStore;
     private RxInputSettingsStore rxInputSettingsStore;
     private TxTemplateStore txTemplateStore;
@@ -159,6 +162,7 @@ public final class SettingsActivity extends AppCompatActivity {
         developerModeStore = new DeveloperModeStore(this);
         stationProfileStore = new StationProfileStore(this);
         rigSelectionStore = new RigSelectionStore(this);
+        operateRouteModeStore = new OperateRouteModeStore(this);
         routeFallbackStore = new RouteFallbackStore(this);
         rxInputSettingsStore = new RxInputSettingsStore(this);
         txTemplateStore = new TxTemplateStore(this);
@@ -652,6 +656,7 @@ public final class SettingsActivity extends AppCompatActivity {
     private void refreshUi() {
         boolean developerModeEnabled = developerModeStore.isEnabled();
         AppOverviewSnapshot overview = localLogRepository.loadOverview();
+        boolean showRouteEditorControls = shouldShowRouteEditorControls();
         String catKeyingHint = renderCatKeyingHintText();
         syncStationProfileEditors(overview);
         syncCwDefaultsEditors();
@@ -676,7 +681,11 @@ public final class SettingsActivity extends AppCompatActivity {
         setVisibleWhenHasText(binding.stationProfileStatusText);
         setVisibleWhenHasText(binding.cwDefaultsStatusText);
         setVisibleWhenHasText(binding.txTemplatesStatusText);
-        setVisibleWhenHasText(binding.routeSettingsStatusText);
+        if (showRouteEditorControls) {
+            setVisibleWhenHasText(binding.routeSettingsStatusText);
+        } else {
+            binding.routeSettingsStatusText.setVisibility(View.GONE);
+        }
         setVisibleWhenHasText(binding.routeFallbackStatusText);
         binding.developerModeStatusText.setText(renderDeveloperModeStatus(developerModeEnabled));
         binding.toggleDeveloperModeButton.setText(developerModeEnabled
@@ -734,12 +743,22 @@ public final class SettingsActivity extends AppCompatActivity {
                         ? usbRouteStatusMessage
                         : null
         );
-        return RigRouteStatusFormatter.describeSettingsRouteSummary(
+        String summary = RigRouteStatusFormatter.describeSettingsRouteSummary(
                 profile,
                 settings,
                 routeFallbackStore.usePhoneFallback(),
                 readiness
         );
+        OperateRouteModeStore.Mode routeMode = operateRouteModeStore == null
+                ? OperateRouteModeStore.Mode.STANDARD_AUTO
+                : operateRouteModeStore.mode(profile);
+        if (routeMode == OperateRouteModeStore.Mode.HYBRID_PHONE_RX) {
+            summary += "\n" + getString(
+                    R.string.settings_radio_route_mode_line,
+                    getString(routeMode.displayNameResId())
+            );
+        }
+        return summary;
     }
 
     private String renderRouteFallbackText() {
@@ -769,6 +788,11 @@ public final class SettingsActivity extends AppCompatActivity {
 
     private String renderCatKeyingHintText() {
         RigProfile profile = rigSelectionStore.selectedProfile();
+        if (!shouldShowRouteEditorControls()) {
+            return profile == null
+                    ? getString(R.string.settings_cat_keying_hint_pick_route)
+                    : getString(R.string.settings_cat_keying_hint_manage_in_rig_setup);
+        }
         RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
         RigControlAdapter adapter = resolveRouteStatusAdapter(profile, settings);
         return renderRouteActionHint(profile, adapter, settings);
@@ -940,7 +964,7 @@ public final class SettingsActivity extends AppCompatActivity {
     }
 
     private void saveStationProfile() {
-        String stationCallsign = normalizedEditorValue(binding.stationCallsignEditText.getText());
+        String stationCallsign = normalizeUppercaseEditorValue(binding.stationCallsignEditText);
         String operatorName = normalizedEditorValue(binding.operatorNameEditText.getText());
         String qth = normalizedEditorValue(binding.qthEditText.getText());
         String maidenheadGrid = normalizedEditorValue(binding.maidenheadGridEditText.getText());
@@ -1352,20 +1376,32 @@ public final class SettingsActivity extends AppCompatActivity {
                 : profile.displayName();
     }
 
+    private boolean shouldShowRouteEditorControls() {
+        return developerModeStore.isEnabled();
+    }
+
     private void updateRoutePanelVisibility() {
         RigProfile profile = rigSelectionStore.selectedProfile();
+        boolean showRouteEditorControls = shouldShowRouteEditorControls();
         boolean hasProfile = profile != null;
         boolean serialVisible = hasProfile && profile.hasCapability(RigCapability.SERIAL_CAT);
-        binding.routeSettingsScopeText.setVisibility(View.VISIBLE);
-        binding.serialRouteSettingsPanel.setVisibility(serialVisible ? View.VISIBLE : View.GONE);
-        binding.serialCatCivAddressEditText.setVisibility(serialVisible && rigSelectionStore.loadSettings(profile).serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
+        binding.routeSettingsScopeText.setVisibility(showRouteEditorControls ? View.VISIBLE : View.GONE);
+        binding.routeSettingsStatusText.setVisibility(showRouteEditorControls ? binding.routeSettingsStatusText.getVisibility() : View.GONE);
+        binding.serialRouteSettingsPanel.setVisibility(showRouteEditorControls && serialVisible ? View.VISIBLE : View.GONE);
+        binding.serialCatCivAddressEditText.setVisibility(showRouteEditorControls && serialVisible && rigSelectionStore.loadSettings(profile).serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
                 ? View.VISIBLE
                 : View.GONE);
-        binding.networkRouteSettingsPanel.setVisibility(hasProfile && profile.hasCapability(RigCapability.NETWORK_CAT) ? View.VISIBLE : View.GONE);
-        binding.usbRouteSettingsPanel.setVisibility(hasProfile && profile.hasCapability(RigCapability.KEY_LINE_CONTROL) ? View.VISIBLE : View.GONE);
+        binding.networkRouteSettingsPanel.setVisibility(showRouteEditorControls && hasProfile && profile.hasCapability(RigCapability.NETWORK_CAT) ? View.VISIBLE : View.GONE);
+        binding.usbRouteSettingsPanel.setVisibility(showRouteEditorControls && hasProfile && profile.hasCapability(RigCapability.KEY_LINE_CONTROL) ? View.VISIBLE : View.GONE);
     }
 
     private void syncUsbRouteState() {
+        if (!shouldShowRouteEditorControls()) {
+            binding.usbDeviceSpinner.setVisibility(View.GONE);
+            binding.requestUsbKeyerPermissionButton.setVisibility(View.GONE);
+            binding.usbRouteStatusText.setVisibility(View.GONE);
+            return;
+        }
         RigProfile profile = rigSelectionStore.selectedProfile();
         RigProfileSettings settings = readCurrentRouteEditorSettings();
         boolean usbVisible = profile != null && profile.hasCapability(RigCapability.KEY_LINE_CONTROL);
@@ -1735,6 +1771,22 @@ public final class SettingsActivity extends AppCompatActivity {
                 return;
             }
         }
+    }
+
+    private String normalizeUppercaseEditorValue(EditText editText) {
+        Editable editable = editText == null ? null : editText.getText();
+        String raw = normalizedEditorValue(editable);
+        if (raw == null) {
+            return null;
+        }
+        String normalized = raw.toUpperCase(Locale.US);
+        if (editText != null && !normalized.equals(editText.getText() == null ? "" : editText.getText().toString())) {
+            syncingEditors = true;
+            editText.setText(normalized);
+            editText.setSelection(normalized.length());
+            syncingEditors = false;
+        }
+        return normalized;
     }
 
     private String normalizeHexByte(android.widget.EditText editText) {

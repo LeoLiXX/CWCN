@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/cwcn_screen_background">
@@ -39,7 +40,7 @@
                 android:layout_width="30dp"
                 android:layout_height="30dp"
                 android:layout_marginStart="8dp"
-                android:background="@drawable/operate_chip_background"
+                android:background="@drawable/logbook_toolbar_button_background"
                 android:contentDescription="@string/settings_back"
                 android:padding="6dp"
                 android:scaleType="centerInside"
@@ -159,10 +160,10 @@
 
                 <Button
                     android:id="@+id/gridAutoDetectButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:background="@drawable/operate_chip_background"
                     android:minHeight="0dp"
                     android:paddingStart="12dp"
                     android:paddingTop="7dp"
@@ -170,7 +171,6 @@
                     android:paddingBottom="7dp"
                     android:text="@string/settings_action_detect_grid"
                     android:textAllCaps="false"
-                    android:textColor="@color/cwcn_body"
                     android:textSize="10sp" />
             </LinearLayout>
 
@@ -266,17 +266,16 @@
 
             <Button
                 android:id="@+id/openRigSetupButton"
+                style="@style/Widget.CWCN.PrimaryButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:background="@drawable/operate_chip_background"
                 android:minHeight="0dp"
                 android:paddingTop="7dp"
                 android:paddingBottom="7dp"
                 android:text="@string/settings_action_open_rig_setup"
-                android:textAllCaps="false"
-                android:textColor="@color/cwcn_body"
-                android:textSize="10sp" />
+                android:textSize="10sp"
+                app:backgroundTint="@null" />
         </LinearLayout>
 
         <LinearLayout
@@ -582,17 +581,16 @@
 
                 <Button
                     android:id="@+id/requestUsbKeyerPermissionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:background="@drawable/operate_chip_background"
                     android:minHeight="0dp"
                     android:paddingTop="7dp"
                     android:paddingBottom="7dp"
                     android:text="@string/settings_action_request_usb_permission"
-                    android:textAllCaps="false"
-                    android:textColor="@color/cwcn_body"
-                    android:textSize="10sp" />
+                    android:textSize="10sp"
+                    app:backgroundTint="@null" />
 
                 <TextView
                     android:id="@+id/usbRouteStatusText"
@@ -890,17 +888,16 @@
 
             <Button
                 android:id="@+id/openTxTemplateLibraryButton"
+                style="@style/Widget.CWCN.PrimaryButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:background="@drawable/operate_chip_background"
                 android:minHeight="0dp"
                 android:paddingTop="7dp"
                 android:paddingBottom="7dp"
                 android:text="@string/settings_action_open_template_list"
-                android:textAllCaps="false"
-                android:textColor="@color/cwcn_body"
-                android:textSize="10sp" />
+                android:textSize="10sp"
+                app:backgroundTint="@null" />
 
             <TextView
                 android:id="@+id/txTemplatesStatusText"
@@ -955,17 +952,16 @@
 
             <Button
                 android:id="@+id/toggleDeveloperModeButton"
+                style="@style/Widget.CWCN.PrimaryButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:background="@drawable/operate_chip_background"
                 android:minHeight="0dp"
                 android:paddingTop="7dp"
                 android:paddingBottom="7dp"
                 android:text="@string/settings_action_enable_developer"
-                android:textAllCaps="false"
-                android:textColor="@color/cwcn_body"
-                android:textSize="10sp" />
+                android:textSize="10sp"
+                app:backgroundTint="@null" />
         </LinearLayout>
 
         <LinearLayout
@@ -996,17 +992,16 @@
 
             <Button
                 android:id="@+id/openDeveloperToolsButton"
+                style="@style/Widget.CWCN.PrimaryButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:background="@drawable/operate_chip_background"
                 android:minHeight="0dp"
                 android:paddingTop="7dp"
                 android:paddingBottom="7dp"
                 android:text="@string/settings_action_open_tools"
-                android:textAllCaps="false"
-                android:textColor="@color/cwcn_body"
-                android:textSize="10sp" />
+                android:textSize="10sp"
+                app:backgroundTint="@null" />
         </LinearLayout>
 
     </LinearLayout>

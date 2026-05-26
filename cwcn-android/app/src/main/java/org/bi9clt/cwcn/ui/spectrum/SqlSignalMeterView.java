@@ -9,6 +9,9 @@ import android.util.TypedValue;
 import android.view.View;
 
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
+
+import org.bi9clt.cwcn.R;
 
 public final class SqlSignalMeterView extends View {
     private static final float MIN_DISPLAY_CEILING = 20f;
@@ -48,21 +51,22 @@ public final class SqlSignalMeterView extends View {
     }
 
     private void init() {
-        trackPaint.setColor(0xff0b171d);
-        strokePaint.setColor(0xff27404d);
+        trackPaint.setColor(ContextCompat.getColor(getContext(), R.color.cwcn_sql_meter_track));
+        strokePaint.setColor(ContextCompat.getColor(getContext(), R.color.cwcn_sql_meter_stroke));
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(dp(1f));
-        gridPaint.setColor(0x3327404d);
+        gridPaint.setColor(ContextCompat.getColor(getContext(), R.color.cwcn_sql_meter_grid));
         gridPaint.setStrokeWidth(dp(1f));
-        noisePaint.setColor(0x5527404d);
-        framePaint.setColor(0xff2f90a3);
-        tonePaint.setColor(0xff8ee7ff);
-        thresholdPaint.setColor(0xff74ebdd);
-        thresholdPaint.setStrokeWidth(dp(1.4f));
-        recommendedThresholdPaint.setColor(0xffffb347);
+        noisePaint.setColor(ContextCompat.getColor(getContext(), R.color.cwcn_sql_meter_noise_fill));
+        framePaint.setColor(ContextCompat.getColor(getContext(), R.color.cwcn_sql_meter_frame_fill));
+        tonePaint.setColor(ContextCompat.getColor(getContext(), R.color.cwcn_sql_meter_tone_fill));
+        thresholdPaint.setColor(ContextCompat.getColor(getContext(), R.color.cwcn_sql_meter_threshold));
+        thresholdPaint.setStrokeWidth(dp(1.6f));
+        recommendedThresholdPaint.setColor(ContextCompat.getColor(getContext(), R.color.cwcn_sql_meter_recommended));
         recommendedThresholdPaint.setStrokeWidth(dp(1.2f));
-        labelPaint.setColor(0xff8ee7ff);
+        labelPaint.setColor(ContextCompat.getColor(getContext(), R.color.cwcn_sql_meter_label_text));
         labelPaint.setTextSize(dp(8f));
+        labelPaint.setFakeBoldText(true);
     }
 
     public void setLevels(

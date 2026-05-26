@@ -3,6 +3,7 @@ package org.bi9clt.cwcn.core.rig;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -255,8 +256,113 @@ public final class SerialCatRigControlAdapterTest {
         );
     }
 
+    @Test
+    public void icomTextTransmissionIsNotAdvertisedWithoutDedicatedKeyingPort() {
+        FakeSessionFactory sessionFactory = new FakeSessionFactory();
+        SerialCatRigControlAdapter adapter = new SerialCatRigControlAdapter(
+                () -> new SerialCatRigControlAdapter.ActiveConfiguration(
+                        RigProfileCatalog.findById("icom-civ-serial-generic"),
+                        new RigProfileSettings(
+                                18,
+                                650,
+                                SerialKeyerTxOutput.KeyLine.RTS,
+                                null,
+                                CatProtocolFamily.ICOM_CIV,
+                                19200,
+                                "USB1",
+                                "94",
+                                CatProtocolFamily.HAMLIB_RIGCTLD,
+                                null,
+                                4532,
+                                null
+                        )
+                ),
+                sessionFactory,
+                new FakeDedicatedKeyingPortFactory()
+        );
+
+        assertFalse(adapter.supportsTextToCw());
+        assertFalse(adapter.sendText("E"));
+        assertTrue(sessionFactory.binaryCommands.isEmpty());
+    }
+
+    @Test
+    public void icomDedicatedKeyingPortUsesRealKeyLineInsteadOfCivPttForText() {
+        FakeSessionFactory sessionFactory = new FakeSessionFactory();
+        FakeDedicatedKeyingPortFactory keyingFactory = new FakeDedicatedKeyingPortFactory();
+        SerialCatRigControlAdapter adapter = new SerialCatRigControlAdapter(
+                () -> new SerialCatRigControlAdapter.ActiveConfiguration(
+                        RigProfileCatalog.findById("icom-civ-serial-generic"),
+                        new RigProfileSettings(
+                                18,
+                                650,
+                                SerialKeyerTxOutput.KeyLine.RTS,
+                                null,
+                                CatProtocolFamily.ICOM_CIV,
+                                19200,
+                                "USB1",
+                                SerialKeyerTxOutput.KeyLine.DTR,
+                                "USB1#KEY",
+                                KeyingPolarity.ACTIVE_HIGH,
+                                false,
+                                true,
+                                "94",
+                                CatProtocolFamily.HAMLIB_RIGCTLD,
+                                null,
+                                4532,
+                                null
+                        )
+                ),
+                sessionFactory,
+                keyingFactory
+        );
+
+        assertTrue(adapter.supportsPttControl());
+        assertTrue(adapter.supportsTextToCw());
+        assertTrue(adapter.isReady());
+        assertTrue(adapter.sendText("E"));
+        assertEquals(0, sessionFactory.openCount);
+        assertTrue(keyingFactory.port.dtrHighSeen);
+        assertTrue(keyingFactory.port.dtrLowSeen);
+        assertFalse(keyingFactory.port.rtsHighSeen);
+    }
+
+    @Test
+    public void kenwoodTextTransmissionUsesAsciiTxAndRxCommands() {
+        FakeSessionFactory sessionFactory = new FakeSessionFactory();
+        SerialCatRigControlAdapter adapter = new SerialCatRigControlAdapter(
+                () -> new SerialCatRigControlAdapter.ActiveConfiguration(
+                        RigProfileCatalog.findById("kenwood-cat-serial-generic"),
+                        new RigProfileSettings(
+                                18,
+                                650,
+                                SerialKeyerTxOutput.KeyLine.RTS,
+                                null,
+                                CatProtocolFamily.KENWOOD_STYLE,
+                                57600,
+                                "USB2",
+                                null,
+                                CatProtocolFamily.HAMLIB_RIGCTLD,
+                                null,
+                                4532,
+                                null
+                        )
+                ),
+                sessionFactory,
+                new FakeDedicatedKeyingPortFactory()
+        );
+
+        assertTrue(adapter.supportsTextToCw());
+        assertTrue(adapter.supportsPttControl());
+        assertTrue(adapter.sendText("E"));
+        assertTrue(sessionFactory.asciiCommands.contains("TX;"));
+        assertTrue(sessionFactory.asciiCommands.contains("RX;"));
+    }
+
     private static final class FakeSessionFactory implements SerialCatSessionFactory {
         int openCount;
+        final List<String> asciiCommands = new ArrayList<>();
+        final List<String> binaryCommands = new ArrayList<>();
 
         @Override
         public PortAvailability availability(String portHint) {
@@ -289,6 +395,8 @@ public final class SerialCatRigControlAdapterTest {
 
                 @Override
                 public void send(byte[] command, int timeoutMs) {
+                    binaryCommands.add(Arrays.toString(command));
+                    asciiCommands.add(new String(command, java.nio.charset.StandardCharsets.US_ASCII));
                 }
 
                 @Override

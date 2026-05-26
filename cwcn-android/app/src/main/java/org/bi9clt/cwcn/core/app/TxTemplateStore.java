@@ -8,6 +8,7 @@ import androidx.annotation.Nullable;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,6 +41,48 @@ public final class TxTemplateStore {
     private static final String KEY_QRZ = "template_qrz";
     private static final String KEY_TU73 = "template_tu73";
     private static final String KEY_TEMPLATES_JSON = "templates_json";
+    private static final String BACKUP_FORMAT = "cwcn_tx_templates";
+    private static final int BACKUP_VERSION = 1;
+
+    public enum ImportMode {
+        APPEND,
+        REPLACE_SAME_NAME
+    }
+
+    public static final class ImportResult {
+        private final int importedCount;
+        private final int createdCount;
+        private final int updatedCount;
+        private final int renamedCount;
+
+        private ImportResult(
+                int importedCount,
+                int createdCount,
+                int updatedCount,
+                int renamedCount
+        ) {
+            this.importedCount = Math.max(0, importedCount);
+            this.createdCount = Math.max(0, createdCount);
+            this.updatedCount = Math.max(0, updatedCount);
+            this.renamedCount = Math.max(0, renamedCount);
+        }
+
+        public int importedCount() {
+            return importedCount;
+        }
+
+        public int createdCount() {
+            return createdCount;
+        }
+
+        public int updatedCount() {
+            return updatedCount;
+        }
+
+        public int renamedCount() {
+            return renamedCount;
+        }
+    }
 
     private final SharedPreferences preferences;
 
@@ -198,6 +241,82 @@ public final class TxTemplateStore {
         return cqTemplate();
     }
 
+    public String exportBackupJson() {
+        JSONObject root = new JSONObject();
+        try {
+            root.put("format", BACKUP_FORMAT);
+            root.put("version", BACKUP_VERSION);
+            root.put("exportedAtEpochMs", System.currentTimeMillis());
+            root.put("templates", buildTemplateArray(loadTemplates()));
+        } catch (JSONException ignored) {
+        }
+        try {
+            return root.toString(2);
+        } catch (JSONException ignored) {
+            return root.toString();
+        }
+    }
+
+    public int countImportableTemplates(@Nullable String rawJson) {
+        return deserializeTemplatesFromImport(rawJson).size();
+    }
+
+    public ImportResult importTemplates(
+            @Nullable String rawJson,
+            @Nullable ImportMode importMode
+    ) {
+        ArrayList<TxTemplateEntry> importedEntries = deserializeTemplatesFromImport(rawJson);
+        if (importedEntries.isEmpty()) {
+            return new ImportResult(0, 0, 0, 0);
+        }
+        ImportMode safeImportMode = importMode == null ? ImportMode.APPEND : importMode;
+        ArrayList<TxTemplateEntry> currentEntries = new ArrayList<>(loadTemplates());
+        int createdCount = 0;
+        int updatedCount = 0;
+        int renamedCount = 0;
+        for (TxTemplateEntry importedEntry : importedEntries) {
+            if (importedEntry == null) {
+                continue;
+            }
+            if (safeImportMode == ImportMode.REPLACE_SAME_NAME) {
+                int existingIndex = findTemplateIndexById(currentEntries, importedEntry.id());
+                if (existingIndex < 0) {
+                    existingIndex = findTemplateIndexByName(currentEntries, importedEntry.name(), -1);
+                }
+                if (existingIndex >= 0) {
+                    TxTemplateEntry existingEntry = currentEntries.get(existingIndex);
+                    String mergedName = uniqueTemplateName(
+                            currentEntries,
+                            importedEntry.name(),
+                            existingIndex
+                    );
+                    if (!mergedName.equals(importedEntry.name())) {
+                        renamedCount++;
+                    }
+                    currentEntries.set(
+                            existingIndex,
+                            new TxTemplateEntry(
+                                    existingEntry.id(),
+                                    mergedName,
+                                    importedEntry.body()
+                            )
+                    );
+                    updatedCount++;
+                    continue;
+                }
+            }
+            String uniqueId = uniqueTemplateId(currentEntries, importedEntry.id());
+            String uniqueName = uniqueTemplateName(currentEntries, importedEntry.name(), -1);
+            if (!uniqueName.equals(importedEntry.name())) {
+                renamedCount++;
+            }
+            currentEntries.add(new TxTemplateEntry(uniqueId, uniqueName, importedEntry.body()));
+            createdCount++;
+        }
+        persistTemplates(currentEntries);
+        return new ImportResult(importedEntries.size(), createdCount, updatedCount, renamedCount);
+    }
+
     private void ensureTemplateCatalog() {
         String rawJson = preferences.getString(KEY_TEMPLATES_JSON, null);
         if (normalize(rawJson) != null && !deserializeTemplates(rawJson).isEmpty()) {
@@ -245,39 +364,9 @@ public final class TxTemplateStore {
     }
 
     private void persistTemplates(List<TxTemplateEntry> entries) {
-        JSONArray array = new JSONArray();
-        if (entries != null) {
-            for (TxTemplateEntry entry : entries) {
-                if (entry == null) {
-                    continue;
-                }
-                String id = normalize(entry.id());
-                String name = normalize(entry.name());
-                String body = normalize(entry.body());
-                if (id == null || name == null || body == null) {
-                    continue;
-                }
-                JSONObject object = new JSONObject();
-                try {
-                    object.put("id", id);
-                    object.put("name", name);
-                    object.put("body", body);
-                    array.put(object);
-                } catch (JSONException ignored) {
-                }
-            }
-        }
+        JSONArray array = buildTemplateArray(entries);
         if (array.length() == 0) {
-            for (TxTemplateEntry entry : defaultTemplates()) {
-                JSONObject object = new JSONObject();
-                try {
-                    object.put("id", entry.id());
-                    object.put("name", entry.name());
-                    object.put("body", entry.body());
-                    array.put(object);
-                } catch (JSONException ignored) {
-                }
-            }
+            array = buildTemplateArray(defaultTemplates());
         }
         preferences.edit().putString(KEY_TEMPLATES_JSON, array.toString()).apply();
     }
@@ -307,6 +396,135 @@ public final class TxTemplateStore {
             entries.clear();
         }
         return entries;
+    }
+
+    private JSONArray buildTemplateArray(List<TxTemplateEntry> entries) {
+        JSONArray array = new JSONArray();
+        if (entries == null) {
+            return array;
+        }
+        for (TxTemplateEntry entry : entries) {
+            if (entry == null) {
+                continue;
+            }
+            String id = normalize(entry.id());
+            String name = normalize(entry.name());
+            String body = normalize(entry.body());
+            if (id == null || name == null || body == null) {
+                continue;
+            }
+            JSONObject object = new JSONObject();
+            try {
+                object.put("id", id);
+                object.put("name", name);
+                object.put("body", body);
+                array.put(object);
+            } catch (JSONException ignored) {
+            }
+        }
+        return array;
+    }
+
+    private ArrayList<TxTemplateEntry> deserializeTemplatesFromImport(@Nullable String rawJson) {
+        ArrayList<TxTemplateEntry> entries = new ArrayList<>();
+        String normalizedJson = normalize(rawJson);
+        if (normalizedJson == null) {
+            return entries;
+        }
+        try {
+            Object root = new JSONTokener(normalizedJson).nextValue();
+            JSONArray array = null;
+            if (root instanceof JSONObject) {
+                array = ((JSONObject) root).optJSONArray("templates");
+            } else if (root instanceof JSONArray) {
+                array = (JSONArray) root;
+            }
+            if (array == null) {
+                return entries;
+            }
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject object = array.optJSONObject(i);
+                if (object == null) {
+                    continue;
+                }
+                String id = normalize(object.optString("id", null));
+                String name = normalize(object.optString("name", null));
+                String body = normalize(object.optString("body", null));
+                if (name == null || body == null) {
+                    continue;
+                }
+                entries.add(new TxTemplateEntry(
+                        id == null ? UUID.randomUUID().toString() : id,
+                        name,
+                        body
+                ));
+            }
+        } catch (JSONException ignored) {
+            entries.clear();
+        }
+        return entries;
+    }
+
+    private int findTemplateIndexById(List<TxTemplateEntry> entries, @Nullable String templateId) {
+        String normalizedId = normalize(templateId);
+        if (normalizedId == null || entries == null) {
+            return -1;
+        }
+        for (int i = 0; i < entries.size(); i++) {
+            TxTemplateEntry entry = entries.get(i);
+            if (entry != null && normalizedId.equals(entry.id())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private int findTemplateIndexByName(
+            List<TxTemplateEntry> entries,
+            @Nullable String templateName,
+            int ignoreIndex
+    ) {
+        String normalizedName = normalize(templateName);
+        if (normalizedName == null || entries == null) {
+            return -1;
+        }
+        for (int i = 0; i < entries.size(); i++) {
+            if (i == ignoreIndex) {
+                continue;
+            }
+            TxTemplateEntry entry = entries.get(i);
+            if (entry != null && normalizedName.equalsIgnoreCase(entry.name())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private String uniqueTemplateId(List<TxTemplateEntry> entries, @Nullable String preferredId) {
+        String normalizedPreferredId = normalize(preferredId);
+        if (normalizedPreferredId != null && findTemplateIndexById(entries, normalizedPreferredId) < 0) {
+            return normalizedPreferredId;
+        }
+        return UUID.randomUUID().toString();
+    }
+
+    private String uniqueTemplateName(
+            List<TxTemplateEntry> entries,
+            @Nullable String preferredName,
+            int ignoreIndex
+    ) {
+        String baseName = normalizeOrDefault(preferredName, "新模板");
+        if (findTemplateIndexByName(entries, baseName, ignoreIndex) < 0) {
+            return baseName;
+        }
+        int suffix = 2;
+        while (true) {
+            String candidate = baseName + " (" + suffix + ")";
+            if (findTemplateIndexByName(entries, candidate, ignoreIndex) < 0) {
+                return candidate;
+            }
+            suffix++;
+        }
     }
 
     @Nullable

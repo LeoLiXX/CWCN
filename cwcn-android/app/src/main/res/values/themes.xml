@@ -7,11 +7,20 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/cwcn_screen_background</item>
         <item name="android:windowBackground">@color/cwcn_screen_background</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
     </style>
 
     <style name="Theme.CWCN.Splash" parent="Theme.CWCN">
         <item name="android:windowBackground">@drawable/splash_window_background</item>
         <item name="android:windowIsTranslucent">false</item>
+    </style>
+
+    <style name="Widget.CWCN.PrimaryButton" parent="Widget.AppCompat.Button">
+        <item name="android:background">@drawable/cwcn_primary_button_background</item>
+        <item name="android:textColor">@color/cwcn_on_primary</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="backgroundTint">@null</item>
     </style>
 </resources>

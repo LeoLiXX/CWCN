@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat;
 import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.BuildConfig;
 import org.bi9clt.cwcn.core.app.DeveloperModeStore;
+import org.bi9clt.cwcn.core.app.OperateRouteModeStore;
 import org.bi9clt.cwcn.core.rig.AndroidUsbProbedSerialKeyerPortFactory;
 import org.bi9clt.cwcn.core.rig.AndroidUsbSerialCatSessionFactory;
 import org.bi9clt.cwcn.core.rig.CatProtocolFamily;
@@ -58,6 +59,7 @@ public final class RigSetupActivity extends AppCompatActivity {
 
     private ActivityRigSetupBinding binding;
     private RigSelectionStore rigSelectionStore;
+    private OperateRouteModeStore operateRouteModeStore;
     private DeveloperModeStore developerModeStore;
     private boolean syncingProfileSelection;
     private String configStatusMessage = "";
@@ -75,9 +77,11 @@ public final class RigSetupActivity extends AppCompatActivity {
     private boolean networkProbeInFlight;
     private String launchStatusMessage = "";
     private BroadcastReceiver usbPermissionReceiver;
+    private ArrayAdapter<RigProfile> profileAdapter;
     private ArrayAdapter<String> serialCatPortAdapter;
     private ArrayAdapter<String> serialCatKeyingPortAdapter;
     private ArrayAdapter<UsbSerialDeviceOption> usbDeviceAdapter;
+    private ArrayAdapter<OperateRouteModeStore.Mode> routeModeAdapter;
     private final List<String> serialCatPortOptions = new ArrayList<>();
     private final List<String> serialCatPortHints = new ArrayList<>();
     private final List<String> serialCatKeyingPortOptions = new ArrayList<>();
@@ -86,7 +90,9 @@ public final class RigSetupActivity extends AppCompatActivity {
     private boolean syncingSerialCatPortSelection;
     private boolean syncingSerialCatKeyingPortSelection;
     private boolean syncingSettingsEditor;
+    private boolean syncingRouteModeSelection;
     private String currentEditorProfileId;
+    private String currentRouteModeProfileId;
     private boolean openDeveloperLabs;
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -94,6 +100,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         binding = ActivityRigSetupBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         rigSelectionStore = new RigSelectionStore(this);
+        operateRouteModeStore = new OperateRouteModeStore(this);
         developerModeStore = new DeveloperModeStore(this);
         binding.versionText.setText(getString(R.string.rig_setup_version, BuildConfig.VERSION_NAME));
         consumeLaunchIntent(getIntent());
@@ -150,13 +157,13 @@ public final class RigSetupActivity extends AppCompatActivity {
     }
 
     private void setupProfileSelector() {
-        ArrayAdapter<RigProfile> adapter = new ArrayAdapter<>(
+        profileAdapter = new ArrayAdapter<>(
                 this,
                 android.R.layout.simple_spinner_item,
-                RigRegistry.defaultProfiles()
+                new ArrayList<>()
         );
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        binding.profileSpinner.setAdapter(adapter);
+        profileAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.profileSpinner.setAdapter(profileAdapter);
         binding.profileSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -327,19 +334,59 @@ public final class RigSetupActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> parent) {
             }
         });
+
+        routeModeAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                OperateRouteModeStore.Mode.values()
+        ) {
+            @Override
+            public View getView(int position, @Nullable View convertView, android.view.ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                bindRouteModeLabel(view, getItem(position));
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(
+                    int position,
+                    @Nullable View convertView,
+                    android.view.ViewGroup parent
+            ) {
+                View view = super.getDropDownView(position, convertView, parent);
+                bindRouteModeLabel(view, getItem(position));
+                return view;
+            }
+        };
+        routeModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.routeModeSpinner.setAdapter(routeModeAdapter);
+        binding.routeModeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (!syncingRouteModeSelection) {
+                    refreshSelectedProfileViews();
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
     }
 
     private void refreshUi() {
         boolean developerModeEnabled = developerModeStore.isEnabled();
         boolean developerLabsVisible = developerModeEnabled && openDeveloperLabs;
-        List<RigTransport> transports = RigRegistry.defaultTransports();
         List<RigProfile> profiles = visibleProfiles(developerLabsVisible);
+        List<RigProfile> spinnerProfiles = pickerProfiles(profiles, developerLabsVisible);
+        List<RigTransport> transports = visibleTransports(profiles, developerLabsVisible);
         binding.readinessSummaryText.setText(renderReadinessSummary(transports, profiles));
         boolean hasLaunchStatus = launchStatusMessage != null && !launchStatusMessage.isEmpty();
         binding.usbAttachStatusPanel.setVisibility(hasLaunchStatus ? View.VISIBLE : View.GONE);
         binding.usbAttachStatusText.setText(hasLaunchStatus ? launchStatusMessage : "");
         syncDeveloperModeViews(developerModeEnabled);
-        syncSelectedProfile(profiles);
+        syncProfileOptions(spinnerProfiles);
+        syncSelectedProfile(spinnerProfiles);
         refreshSelectedProfileViews();
         binding.transportSummaryText.setText(renderTransportSummary(transports));
         binding.profileSummaryText.setText(renderProfileSummary(profiles));
@@ -349,34 +396,163 @@ public final class RigSetupActivity extends AppCompatActivity {
     private List<RigProfile> visibleProfiles(boolean developerLabsVisible) {
         List<RigProfile> allProfiles = RigRegistry.defaultProfiles();
         if (developerLabsVisible) {
-            return allProfiles;
+            return sortVisibleProfiles(new ArrayList<>(allProfiles));
         }
         ArrayList<RigProfile> filtered = new ArrayList<>();
         for (RigProfile profile : allProfiles) {
-            if (profile.supportLevel() == RigSupportLevel.DEBUG_ONLY) {
+            if (profile.supportLevel() != RigSupportLevel.BENCH_READY) {
+                continue;
+            }
+            if (!isProductVisibleProfile(profile)) {
                 continue;
             }
             filtered.add(profile);
         }
+        return sortVisibleProfiles(filtered);
+    }
+
+    private List<RigProfile> pickerProfiles(
+            List<RigProfile> productProfiles,
+            boolean developerLabsVisible
+    ) {
+        if (developerLabsVisible) {
+            return productProfiles;
+        }
+        ArrayList<RigProfile> pickerProfiles = new ArrayList<>(productProfiles);
+        RigProfile pinnedProfile = rigSelectionStore == null ? null : rigSelectionStore.selectedProfile();
+        if (pinnedProfile == null || containsProfileId(pickerProfiles, pinnedProfile.id())) {
+            return pickerProfiles;
+        }
+        pickerProfiles.add(pinnedProfile);
+        return sortVisibleProfiles(pickerProfiles);
+    }
+
+    private List<RigTransport> visibleTransports(
+            List<RigProfile> profiles,
+            boolean developerLabsVisible
+    ) {
+        List<RigTransport> allTransports = RigRegistry.defaultTransports();
+        if (developerLabsVisible) {
+            return allTransports;
+        }
+        LinkedHashSet<RigTransport.TransportKind> visibleKinds = new LinkedHashSet<>();
+        for (RigProfile profile : profiles) {
+            if (profile == null) {
+                continue;
+            }
+            visibleKinds.add(profile.transportKind());
+        }
+        ArrayList<RigTransport> filtered = new ArrayList<>();
+        for (RigTransport transport : allTransports) {
+            if (visibleKinds.contains(transport.kind())) {
+                filtered.add(transport);
+            }
+        }
         return filtered;
+    }
+
+    private boolean isProductVisibleProfile(@Nullable RigProfile profile) {
+        return profile != null && !isRigctldBridgeProfile(profile);
+    }
+
+    private boolean isRigctldBridgeProfile(@Nullable RigProfile profile) {
+        return profile != null
+                && profile.transportKind() == RigTransport.TransportKind.NETWORK_CAT
+                && "hamlib-rigctld".equals(profile.adapterId());
+    }
+
+    private boolean containsProfileId(List<RigProfile> profiles, @Nullable String profileId) {
+        if (profiles == null || profileId == null || profileId.trim().isEmpty()) {
+            return false;
+        }
+        for (RigProfile profile : profiles) {
+            if (profile != null && profileId.equals(profile.id())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<RigProfile> sortVisibleProfiles(List<RigProfile> profiles) {
+        if (profiles == null || profiles.size() < 2) {
+            return profiles;
+        }
+        profiles.sort((left, right) -> Integer.compare(
+                visibleProfileOrder(left == null ? null : left.id()),
+                visibleProfileOrder(right == null ? null : right.id())
+        ));
+        return profiles;
+    }
+
+    private int visibleProfileOrder(@Nullable String profileId) {
+        if ("audio-vox-generic".equals(profileId)) {
+            return 0;
+        }
+        if ("usb-serial-keyer-generic".equals(profileId)) {
+            return 1;
+        }
+        if ("yaesu-cat-serial-generic".equals(profileId)) {
+            return 2;
+        }
+        if ("icom-civ-serial-generic".equals(profileId)) {
+            return 3;
+        }
+        if ("kenwood-cat-serial-generic".equals(profileId)) {
+            return 4;
+        }
+        if ("yaesu-rigctld-network-family".equals(profileId)) {
+            return 5;
+        }
+        if ("icom-rigctld-network-family".equals(profileId)) {
+            return 6;
+        }
+        if ("kenwood-rigctld-network-family".equals(profileId)) {
+            return 7;
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    private void syncProfileOptions(List<RigProfile> profiles) {
+        if (profileAdapter == null) {
+            return;
+        }
+        if (profileAdapter.getCount() == profiles.size()) {
+            boolean sameOrder = true;
+            for (int index = 0; index < profiles.size(); index++) {
+                RigProfile existing = profileAdapter.getItem(index);
+                RigProfile expected = profiles.get(index);
+                if (existing == null || !expected.id().equals(existing.id())) {
+                    sameOrder = false;
+                    break;
+                }
+            }
+            if (sameOrder) {
+                return;
+            }
+        }
+        syncingProfileSelection = true;
+        profileAdapter.clear();
+        profileAdapter.addAll(profiles);
+        profileAdapter.notifyDataSetChanged();
+        syncingProfileSelection = false;
     }
 
     private void syncSelectedProfile(List<RigProfile> profiles) {
         RigProfile selectedProfile = rigSelectionStore.selectedProfile();
         syncingProfileSelection = true;
         if (selectedProfile == null) {
-            binding.profileSpinner.setSelection(0);
+            binding.profileSpinner.setSelection(0, false);
             syncingProfileSelection = false;
             return;
         }
         for (int index = 0; index < profiles.size(); index++) {
             if (profiles.get(index).id().equals(selectedProfile.id())) {
-                binding.profileSpinner.setSelection(index);
+                binding.profileSpinner.setSelection(index, false);
                 syncingProfileSelection = false;
                 return;
             }
         }
-        binding.profileSpinner.setSelection(0);
+        binding.profileSpinner.setSelection(0, false);
         syncingProfileSelection = false;
     }
 
@@ -385,8 +561,13 @@ public final class RigSetupActivity extends AppCompatActivity {
         if (profile == null) {
             return;
         }
+        persistSelectedRouteMode(profile);
         rigSelectionStore.saveSelectedProfileId(profile.id());
-        configStatusMessage = getString(R.string.rig_setup_status_profile_selected, profile.displayName());
+        configStatusMessage = getString(
+                R.string.rig_setup_status_profile_selected,
+                profile.displayName(),
+                renderRouteModeLabel(readSelectedRouteMode(profile))
+        );
         configStatusProfileId = profile.id();
         refreshUi();
     }
@@ -394,6 +575,7 @@ public final class RigSetupActivity extends AppCompatActivity {
     private void saveProfileConfig() {
         RigProfile profile = selectedProfile();
         RigProfileSettings settings = readSettingsFromEditor();
+        persistSelectedRouteMode(profile);
         rigSelectionStore.saveSettings(profile, settings);
         currentEditorProfileId = profile == null ? null : profile.id();
         configStatusMessage = profile == null
@@ -903,6 +1085,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         RigProfile profile = selectedProfile();
         RigProfile pinnedProfile = rigSelectionStore.selectedProfile();
         RigProfileSettings storedSettings = rigSelectionStore.loadSettings(profile);
+        OperateRouteModeStore.Mode storedRouteMode = operateRouteModeStore.mode(profile);
         boolean hasSavedOverride = rigSelectionStore.hasSavedSettings(profile);
         boolean developerModeEnabled = developerModeStore.isEnabled();
         boolean shouldReloadEditor = profile == null
@@ -913,17 +1096,65 @@ public final class RigSetupActivity extends AppCompatActivity {
             currentEditorProfileId = profile == null ? null : profile.id();
         }
         RigProfileSettings settings = shouldReloadEditor ? storedSettings : readSettingsFromEditor();
+        boolean shouldReloadRouteMode = profile == null
+                ? currentRouteModeProfileId != null
+                : !profile.id().equals(currentRouteModeProfileId);
+        if (shouldReloadRouteMode) {
+            syncRouteModeSelection(profile, storedRouteMode);
+            currentRouteModeProfileId = profile == null ? null : profile.id();
+        }
+        OperateRouteModeStore.Mode routeMode = shouldReloadRouteMode
+                ? storedRouteMode
+                : readSelectedRouteMode(profile);
+        boolean routeModeDirty = profile != null && storedRouteMode != routeMode;
         syncUsbDeviceOptions(profile, settings);
         syncSerialCatPortOptions(profile, settings);
         updateConfigVisibility(profile, settings, developerModeEnabled);
         binding.resetProfileConfigButton.setEnabled(profile != null && hasSavedOverride);
-        syncProfileActionButton(profile, pinnedProfile);
+        syncRouteModeViews(profile, routeMode);
+        syncProfileActionButton(profile, pinnedProfile, routeModeDirty);
         syncUsbKeyerState(profile, settings);
         syncSerialProbeState(profile, settings, developerModeEnabled);
         syncNetworkProbeState(profile, settings, developerModeEnabled);
-        binding.connectionGuideText.setText(renderConnectionGuide(profile, settings, developerModeEnabled));
-        binding.selectedProfileStatusText.setText(renderSelectedProfileStatus(profile, pinnedProfile, settings, hasSavedOverride));
+        binding.connectionGuideText.setText(renderConnectionGuide(profile, settings, routeMode, developerModeEnabled));
+        binding.selectedProfileStatusText.setText(renderSelectedProfileStatus(
+                profile,
+                pinnedProfile,
+                settings,
+                hasSavedOverride,
+                routeMode,
+                routeModeDirty
+        ));
         binding.profileConfigStatusText.setText(renderProfileConfigStatus(profile, settings, hasSavedOverride));
+    }
+
+    private void syncRouteModeSelection(
+            @Nullable RigProfile profile,
+            @Nullable OperateRouteModeStore.Mode routeMode
+    ) {
+        syncingRouteModeSelection = true;
+        binding.routeModeSpinner.setSelection(
+                operateRouteModeStore.sanitize(profile, routeMode).ordinal(),
+                false
+        );
+        syncingRouteModeSelection = false;
+    }
+
+    private void syncRouteModeViews(
+            @Nullable RigProfile profile,
+            @Nullable OperateRouteModeStore.Mode routeMode
+    ) {
+        boolean visible = operateRouteModeStore.supportsHybridPhoneRx(profile);
+        int visibility = visible ? View.VISIBLE : View.GONE;
+        binding.routeModeLabelText.setVisibility(visibility);
+        binding.routeModeSpinner.setVisibility(visibility);
+        binding.routeModeHintText.setVisibility(visibility);
+        if (!visible) {
+            binding.routeModeHintText.setText("");
+            return;
+        }
+        OperateRouteModeStore.Mode safeMode = operateRouteModeStore.sanitize(profile, routeMode);
+        binding.routeModeHintText.setText(getString(safeMode.descriptionResId()));
     }
 
     private void syncSettingsEditor(RigProfileSettings settings) {
@@ -1084,13 +1315,17 @@ public final class RigSetupActivity extends AppCompatActivity {
         }
 
         List<String> detectedHints = new AndroidUsbSerialCatSessionFactory(this).listDetectedPortHints();
+        String recommendedCatHint = recommendSerialCatPortHint(profile, detectedHints, true);
+        String recommendedKeyingHint = recommendSerialCatPortHint(profile, detectedHints, false);
         populateSerialPortSpinner(
                 serialCatPortOptions,
                 serialCatPortHints,
                 serialCatPortAdapter,
                 binding.serialCatPortSpinner,
                 detectedHints,
-                settings.serialCatPortHint()
+                settings.serialCatPortHint() != null ? settings.serialCatPortHint() : recommendedCatHint,
+                recommendedCatHint,
+                true
         );
         populateSerialPortSpinner(
                 serialCatKeyingPortOptions,
@@ -1098,8 +1333,13 @@ public final class RigSetupActivity extends AppCompatActivity {
                 serialCatKeyingPortAdapter,
                 binding.serialCatKeyingPortSpinner,
                 detectedHints,
-                settings.serialCatKeyingPortHint()
+                settings.serialCatKeyingPortHint() != null ? settings.serialCatKeyingPortHint() : recommendedKeyingHint,
+                recommendedKeyingHint,
+                false
         );
+        if (settings.serialCatPortHint() == null && recommendedCatHint != null) {
+            binding.serialCatPortHintEditText.setText(recommendedCatHint);
+        }
         syncingSerialCatPortSelection = false;
         syncingSerialCatKeyingPortSelection = false;
     }
@@ -1110,12 +1350,14 @@ public final class RigSetupActivity extends AppCompatActivity {
             ArrayAdapter<String> adapter,
             android.widget.Spinner spinner,
             List<String> detectedHints,
-            String currentHint
+            String currentHint,
+            @Nullable String recommendedHint,
+            boolean catRole
     ) {
         options.add(getString(R.string.rig_setup_serial_port_auto_option));
         hints.add(null);
         for (String detectedHint : detectedHints) {
-            options.add(renderSerialCatPortLabel(detectedHint));
+            options.add(renderSerialCatPortLabel(detectedHint, recommendedHint, catRole));
             hints.add(detectedHint);
         }
         if (currentHint != null && !currentHint.isEmpty() && !detectedHints.contains(currentHint)) {
@@ -1136,7 +1378,11 @@ public final class RigSetupActivity extends AppCompatActivity {
         spinner.setSelection(selection, false);
     }
 
-    private String renderSerialCatPortLabel(String portHint) {
+    private String renderSerialCatPortLabel(
+            String portHint,
+            @Nullable String recommendedHint,
+            boolean catRole
+    ) {
         if (portHint == null || portHint.trim().isEmpty()) {
             return getString(R.string.rig_setup_serial_port_detected_generic);
         }
@@ -1150,10 +1396,46 @@ public final class RigSetupActivity extends AppCompatActivity {
         String shortDevice = lastSlash >= 0 && lastSlash < devicePart.length() - 1
                 ? devicePart.substring(lastSlash + 1)
                 : devicePart;
-        return getString(R.string.rig_setup_serial_port_detected_label, shortDevice, portPart);
+        String roleLabel = "";
+        if (recommendedHint != null && recommendedHint.equals(trimmed)) {
+            roleLabel = catRole
+                    ? getString(R.string.rig_setup_serial_port_role_cat_recommended)
+                    : getString(R.string.rig_setup_serial_port_role_keying_recommended);
+        } else if ("1".equals(portPart)) {
+            roleLabel = getString(R.string.rig_setup_serial_port_role_cat_hint);
+        } else if ("0".equals(portPart)) {
+            roleLabel = getString(R.string.rig_setup_serial_port_role_keying_hint);
+        }
+        return getString(R.string.rig_setup_serial_port_detected_label, shortDevice, portPart, roleLabel);
     }
 
-    private void syncProfileActionButton(RigProfile selectedProfile, RigProfile pinnedProfile) {
+    @Nullable
+    private String recommendSerialCatPortHint(
+            @Nullable RigProfile profile,
+            List<String> detectedHints,
+            boolean catRole
+    ) {
+        if (profile == null
+                || profile.transportKind() != RigTransport.TransportKind.USB_SERIAL
+                || profile.defaultSettings().serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE
+                || detectedHints == null
+                || detectedHints.isEmpty()) {
+            return null;
+        }
+        String preferredPortSuffix = catRole ? "#1" : "#0";
+        for (String hint : detectedHints) {
+            if (hint != null && hint.endsWith(preferredPortSuffix)) {
+                return hint;
+            }
+        }
+        return detectedHints.size() == 1 ? detectedHints.get(0) : null;
+    }
+
+    private void syncProfileActionButton(
+            RigProfile selectedProfile,
+            RigProfile pinnedProfile,
+            boolean routeModeDirty
+    ) {
         if (selectedProfile == null) {
             binding.saveSelectedProfileButton.setText(R.string.rig_setup_select_current_path);
             binding.saveSelectedProfileButton.setEnabled(false);
@@ -1161,7 +1443,11 @@ public final class RigSetupActivity extends AppCompatActivity {
         }
         binding.saveSelectedProfileButton.setEnabled(true);
         if (pinnedProfile != null && pinnedProfile.id().equals(selectedProfile.id())) {
-            binding.saveSelectedProfileButton.setText(R.string.rig_setup_current_path_enabled);
+            binding.saveSelectedProfileButton.setText(
+                    routeModeDirty
+                            ? R.string.rig_setup_current_path_apply_mode
+                            : R.string.rig_setup_current_path_enabled
+            );
         } else {
             binding.saveSelectedProfileButton.setText(R.string.rig_setup_select_current_path);
         }
@@ -1221,29 +1507,26 @@ public final class RigSetupActivity extends AppCompatActivity {
         binding.openCloseSerialCatKeyingPortButton.setVisibility(serialCatVisible && developerLabsVisible ? View.VISIBLE : View.GONE);
         binding.runSerialCatTimingLabButton.setVisibility(serialCatVisible && developerLabsVisible ? View.VISIBLE : View.GONE);
         binding.runSerialCatShortPulseLabButton.setVisibility(serialCatVisible && developerLabsVisible ? View.VISIBLE : View.GONE);
+        boolean dedicatedKeyingEligible = (yaesuSelected || icomSelected || kenwoodSelected)
+                && settings.serialCatKeyingPortHint() != null;
         binding.testSerialCatKeyingButton.setEnabled(
-                yaesuSelected
-                        && settings.serialCatKeyingPortHint() != null
+                dedicatedKeyingEligible
                         && !serialProbeInFlight
         );
         binding.holdSerialCatKeyingButton.setEnabled(
-                yaesuSelected
-                        && settings.serialCatKeyingPortHint() != null
+                dedicatedKeyingEligible
                         && !serialProbeInFlight
         );
         binding.openCloseSerialCatKeyingPortButton.setEnabled(
-                yaesuSelected
-                        && settings.serialCatKeyingPortHint() != null
+                dedicatedKeyingEligible
                         && !serialProbeInFlight
         );
         binding.runSerialCatTimingLabButton.setEnabled(
-                yaesuSelected
-                        && settings.serialCatKeyingPortHint() != null
+                dedicatedKeyingEligible
                         && !serialProbeInFlight
         );
         binding.runSerialCatShortPulseLabButton.setEnabled(
-                yaesuSelected
-                        && settings.serialCatKeyingPortHint() != null
+                dedicatedKeyingEligible
                         && !serialProbeInFlight
         );
         binding.runSerialCatKeyingSweepButton.setEnabled(yaesuSelected && !serialProbeInFlight);
@@ -1268,7 +1551,9 @@ public final class RigSetupActivity extends AppCompatActivity {
                 ? getString(R.string.rig_setup_serial_ports_one, detectedPorts.get(0))
                 : getString(R.string.rig_setup_serial_ports_many, detectedPorts.size());
         if (!developerLabsVisible) {
-            binding.serialCatProbeStatusText.setText(yaesuSelected || icomSelected || kenwoodSelected
+            binding.serialCatProbeStatusText.setText(yaesuSelected
+                    ? getString(R.string.rig_setup_serial_probe_basic_yaesu_hybrid, pickerHint)
+                    : icomSelected || kenwoodSelected
                     ? getString(R.string.rig_setup_serial_probe_basic_supported, pickerHint)
                     : getString(R.string.rig_setup_serial_probe_basic_unsupported, pickerHint));
             return;
@@ -1300,6 +1585,7 @@ public final class RigSetupActivity extends AppCompatActivity {
     private String renderConnectionGuide(
             RigProfile profile,
             RigProfileSettings settings,
+            OperateRouteModeStore.Mode routeMode,
             boolean developerModeEnabled
     ) {
         if (profile == null) {
@@ -1323,6 +1609,11 @@ public final class RigSetupActivity extends AppCompatActivity {
                 builder.append(getString(R.string.rig_setup_connection_next_serial_civ));
             }
             builder.append(getString(R.string.rig_setup_connection_next_serial_suffix));
+            if (routeMode == OperateRouteModeStore.Mode.HYBRID_PHONE_RX) {
+                builder.append(getString(R.string.rig_setup_connection_hybrid_enabled));
+            } else if (settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE) {
+                builder.append(getString(R.string.rig_setup_connection_yaesu_hybrid_combo));
+            }
             if (!developerModeEnabled) {
                 builder.append(getString(R.string.rig_setup_connection_deep_hidden));
             } else if (!openDeveloperLabs) {
@@ -1349,7 +1640,9 @@ public final class RigSetupActivity extends AppCompatActivity {
             RigProfile selectedProfile,
             RigProfile pinnedProfile,
             RigProfileSettings settings,
-            boolean hasSavedOverride
+            boolean hasSavedOverride,
+            OperateRouteModeStore.Mode routeMode,
+            boolean routeModeDirty
     ) {
         if (selectedProfile == null) {
             return getString(R.string.rig_setup_selected_none);
@@ -1363,6 +1656,13 @@ public final class RigSetupActivity extends AppCompatActivity {
                 RigUiLabels.capabilitySummary(this, selectedProfile),
                 selectedProfile.setupNotes()
         ));
+        builder.append(getString(
+                R.string.rig_setup_selected_route_mode,
+                renderRouteModeLabel(routeMode)
+        ));
+        if (routeModeDirty) {
+            builder.append(getString(R.string.rig_setup_selected_route_mode_pending));
+        }
         if (pinnedProfile == null) {
             builder.append(getString(R.string.rig_setup_selected_pinned_none));
         } else if (pinnedProfile.id().equals(selectedProfile.id())) {
@@ -1433,6 +1733,43 @@ public final class RigSetupActivity extends AppCompatActivity {
                         ? null
                         : binding.bluetoothDeviceHintEditText.getText().toString())
         );
+    }
+
+    private void persistSelectedRouteMode(@Nullable RigProfile profile) {
+        if (profile == null) {
+            return;
+        }
+        operateRouteModeStore.setMode(profile, readSelectedRouteMode(profile));
+    }
+
+    private OperateRouteModeStore.Mode readSelectedRouteMode(@Nullable RigProfile profile) {
+        if (!operateRouteModeStore.supportsHybridPhoneRx(profile)) {
+            return OperateRouteModeStore.Mode.STANDARD_AUTO;
+        }
+        Object selectedItem = binding.routeModeSpinner.getSelectedItem();
+        if (selectedItem instanceof OperateRouteModeStore.Mode) {
+            return operateRouteModeStore.sanitize(
+                    profile,
+                    (OperateRouteModeStore.Mode) selectedItem
+            );
+        }
+        return operateRouteModeStore.mode(profile);
+    }
+
+    private void bindRouteModeLabel(View view, @Nullable OperateRouteModeStore.Mode mode) {
+        if (!(view instanceof android.widget.TextView)) {
+            return;
+        }
+        ((android.widget.TextView) view).setText(mode == null
+                ? ""
+                : getString(mode.displayNameResId()));
+    }
+
+    private String renderRouteModeLabel(@Nullable OperateRouteModeStore.Mode mode) {
+        OperateRouteModeStore.Mode safeMode = mode == null
+                ? OperateRouteModeStore.Mode.STANDARD_AUTO
+                : mode;
+        return getString(safeMode.displayNameResId());
     }
 
     private SerialKeyerTxOutput.KeyLine selectedUsbKeyLine() {

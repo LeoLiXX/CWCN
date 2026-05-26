@@ -41,6 +41,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
 import org.bi9clt.cwcn.R;
+import org.bi9clt.cwcn.core.app.OperateRouteModeStore;
 import org.bi9clt.cwcn.core.app.RouteFallbackStore;
 import org.bi9clt.cwcn.core.app.RxInputRouteResolver;
 import org.bi9clt.cwcn.core.app.RxInputSettingsStore;
@@ -60,6 +61,7 @@ import org.bi9clt.cwcn.core.decoder.CwDecodeEvent;
 import org.bi9clt.cwcn.core.decoder.CwDecoder;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreter;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreterSnapshot;
+import org.bi9clt.cwcn.core.log.LogDisplayFormatter;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoPhase;
@@ -91,7 +93,10 @@ import org.bi9clt.cwcn.core.rx.RxTurnSessionFinalizer;
 import org.bi9clt.cwcn.core.rx.RxUnknownFallbackTracker;
 import org.bi9clt.cwcn.core.rx.TimingAnchorController;
 import org.bi9clt.cwcn.core.rig.AudioVoxRigControlAdapter;
+import org.bi9clt.cwcn.core.rig.CatProtocolFamily;
+import org.bi9clt.cwcn.core.rig.RigCapability;
 import org.bi9clt.cwcn.core.rig.RigControlAdapter;
+import org.bi9clt.cwcn.core.rig.RigFrequencyResolver;
 import org.bi9clt.cwcn.core.rig.RigProfile;
 import org.bi9clt.cwcn.core.rig.RigProfileSettings;
 import org.bi9clt.cwcn.core.rig.RigRouteStatusFormatter;
@@ -144,6 +149,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private static final long LIVE_RX_REFRESH_INTERVAL_MS = 700L;
     private static final long OPERATE_RX_PUBLISH_INTERVAL_MS = 450L;
     private static final long TX_PROGRESS_REFRESH_INTERVAL_MS = 120L;
+    private static final long RIG_FREQUENCY_REFRESH_INTERVAL_MS = 2800L;
     private static final Pattern STRICT_CALLSIGN_PATTERN = Pattern.compile(
             "^(?:[BFGIKMNRW]|[A-Z0-9]{2,3})\\d[A-Z0-9]{0,3}[A-Z]$"
     );
@@ -307,6 +313,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private ActivityOperateBinding binding;
     private LocalLogRepository localLogRepository;
     private RigSelectionStore rigSelectionStore;
+    private RigFrequencyResolver rigFrequencyResolver;
+    private OperateRouteModeStore operateRouteModeStore;
     private RouteFallbackStore routeFallbackStore;
     private RxInputSettingsStore rxInputSettingsStore;
     private SqlLevelStore sqlLevelStore;
@@ -365,6 +373,15 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             mainHandler.postDelayed(this, TX_PROGRESS_REFRESH_INTERVAL_MS);
         }
     };
+    private final Runnable rigFrequencyRefreshRunnable = new Runnable() {
+        @Override
+        public void run() {
+            requestRigFrequencyRefresh();
+            if (operateActivityResumed) {
+                mainHandler.postDelayed(this, RIG_FREQUENCY_REFRESH_INTERVAL_MS);
+            }
+        }
+    };
 
     private volatile RxSessionSnapshot lastRxSessionSnapshot;
     private volatile SpectrumSnapshotData lastUiSpectrumSnapshot;
@@ -373,6 +390,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private final ArrayList<TxTemplateEntry> operateTxTemplates = new ArrayList<>();
     private ArrayAdapter<String> templateSelectorAdapter;
     private String selectedTemplateId;
+    private String lastAutoPopulatedTemplateText = "";
     private int sqlLevel = 55;
     private boolean templateSelectorInitialized;
     private boolean templateSelectorSyncing;
@@ -402,7 +420,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private long lastOperateRxPublishAtElapsedMs;
     private long lastOperateStableDecodeAtElapsedMs = -1L;
     private long lastOperateTimingResetAtElapsedMs = -1L;
-    private boolean preserveRxAcrossSpectrumNavigation;
     private RxInputSettingsStore.MicSourceMode activeMicSourceMode;
     private RxInputSettingsStore.RxInputMode activeRxInputMode;
     private String activeRigProfileId;
@@ -426,6 +443,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private boolean transcriptRxSuppressedDuringTx;
     private boolean immediateTxPausedRxCapture;
     private boolean operateActivityResumed;
+    private boolean rigFrequencyRefreshInFlight;
+    private long currentRigFrequencyHz;
+    private String currentRigFrequencyProfileId;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -444,6 +464,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         );
         localLogRepository = new LocalLogRepository(this);
         rigSelectionStore = new RigSelectionStore(this);
+        rigFrequencyResolver = new RigFrequencyResolver(this);
+        operateRouteModeStore = new OperateRouteModeStore(this);
         routeFallbackStore = new RouteFallbackStore(this);
         rxInputSettingsStore = new RxInputSettingsStore(this);
         sqlLevelStore = new SqlLevelStore(this);
@@ -480,14 +502,15 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         super.onResume();
         operateActivityResumed = true;
         sharedActiveInstance = new WeakReference<>(this);
-        preserveRxAcrossSpectrumNavigation = false;
         reloadTxTemplateCatalog(false);
         refreshUi();
         maybeEnsureMicrophonePermission();
         syncOperateRxEngine();
         openPendingLaunchOverlayIfAny();
         mainHandler.removeCallbacks(liveRefreshRunnable);
+        mainHandler.removeCallbacks(rigFrequencyRefreshRunnable);
         mainHandler.postDelayed(liveRefreshRunnable, LIVE_RX_REFRESH_INTERVAL_MS);
+        mainHandler.post(rigFrequencyRefreshRunnable);
     }
 
     @Override
@@ -503,11 +526,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     protected void onPause() {
         operateActivityResumed = false;
         mainHandler.removeCallbacks(liveRefreshRunnable);
+        mainHandler.removeCallbacks(rigFrequencyRefreshRunnable);
         mainHandler.removeCallbacks(txProgressRefreshRunnable);
-        if (!preserveRxAcrossSpectrumNavigation) {
-            stopOperateRxCapture(true);
-            clearOperateRxPresentationState();
-        }
         stopImmediateTxForLifecycle();
         super.onPause();
     }
@@ -515,6 +535,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     @Override
     protected void onDestroy() {
         mainHandler.removeCallbacks(liveRefreshRunnable);
+        mainHandler.removeCallbacks(rigFrequencyRefreshRunnable);
         mainHandler.removeCallbacks(txProgressRefreshRunnable);
         OperateActivity currentSharedInstance = sharedActiveInstance.get();
         if (currentSharedInstance == this) {
@@ -558,7 +579,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 return true;
             }
             if (itemId == R.id.menu_nav_spectrum) {
-                preserveRxAcrossSpectrumNavigation = true;
                 startActivity(new Intent(this, SpectrumActivity.class));
                 return true;
             }
@@ -894,6 +914,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         binding.statusMainText.setText(renderStatusMain(lastRxSessionSnapshot));
         binding.statusDetailText.setText(renderStatusDetail(lastRxSessionSnapshot));
         binding.sourceChipText.setText(renderSourceChip(lastRxSessionSnapshot));
+        binding.rigFrequencyChip.setText(renderRigFrequencyChipText());
+        binding.rigFrequencyChip.setContentDescription(renderRigFrequencyChipContentDescription());
         boolean callsignHintAvailable = hasMeaningfulText(resolvePrimaryCallsignHint(lastRxSessionSnapshot))
                 || hasMeaningfulText(selectedOperateRemoteCallsign);
         binding.callsignHintText.setText(renderCallsignHint(lastRxSessionSnapshot));
@@ -903,6 +925,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         binding.callsignHintText.setBackgroundResource(callsignHintAvailable
                 ? R.drawable.operate_chip_active_background
                 : R.drawable.operate_chip_background);
+        setVisibleWhenHasText(binding.rigFrequencyChip);
         setVisibleWhenHasText(binding.callsignHintText);
         setVisibleWhenHasText(binding.rxFootnoteText);
         binding.rxFootnoteText.setClickable(
@@ -1106,79 +1129,63 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void renderComposerPlaybackHighlight() {
-        String composeText = binding.txComposeEditText.getText() == null
-                ? ""
-                : binding.txComposeEditText.getText().toString();
+        Editable editable = binding.txComposeEditText.getText();
+        String composeText = editable == null ? "" : editable.toString();
         if (!txSendInProgress || !hasMeaningfulText(composeText)) {
-            clearComposerHighlightIfNeeded(composeText);
+            clearComposerHighlightIfNeeded(editable);
             return;
         }
-        SpannableString styled = new SpannableString(composeText);
-        int normalColor = ContextCompat.getColor(this, R.color.cwcn_title);
+        if (editable == null) {
+            return;
+        }
         int completedColor = ContextCompat.getColor(this, R.color.cwcn_tx_line);
         int currentColor = ContextCompat.getColor(this, R.color.cwcn_accent);
         int currentBackground = ContextCompat.getColor(this, R.color.cwcn_overlay_scrim);
         int currentIndex = activeTxPlaybackSnapshot == null ? -1 : activeTxPlaybackSnapshot.currentTextIndex();
         if (currentIndex < 0 || currentIndex >= composeText.length()) {
-            styled.setSpan(
-                    new ForegroundColorSpan(normalColor),
-                    0,
-                    composeText.length(),
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-            );
-            applyComposerStyledText(styled);
+            clearComposerHighlightIfNeeded(editable);
             return;
         }
+        clearComposerHighlightIfNeeded(editable);
         if (currentIndex > 0) {
-            styled.setSpan(
-                    new ForegroundColorSpan(completedColor),
+            editable.setSpan(
+                    new ComposerPlaybackForegroundSpan(completedColor),
                     0,
                     currentIndex,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
             );
         }
-        styled.setSpan(
-                new ForegroundColorSpan(currentColor),
+        editable.setSpan(
+                new ComposerPlaybackForegroundSpan(currentColor),
                 currentIndex,
                 currentIndex + 1,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
         );
-        styled.setSpan(
-                new BackgroundColorSpan(currentBackground),
+        editable.setSpan(
+                new ComposerPlaybackBackgroundSpan(currentBackground),
                 currentIndex,
                 currentIndex + 1,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
         );
-        styled.setSpan(
-                new StyleSpan(android.graphics.Typeface.BOLD),
+        editable.setSpan(
+                new ComposerPlaybackStyleSpan(android.graphics.Typeface.BOLD),
                 currentIndex,
                 currentIndex + 1,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
         );
-        if (currentIndex + 1 < composeText.length()) {
-            styled.setSpan(
-                    new ForegroundColorSpan(normalColor),
-                    currentIndex + 1,
-                    composeText.length(),
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-            );
-        }
-        applyComposerStyledText(styled);
     }
 
-    private void clearComposerHighlightIfNeeded(String composeText) {
-        Editable editable = binding.txComposeEditText.getText();
-        if (!(editable instanceof Spanned)) {
+    private void clearComposerHighlightIfNeeded(@Nullable Editable editable) {
+        if (editable == null || editable.length() == 0) {
             return;
         }
-        if (editable.length() == 0) {
-            return;
-        }
-        Object[] spans = editable.getSpans(0, editable.length(), Object.class);
+        ComposerPlaybackSpan[] spans = editable.getSpans(0, editable.length(), ComposerPlaybackSpan.class);
         if (spans == null || spans.length == 0) {
             return;
         }
-        applyComposerStyledText(new SpannableString(composeText));
+        for (ComposerPlaybackSpan span : spans) {
+            editable.removeSpan(span);
+        }
     }
 
     private void applyComposerStyledText(CharSequence styledText) {
@@ -1192,6 +1199,33 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 Math.min(selectionEnd, length)
         );
         suppressComposerWatcher = false;
+    }
+
+    private interface ComposerPlaybackSpan {
+    }
+
+    private static final class ComposerPlaybackForegroundSpan
+            extends ForegroundColorSpan
+            implements ComposerPlaybackSpan {
+        private ComposerPlaybackForegroundSpan(int color) {
+            super(color);
+        }
+    }
+
+    private static final class ComposerPlaybackBackgroundSpan
+            extends BackgroundColorSpan
+            implements ComposerPlaybackSpan {
+        private ComposerPlaybackBackgroundSpan(int color) {
+            super(color);
+        }
+    }
+
+    private static final class ComposerPlaybackStyleSpan
+            extends StyleSpan
+            implements ComposerPlaybackSpan {
+        private ComposerPlaybackStyleSpan(int style) {
+            super(style);
+        }
     }
 
     private String renderStatusMain(@Nullable RxSessionSnapshot snapshot) {
@@ -1222,11 +1256,11 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             RigProfile profile = rigSelectionStore.selectedProfile();
             String routeHint = renderOperateRouteReadinessHint(profile);
             if (routeHint != null) {
-                return resolveOperateRouteSummary(profile) + " | " + routeHint;
+                return resolveOperateRouteSummary(profile, null) + " | " + routeHint;
             }
         }
         RigProfile profile = rigSelectionStore.selectedProfile();
-        String rigSummary = resolveOperateRouteSummary(profile);
+        String rigSummary = resolveOperateRouteSummary(profile, snapshot);
         if (snapshot == null) {
             if (shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission()) {
                 return rigSummary + " | " + getString(R.string.operate_status_wait_mic_permission);
@@ -1256,6 +1290,99 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             return getString(R.string.operate_source_none);
         }
         return renderFriendlyOperateSourceLabel(snapshot.sourceLabel());
+    }
+
+    private void requestRigFrequencyRefresh() {
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
+        if (!shouldPollRigFrequency(profile, settings)) {
+            clearRigFrequencyDisplay();
+            return;
+        }
+        String profileId = profile == null ? null : profile.id();
+        if (!hasMeaningfulText(profileId) || rigFrequencyRefreshInFlight) {
+            return;
+        }
+        rigFrequencyRefreshInFlight = true;
+        new Thread(() -> {
+            long frequencyHz = rigFrequencyResolver == null
+                    ? 0L
+                    : rigFrequencyResolver.readCurrentFrequencyHz();
+            runOnUiThread(() -> applyRigFrequencyRefreshResult(profileId, Math.max(0L, frequencyHz)));
+        }, "cwcn-operate-rig-frequency").start();
+    }
+
+    private void applyRigFrequencyRefreshResult(@Nullable String profileId, long frequencyHz) {
+        rigFrequencyRefreshInFlight = false;
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        RigProfile currentProfile = rigSelectionStore.selectedProfile();
+        RigProfileSettings currentSettings = rigSelectionStore.loadSettings(currentProfile);
+        String currentProfileId = currentProfile == null ? null : currentProfile.id();
+        if (!sameValue(profileId, currentProfileId) || !shouldPollRigFrequency(currentProfile, currentSettings)) {
+            return;
+        }
+        currentRigFrequencyProfileId = currentProfileId;
+        currentRigFrequencyHz = frequencyHz;
+        if (binding != null) {
+            binding.rigFrequencyChip.setText(renderRigFrequencyChipText());
+            binding.rigFrequencyChip.setContentDescription(renderRigFrequencyChipContentDescription());
+            setVisibleWhenHasText(binding.rigFrequencyChip);
+        }
+    }
+
+    private boolean shouldPollRigFrequency(@Nullable RigProfile profile, @Nullable RigProfileSettings settings) {
+        if (profile == null || settings == null || !profile.hasCapability(RigCapability.FREQUENCY_READ)) {
+            return false;
+        }
+        if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
+            return settings.networkCatProtocolFamily() == CatProtocolFamily.HAMLIB_RIGCTLD
+                    && hasMeaningfulText(settings.networkHost());
+        }
+        if (!profile.hasCapability(RigCapability.SERIAL_CAT)) {
+            return false;
+        }
+        return settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
+                || settings.serialCatProtocolFamily() == CatProtocolFamily.KENWOOD_STYLE;
+    }
+
+    private void clearRigFrequencyDisplay() {
+        currentRigFrequencyHz = 0L;
+        currentRigFrequencyProfileId = null;
+        rigFrequencyRefreshInFlight = false;
+        if (binding != null) {
+            binding.rigFrequencyChip.setText("");
+            binding.rigFrequencyChip.setContentDescription("");
+            binding.rigFrequencyChip.setVisibility(View.GONE);
+        }
+    }
+
+    private String renderRigFrequencyChipText() {
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        String profileId = profile == null ? null : profile.id();
+        if (!hasMeaningfulText(profileId)
+                || !sameValue(profileId, currentRigFrequencyProfileId)
+                || currentRigFrequencyHz <= 0L) {
+            return "";
+        }
+        String compactFrequency = trimToNull(LogDisplayFormatter.formatFrequency(currentRigFrequencyHz));
+        if (compactFrequency != null) {
+            compactFrequency = compactFrequency.replace(" MHz", "MHz");
+        }
+        String band = trimToNull(LogDisplayFormatter.formatBand(currentRigFrequencyHz));
+        if (band != null && compactFrequency != null) {
+            return band + " " + compactFrequency;
+        }
+        return band != null ? band : safeValue(compactFrequency);
+    }
+
+    private String renderRigFrequencyChipContentDescription() {
+        String chipText = renderRigFrequencyChipText();
+        if (!hasMeaningfulText(chipText)) {
+            return "";
+        }
+        return getString(R.string.operate_rig_frequency_cd, chipText);
     }
 
     private String renderFriendlyOperateSourceLabel(@Nullable String sourceLabel) {
@@ -1563,20 +1690,23 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private String renderRxFootnote(@Nullable RxSessionSnapshot snapshot) {
-        if (snapshot == null) {
-            String routeHint = renderOperateRouteReadinessHint(rigSelectionStore.selectedProfile());
-            if (routeHint != null) {
-                return routeHint;
-            }
-        }
         RigProfile profile = rigSelectionStore.selectedProfile();
         if (snapshot == null && shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission()) {
             return getString(R.string.operate_rx_hint_request_mic);
+        }
+        if (snapshot == null
+                && shouldUsePhoneMicrophoneRx()
+                && isHybridPhoneRxRouteEnabled(profile)) {
+            return getString(R.string.operate_rx_hint_hybrid_phone_mic);
         }
         if (snapshot == null && shouldUseUsbExternalRx()) {
             return getString(R.string.operate_rx_hint_external_audio);
         }
         if (snapshot == null) {
+            String routeHint = renderOperateRouteReadinessHint(profile);
+            if (routeHint != null) {
+                return routeHint;
+            }
             return resolveOperateRxHint(profile);
         }
         if (snapshot.inputLevelClipping()) {
@@ -1685,6 +1815,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private RxInputSettingsStore.RxInputMode resolveConfiguredOperateRxInputMode() {
+        if (isHybridPhoneRxRouteEnabled(resolveSelectedOperateRigProfile())) {
+            return RxInputSettingsStore.RxInputMode.PHONE_MICROPHONE;
+        }
         return rxInputSettingsStore == null
                 ? RxInputSettingsStore.RxInputMode.AUTO
                 : rxInputSettingsStore.rxInputMode();
@@ -1693,6 +1826,11 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     @Nullable
     private RigProfile resolveSelectedOperateRigProfile() {
         return rigSelectionStore == null ? null : rigSelectionStore.selectedProfile();
+    }
+
+    private boolean isHybridPhoneRxRouteEnabled(@Nullable RigProfile profile) {
+        return operateRouteModeStore != null
+                && operateRouteModeStore.mode(profile) == OperateRouteModeStore.Mode.HYBRID_PHONE_RX;
     }
 
     private boolean isOperatePhoneFallbackEnabled() {
@@ -2106,19 +2244,56 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 && immediateTxPausedRxCapture;
     }
 
-    private String resolveOperateRouteSummary(@Nullable RigProfile profile) {
-        return RigRouteStatusFormatter.describeOperateRouteSummary(
+    private String resolveOperateRouteSummary(@Nullable RigProfile profile, @Nullable RxSessionSnapshot snapshot) {
+        RigProfileSettings settings = rigSelectionStore.loadSettings(profile);
+        return "RX "
+                + resolveOperateRxRouteLabel(profile, snapshot)
+                + " | TX "
+                + resolveTxRouteLabel(profile, settings)
+                + " | CAT "
+                + resolveCatRouteLabel(profile, settings);
+    }
+
+    private String resolveOperateRxRouteLabel(
+            @Nullable RigProfile profile,
+            @Nullable RxSessionSnapshot snapshot
+    ) {
+        if (snapshot != null) {
+            return renderFriendlyOperateSourceLabel(snapshot.sourceLabel());
+        }
+        if (shouldUsePhoneMicrophoneRx()) {
+            return RigRouteStatusFormatter.describeRxRouteLabel(
+                    profile,
+                    true,
+                    hasMicrophonePermission()
+            );
+        }
+        if (shouldUseUsbExternalRx()) {
+            return getString(R.string.operate_source_usb_rx);
+        }
+        return RigRouteStatusFormatter.describeRxRouteLabel(
                 profile,
-                shouldUsePhoneMicrophoneRx(),
+                false,
                 hasMicrophonePermission()
         );
     }
 
-    private String resolveTxRouteLabel(@Nullable RigProfile profile) {
+    private String resolveTxRouteLabel(
+            @Nullable RigProfile profile,
+            @Nullable RigProfileSettings settings
+    ) {
         return RigRouteStatusFormatter.describeTxRouteLabel(
                 profile,
-                usePhoneFallbackRoute(profile)
+                usePhoneFallbackRoute(profile),
+                settings
         );
+    }
+
+    private String resolveCatRouteLabel(
+            @Nullable RigProfile profile,
+            @Nullable RigProfileSettings settings
+    ) {
+        return RigRouteStatusFormatter.describeCatRouteLabel(profile, settings);
     }
 
     private String resolveOperateRxHint(@Nullable RigProfile profile) {
@@ -2747,10 +2922,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         syncTemplateSelector(selectedTemplateId);
         updateTemplateButtonStates();
         if (populateComposer) {
-            binding.txComposeEditText.setText(buildTemplateText(selectedTemplateId));
-            binding.txComposeEditText.setSelection(binding.txComposeEditText.getText() == null
-                    ? 0
-                    : binding.txComposeEditText.getText().length());
+            populateComposerFromTemplate(selectedTemplateId);
         }
         updateComposerUi();
         updateOverlayContent();
@@ -2822,10 +2994,38 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (populateComposer) {
             selectTemplate(selectedTemplateId, true);
         } else {
+            refreshAutoPopulatedComposerTemplateIfNeeded();
             updateTemplateButtonStates();
             updateComposerUi();
             updateOverlayContent();
         }
+    }
+
+    private void populateComposerFromTemplate(@Nullable String templateId) {
+        String renderedTemplate = buildTemplateText(templateId);
+        lastAutoPopulatedTemplateText = renderedTemplate;
+        suppressComposerWatcher = true;
+        binding.txComposeEditText.setText(renderedTemplate);
+        int length = binding.txComposeEditText.getText() == null
+                ? 0
+                : binding.txComposeEditText.getText().length();
+        binding.txComposeEditText.setSelection(length);
+        suppressComposerWatcher = false;
+    }
+
+    private void refreshAutoPopulatedComposerTemplateIfNeeded() {
+        String composeText = binding.txComposeEditText.getText() == null
+                ? ""
+                : binding.txComposeEditText.getText().toString();
+        if (!sameText(composeText, lastAutoPopulatedTemplateText)) {
+            return;
+        }
+        String refreshedTemplate = buildTemplateText(selectedTemplateId);
+        lastAutoPopulatedTemplateText = refreshedTemplate;
+        if (sameText(composeText, refreshedTemplate)) {
+            return;
+        }
+        applyComposerStyledText(refreshedTemplate);
     }
 
     private String normalizeSelectedTemplateId(@Nullable String candidateId) {
@@ -4510,7 +4710,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (activeInstance == null) {
             return;
         }
-        activeInstance.preserveRxAcrossSpectrumNavigation = false;
         activeInstance.stopOperateRxCapture(true);
         activeInstance.clearOperateRxPresentationState();
     }
@@ -4520,8 +4719,19 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (activeInstance == null) {
             return;
         }
-        activeInstance.preserveRxAcrossSpectrumNavigation = true;
         activeInstance.syncOperateRxEngine();
+    }
+
+    public static void requestSharedOperateRxAppForegroundChanged(boolean foreground) {
+        OperateActivity activeInstance = sharedActiveInstance.get();
+        if (activeInstance == null) {
+            return;
+        }
+        if (foreground) {
+            activeInstance.syncOperateRxEngine();
+            return;
+        }
+        activeInstance.stopOperateRxCapture(true);
     }
 
     public static void requestSharedOperatePreferredToneUpdate(int frequencyHz) {
@@ -4956,6 +5166,13 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     private boolean hasMeaningfulText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean sameValue(@Nullable String left, @Nullable String right) {
+        if (left == null) {
+            return right == null;
+        }
+        return left.equals(right);
     }
 
     private String safeValue(String value) {
@@ -5671,10 +5888,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             return visibleText;
         }
         SpannableString styled = new SpannableString(visibleText);
-        int defaultCandidateForeground = ContextCompat.getColor(this, R.color.cwcn_title);
-        int defaultCandidateBackground = ContextCompat.getColor(this, R.color.cwcn_primary_variant);
-        int selectedCandidateForeground = ContextCompat.getColor(this, R.color.cwcn_accent);
-        int selectedCandidateBackground = ContextCompat.getColor(this, R.color.cwcn_chip_active);
+        int defaultCandidateForeground = ContextCompat.getColor(this, R.color.cwcn_callsign_candidate_text);
+        int defaultCandidateBackground = ContextCompat.getColor(this, R.color.cwcn_callsign_candidate_fill);
+        int selectedCandidateForeground = ContextCompat.getColor(this, R.color.cwcn_callsign_selected_text);
+        int selectedCandidateBackground = ContextCompat.getColor(this, R.color.cwcn_callsign_selected_fill);
         String selectedCallsign = trimToNull(selectedOperateRemoteCallsign);
         for (String candidate : transcriptEntry.callsignCandidates) {
             String normalizedCandidate = trimToNull(candidate);

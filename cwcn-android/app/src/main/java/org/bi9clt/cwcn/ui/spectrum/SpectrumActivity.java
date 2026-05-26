@@ -58,8 +58,6 @@ public final class SpectrumActivity extends AppCompatActivity {
             mainHandler.postDelayed(this, LIVE_SPECTRUM_REFRESH_INTERVAL_MS);
         }
     };
-    private boolean returnToOperateOnNextPause;
-
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -91,9 +89,6 @@ public final class SpectrumActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         mainHandler.removeCallbacks(liveRefreshRunnable);
-        if (!returnToOperateOnNextPause && !isChangingConfigurations()) {
-            OperateActivity.requestSharedOperateRxStop();
-        }
         super.onPause();
     }
 
@@ -130,7 +125,6 @@ public final class SpectrumActivity extends AppCompatActivity {
     }
 
     private void returnToOperate() {
-        returnToOperateOnNextPause = true;
         finish();
     }
 

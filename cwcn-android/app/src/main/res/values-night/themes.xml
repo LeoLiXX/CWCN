@@ -8,6 +8,7 @@
         <item name="android:navigationBarColor">@color/cwcn_screen_background</item>
         <item name="android:windowBackground">@color/cwcn_screen_background</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 
     <style name="Theme.CWCN.Splash" parent="Theme.CWCN">

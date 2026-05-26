@@ -2,6 +2,8 @@ package org.bi9clt.cwcn.core.rig;
 
 import android.content.Context;
 
+import androidx.annotation.Nullable;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
@@ -65,7 +67,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
 
     @Override
     public String describeCapabilities() {
-        return "统一承接 Yaesu 风格、Icom CI-V 和 Kenwood 风格的原生串口 CAT 控制。当前阶段优先收口 Yaesu 与 Icom 家族的 TX/PTT，Kenwood 仍以探测验证为主。";
+        return "统一承接 Yaesu 风格、Icom CI-V 和 Kenwood 风格的原生串口 CAT 控制，支持基础 PTT、定时键控与家族级参数收口。";
     }
 
     @Override
@@ -95,8 +97,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                     .append("。");
         }
         builder.append(" ").append(sessionFactory.describeAvailability(configuration.settings.serialCatPortHint()));
-        if (configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
-                && configuration.settings.serialCatKeyingPortHint() != null) {
+        if (shouldUseDedicatedKeyingPort(configuration)) {
             builder.append(" 键控口状态：")
                     .append(keyerPortFactory.describeAvailability(configuration.settings.serialCatKeyingPortHint()));
         }
@@ -110,8 +111,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
     @Override
     public boolean supportsTextToCw() {
         ActiveConfiguration configuration = configurationProvider.activeConfiguration();
-        return configuration != null
-                && configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE;
+        return configuration != null && supportsNativeTextTransmission(configuration);
     }
 
     @Override
@@ -129,8 +129,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         if (!supportsFamily(configuration.settings.serialCatProtocolFamily())) {
             return false;
         }
-        if (configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
-                && configuration.settings.serialCatKeyingPortHint() != null) {
+        if (shouldUseDedicatedKeyingPort(configuration)) {
             return keyerPortFactory.canOpenPort(configuration.settings.serialCatKeyingPortHint());
         }
         return sessionFactory.isReady(configuration.settings.serialCatPortHint());
@@ -176,7 +175,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             return false;
         }
         if (!supportsTextToCw()) {
-            lastAvailabilityNote = "当前原生串口 CAT 文本发射仅优先接入 Yaesu 风格路径。";
+            lastAvailabilityNote = "当前原生串口 CAT 文本发射还未对所选协议族就绪。";
             return false;
         }
         if (!isReady()) {
@@ -213,8 +212,11 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         try (SerialCatSession session = sessionFactory.openSession(
                 configuration.settings.serialCatPortHint(),
                 configuration.settings.serialCatBaudRate())) {
-            applyYaesuCwProfile(session);
-            CwTxRunner runner = new CwTxRunner(new SessionBackedCatAudioOutput(session));
+            applyNativeCwProfile(configuration, session);
+            CwTxRunner runner = new CwTxRunner(new ProtocolSessionBackedCatAudioOutput(
+                    session,
+                    configuration.settings
+            ));
             txRunner = runner;
             runner.runPlanBlocking(plan, this::recordSnapshot);
             return lastSnapshot != null && lastSnapshot.state() == CwTxState.COMPLETED;
@@ -255,7 +257,7 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
     @Override
     public boolean supportsConfigurableTextToCwProfile() {
         ActiveConfiguration configuration = configurationProvider.activeConfiguration();
-        return configuration != null && supportsNativeCwProfile(configuration);
+        return configuration != null && supportsNativeTextTransmission(configuration);
     }
 
     @Override
@@ -272,7 +274,9 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
 
     @Override
     public boolean usesToneFrequencyForTextToCwProfile() {
-        return supportsConfigurableTextToCwProfile();
+        ActiveConfiguration configuration = configurationProvider.activeConfiguration();
+        return configuration != null
+                && configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE;
     }
 
     @Override
@@ -290,22 +294,39 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         if (!configuration.profile.hasCapability(RigCapability.PTT_CONTROL)) {
             return false;
         }
+        if (shouldUseDedicatedKeyingPort(configuration)) {
+            return true;
+        }
         if (configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE) {
             return true;
         }
-        return configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
-                && configuration.settings.serialCatCivAddressHex() != null;
+        if (configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
+            return configuration.settings.serialCatCivAddressHex() != null;
+        }
+        return configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.KENWOOD_STYLE;
     }
 
-    private boolean supportsNativeCwProfile(ActiveConfiguration configuration) {
-        return configuration.profile.hasCapability(RigCapability.PTT_CONTROL)
-                && configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE;
+    private boolean supportsNativeTextTransmission(ActiveConfiguration configuration) {
+        if (configuration == null) {
+            return false;
+        }
+        if (shouldUseDedicatedKeyingPort(configuration)) {
+            return true;
+        }
+        return supportsNativePtt(configuration)
+                && configuration.settings.serialCatProtocolFamily() != CatProtocolFamily.ICOM_CIV;
     }
 
     private boolean shouldUseDedicatedKeyingPort(ActiveConfiguration configuration) {
         return configuration != null
-                && configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
+                && supportsFamily(configuration.settings.serialCatProtocolFamily())
                 && configuration.settings.serialCatKeyingPortHint() != null;
+    }
+
+    private static boolean supportsDedicatedKeyingFamily(@Nullable CatProtocolFamily family) {
+        return family == CatProtocolFamily.YAESU_STYLE
+                || family == CatProtocolFamily.ICOM_CIV
+                || family == CatProtocolFamily.KENWOOD_STYLE;
     }
 
     private String familyStatus(CatProtocolFamily family) {
@@ -313,10 +334,10 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             return "Yaesu 原生串口路径已具备探测能力。CW 发射优先建议使用独立键控口（RTS/DTR），而不是 CAT TX1/TX0。";
         }
         if (family == CatProtocolFamily.ICOM_CIV) {
-            return "Icom 原生 CI-V 路径已具备探测能力，当前已先接入最小化的 CI-V PTT 脉冲路径。";
+            return "Icom 原生 CI-V 路径已接入读频与基础 PTT；正式 CW 发射建议优先配独立键控口（RTS/DTR），不要把 CI-V PTT 当作摩尔斯键控。";
         }
         if (family == CatProtocolFamily.KENWOOD_STYLE) {
-            return "Kenwood 原生串口路径已具备探测能力；下一层是补齐家族专属的 TX/PTT 指令。";
+            return "Kenwood 原生串口路径已接入 ASCII CAT 的基础读写；正式 CW 发射也优先建议配独立键控口（RTS/DTR）。";
         }
         return "当前这个 CAT 家族还没有接入原生串口控制适配器。";
     }
@@ -355,15 +376,10 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             if (configuration.settings.serialCatKeyingPortHint() != null) {
                 return keyingLineUp(configuration);
             }
-            applyYaesuCwProfile(session);
-            session.send("TX1;", COMMAND_TIMEOUT_MS);
-            return true;
+            applyNativeCwProfile(configuration, session);
         }
-        if (configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
-            session.send(buildIcomPttCommand(configuration.settings, true), COMMAND_TIMEOUT_MS);
-            return true;
-        }
-        return false;
+        sendFamilyKeyCommand(session, configuration.settings, true);
+        return true;
     }
 
     private boolean executeKeyUp(ActiveConfiguration configuration, SerialCatSession session) throws IOException {
@@ -371,19 +387,30 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             if (configuration.settings.serialCatKeyingPortHint() != null) {
                 return keyingLineDown(configuration);
             }
-            session.send("TX0;", COMMAND_TIMEOUT_MS);
-            return true;
         }
-        if (configuration.settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
-            session.send(buildIcomPttCommand(configuration.settings, false), COMMAND_TIMEOUT_MS);
-            return true;
-        }
-        return false;
+        sendFamilyKeyCommand(session, configuration.settings, false);
+        return true;
     }
 
-    private void applyYaesuCwProfile(SerialCatSession session) throws IOException {
+    private void applyNativeCwProfile(ActiveConfiguration configuration, SerialCatSession session) throws IOException {
+        if (configuration == null
+                || configuration.settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
+            return;
+        }
         session.send(buildYaesuKeySpeedCommand(wpm), COMMAND_TIMEOUT_MS);
         session.send(buildYaesuKeyPitchCommand(toneFrequencyHz), COMMAND_TIMEOUT_MS);
+    }
+
+    private void sendFamilyKeyCommand(
+            SerialCatSession session,
+            RigProfileSettings settings,
+            boolean keyDown
+    ) throws IOException {
+        if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
+            session.send(buildIcomPttCommand(settings, keyDown), COMMAND_TIMEOUT_MS);
+            return;
+        }
+        session.send(buildAsciiPttCommand(settings.serialCatProtocolFamily(), keyDown), COMMAND_TIMEOUT_MS);
     }
 
     private void recordSnapshot(CwTxPlaybackSnapshot snapshot) {
@@ -528,22 +555,24 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         }
     }
 
-    private static final class SessionBackedCatAudioOutput implements CwTxAudioOutput {
+    private static final class ProtocolSessionBackedCatAudioOutput implements CwTxAudioOutput {
         private final SerialCatSession session;
+        private final RigProfileSettings settings;
 
-        private SessionBackedCatAudioOutput(SerialCatSession session) {
+        private ProtocolSessionBackedCatAudioOutput(SerialCatSession session, RigProfileSettings settings) {
             this.session = session;
+            this.settings = settings;
         }
 
         @Override
         public void playTone(int frequencyHz, int durationMs) throws InterruptedException {
-            sendCommand("TX1;");
+            sendCommandSafely(true);
             sleepQuietly(durationMs);
         }
 
         @Override
         public void playSilence(int durationMs) throws InterruptedException {
-            sendCommand("TX0;");
+            sendCommandSafely(false);
             sleepQuietly(durationMs);
         }
 
@@ -555,15 +584,23 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         @Override
         public void stop() {
             try {
-                session.send("TX0;", COMMAND_TIMEOUT_MS);
+                sendCommandInternal(false);
             } catch (IOException ignored) {
                 // Best-effort release path during stop/finalize.
             }
         }
 
-        private void sendCommand(String command) {
+        private void sendCommandInternal(boolean keyDown) throws IOException {
+            if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
+                session.send(buildIcomPttCommand(settings, keyDown), COMMAND_TIMEOUT_MS);
+                return;
+            }
+            session.send(buildAsciiPttCommand(settings.serialCatProtocolFamily(), keyDown), COMMAND_TIMEOUT_MS);
+        }
+
+        private void sendCommandSafely(boolean keyDown) {
             try {
-                session.send(command, COMMAND_TIMEOUT_MS);
+                sendCommandInternal(keyDown);
             } catch (IOException exception) {
                 throw new IllegalStateException(exception);
             }
@@ -597,10 +634,11 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             settings = profile.defaultSettings();
         }
         if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE
-                && settings.serialCatProtocolFamily() != CatProtocolFamily.ICOM_CIV) {
+                && settings.serialCatProtocolFamily() != CatProtocolFamily.ICOM_CIV
+                && settings.serialCatProtocolFamily() != CatProtocolFamily.KENWOOD_STYLE) {
             return new ControlResult(
                     false,
-                    "当前串口 CAT PTT 脉冲验证优先支持 Yaesu 风格 CAT 和 Icom CI-V。"
+                    "当前串口 CAT PTT 脉冲验证优先支持 Yaesu 风格 CAT、Icom CI-V 和 Kenwood 风格 CAT。"
             );
         }
         if (sessionFactory == null) {
@@ -616,32 +654,40 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
             if (settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE) {
                 session.send(buildYaesuKeySpeedCommand(wpm), COMMAND_TIMEOUT_MS);
                 session.send(buildYaesuKeyPitchCommand(toneFrequencyHz), COMMAND_TIMEOUT_MS);
-                session.send("TX1;", COMMAND_TIMEOUT_MS);
-            } else {
+                session.send(buildAsciiPttCommand(settings.serialCatProtocolFamily(), true), COMMAND_TIMEOUT_MS);
+            } else if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
                 session.send(buildIcomPttCommand(settings, true), COMMAND_TIMEOUT_MS);
+            } else {
+                session.send(buildAsciiPttCommand(settings.serialCatProtocolFamily(), true), COMMAND_TIMEOUT_MS);
             }
             try {
                 Thread.sleep(Math.max(50, Math.min(1500, holdMs)));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 if (settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE) {
-                    session.send("TX0;", COMMAND_TIMEOUT_MS);
-                } else {
+                    session.send(buildAsciiPttCommand(settings.serialCatProtocolFamily(), false), COMMAND_TIMEOUT_MS);
+                } else if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
                     session.send(buildIcomPttCommand(settings, false), COMMAND_TIMEOUT_MS);
+                } else {
+                    session.send(buildAsciiPttCommand(settings.serialCatProtocolFamily(), false), COMMAND_TIMEOUT_MS);
                 }
-                  return new ControlResult(false, "串口 CAT PTT 脉冲验证被中断。");
+                return new ControlResult(false, "串口 CAT PTT 脉冲验证被中断。");
             }
             if (settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE) {
-                session.send("TX0;", COMMAND_TIMEOUT_MS);
-            } else {
+                session.send(buildAsciiPttCommand(settings.serialCatProtocolFamily(), false), COMMAND_TIMEOUT_MS);
+            } else if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
                 session.send(buildIcomPttCommand(settings, false), COMMAND_TIMEOUT_MS);
+            } else {
+                session.send(buildAsciiPttCommand(settings.serialCatProtocolFamily(), false), COMMAND_TIMEOUT_MS);
             }
             return new ControlResult(
-                      true,
-                      settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
-                              ? "原生串口 CAT PTT 脉冲已完成。Yaesu 风格发射已短暂拉起后释放。"
-                              : "原生串口 CAT PTT 脉冲已完成。Icom CI-V PTT 已短暂拉起后释放。"
-              );
+                    true,
+                    settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
+                            ? "原生串口 CAT PTT 脉冲已完成。Yaesu 风格发射已短暂拉起后释放。"
+                            : settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
+                            ? "原生串口 CAT PTT 脉冲已完成。Icom CI-V PTT 已短暂拉起后释放。"
+                            : "原生串口 CAT PTT 脉冲已完成。Kenwood 风格 ASCII CAT 已短暂切到 TX 后回到 RX。"
+            );
         } catch (IOException | RuntimeException exception) {
             return new ControlResult(false, "原生串口 CAT PTT 脉冲验证失败：" + safeMessage(exception));
         }
@@ -659,8 +705,8 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         if (settings == null) {
             settings = profile.defaultSettings();
         }
-        if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "当前独立键控脉冲验证优先支持 Yaesu 风格串口 CAT。");
+        if (!supportsDedicatedKeyingFamily(settings.serialCatProtocolFamily())) {
+            return new ControlResult(false, "当前独立键控脉冲验证优先支持 Yaesu 风格、Icom CI-V 和 Kenwood 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
             return new ControlResult(false, "请先选择独立键控口，再重新执行键控脉冲验证。");
@@ -721,8 +767,8 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         if (settings == null) {
             settings = profile.defaultSettings();
         }
-        if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "当前独立键控保持验证优先支持 Yaesu 风格串口 CAT。");
+        if (!supportsDedicatedKeyingFamily(settings.serialCatProtocolFamily())) {
+            return new ControlResult(false, "当前独立键控保持验证优先支持 Yaesu 风格、Icom CI-V 和 Kenwood 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
             return new ControlResult(false, "请先选择独立键控口，再重新执行键控保持验证。");
@@ -778,8 +824,8 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         if (settings == null) {
             settings = profile.defaultSettings();
         }
-        if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "当前键控口开关验证优先支持 Yaesu 风格串口 CAT。");
+        if (!supportsDedicatedKeyingFamily(settings.serialCatProtocolFamily())) {
+            return new ControlResult(false, "当前键控口开关验证优先支持 Yaesu 风格、Icom CI-V 和 Kenwood 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
             return new ControlResult(false, "请先选择独立键控口，再重新执行开关验证。");
@@ -824,8 +870,8 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         if (plan == null) {
             return new ControlResult(false, "时序实验参数缺失。");
         }
-        if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "当前独立键控时序实验优先支持 Yaesu 风格串口 CAT。");
+        if (!supportsDedicatedKeyingFamily(settings.serialCatProtocolFamily())) {
+            return new ControlResult(false, "当前独立键控时序实验优先支持 Yaesu 风格、Icom CI-V 和 Kenwood 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
             return new ControlResult(false, "请先选择独立键控口，再重新执行时序实验。");
@@ -861,8 +907,8 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         if (plan == null) {
             return new ControlResult(false, "短脉冲实验参数缺失。");
         }
-        if (settings.serialCatProtocolFamily() != CatProtocolFamily.YAESU_STYLE) {
-            return new ControlResult(false, "当前独立键控短脉冲实验优先支持 Yaesu 风格串口 CAT。");
+        if (!supportsDedicatedKeyingFamily(settings.serialCatProtocolFamily())) {
+            return new ControlResult(false, "当前独立键控短脉冲实验优先支持 Yaesu 风格、Icom CI-V 和 Kenwood 风格串口 CAT。");
         }
         if (settings.serialCatKeyingPortHint() == null || settings.serialCatKeyingPortHint().trim().isEmpty()) {
             return new ControlResult(false, "请先选择独立键控口，再重新执行短脉冲实验。");
@@ -1115,6 +1161,16 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
         return String.format(Locale.US, "KP%02d;", index);
     }
 
+    static String buildAsciiPttCommand(CatProtocolFamily family, boolean enabled) {
+        if (family == CatProtocolFamily.YAESU_STYLE) {
+            return enabled ? "TX1;" : "TX0;";
+        }
+        if (family == CatProtocolFamily.KENWOOD_STYLE) {
+            return enabled ? "TX;" : "RX;";
+        }
+        throw new IllegalArgumentException("当前 ASCII PTT 指令构造仅支持 Yaesu 风格 CAT 和 Kenwood 风格 CAT。");
+    }
+
     static byte[] buildIcomPttCommand(RigProfileSettings settings, boolean enabled) {
         if (settings == null || settings.serialCatCivAddressHex() == null) {
             throw new IllegalArgumentException("构造 Icom CI-V PTT 指令前，必须先设置 CI-V 地址。");
@@ -1128,6 +1184,21 @@ public final class SerialCatRigControlAdapter implements RigControlAdapter {
                 0x1C,
                 0x00,
                 enabled ? (byte) 0x01 : (byte) 0x00,
+                (byte) 0xFD
+        };
+    }
+
+    static byte[] buildIcomFrequencyReadCommand(RigProfileSettings settings) {
+        if (settings == null || settings.serialCatCivAddressHex() == null) {
+            throw new IllegalArgumentException("构造 Icom CI-V 读频指令前，必须先设置 CI-V 地址。");
+        }
+        int radioAddress = Integer.parseInt(settings.serialCatCivAddressHex(), 16);
+        return new byte[] {
+                (byte) 0xFE,
+                (byte) 0xFE,
+                (byte) radioAddress,
+                (byte) CIV_CONTROLLER_ADDRESS,
+                0x03,
                 (byte) 0xFD
         };
     }

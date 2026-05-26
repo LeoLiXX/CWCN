@@ -12,7 +12,8 @@ public final class RigRouteStatusFormatter {
             boolean hasMicrophonePermission
     ) {
         return "RX " + describeRxRouteLabel(profile, usePhoneFallback, hasMicrophonePermission)
-                + " | TX " + describeTxRouteLabel(profile, usePhoneFallback);
+                + " | TX " + describeTxRouteLabel(profile, usePhoneFallback, null)
+                + " | CAT " + describeCatRouteLabel(profile, null);
     }
 
     public static String describeRxRouteLabel(
@@ -33,13 +34,55 @@ public final class RigRouteStatusFormatter {
             @Nullable RigProfile profile,
             boolean usePhoneFallback
     ) {
+        return describeTxRouteLabel(profile, usePhoneFallback, null);
+    }
+
+    public static String describeTxRouteLabel(
+            @Nullable RigProfile profile,
+            boolean usePhoneFallback,
+            @Nullable RigProfileSettings settings
+    ) {
         if (usePhoneFallback) {
             return "手机音频";
         }
         if (profile == null) {
             return "未配置";
         }
+        RigProfileSettings safeSettings = settings == null ? profile.defaultSettings() : settings;
+        if (profile.hasCapability(RigCapability.SERIAL_CAT)
+                && hasMeaningfulText(safeSettings.serialCatKeyingPortHint())) {
+            return "独立线控";
+        }
+        if (profile.hasCapability(RigCapability.KEY_LINE_CONTROL)) {
+            return "USB 线控";
+        }
         return fallback(profile.displayName(), "已选电台路由");
+    }
+
+    public static String describeCatRouteLabel(
+            @Nullable RigProfile profile,
+            @Nullable RigProfileSettings settings
+    ) {
+        if (profile == null) {
+            return "-";
+        }
+        RigProfileSettings safeSettings = settings == null ? profile.defaultSettings() : settings;
+        if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
+            if (safeSettings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE) {
+                return "USB CAT";
+            }
+            if (safeSettings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
+                return "CI-V";
+            }
+            if (safeSettings.serialCatProtocolFamily() == CatProtocolFamily.KENWOOD_STYLE) {
+                return "USB CAT";
+            }
+            return "串口 CAT";
+        }
+        if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
+            return "网络 CAT";
+        }
+        return "-";
     }
 
     public static String describeOperateRxHint(
@@ -54,6 +97,9 @@ public final class RigRouteStatusFormatter {
         }
         if (profile == null) {
             return "当前没有选中的电台路由，也没有启用手机兜底。";
+        }
+        if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
+            return "当前是混合电台链路：CAT 走 USB 串口，发射可走独立线控；正式 RX 仍需手机麦克风或外部 USB 音频。";
         }
         return "已选电台发射路由，但正式 RX 仍未接入电台音频。";
     }
@@ -80,7 +126,7 @@ public final class RigRouteStatusFormatter {
             return adapter.isReady() ? "网络 CAT | RX 未接入" : "网络 CAT | 待配置";
         }
         if (adapter instanceof SerialCatRigControlAdapter) {
-            return adapter.isReady() ? "串口 CAT | RX 未接入" : "串口 CAT | 待配置";
+            return adapter.isReady() ? "CAT 已就绪 | RX 未接入" : "CAT 待配置";
         }
         if (adapter instanceof AudioVoxRigControlAdapter) {
             return "音频 VOX | 待命";

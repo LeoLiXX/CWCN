@@ -19,14 +19,14 @@ public final class RxSessionSnapshotTest {
                 20,
                 20,
                 "CQ",
-                "",
-                "",
                 "CQ",
                 "BI3TUK",
                 "",
                 "",
                 false,
                 false,
+                "",
+                "",
                 ""
         );
 
@@ -46,14 +46,14 @@ public final class RxSessionSnapshotTest {
                 20,
                 20,
                 "CQ",
-                "fallback",
-                "notes",
                 "CQ",
                 "BI3TUK",
                 "",
                 "",
                 false,
                 false,
+                "",
+                "",
                 "tm hybrid | turn active"
         );
 
@@ -61,8 +61,8 @@ public final class RxSessionSnapshotTest {
     }
 
     @Test
-    public void exposesFallbackPresenceFlags() {
-        RxSessionSnapshot emptyFallbackSnapshot = new RxSessionSnapshot(
+    public void exposesCurrentTurnAndRawGatePresenceFlags() {
+        RxSessionSnapshot emptySummarySnapshot = new RxSessionSnapshot(
                 1L,
                 "mic",
                 "active",
@@ -73,17 +73,17 @@ public final class RxSessionSnapshotTest {
                 20,
                 20,
                 "CQ",
-                "",
-                "",
                 "CQ",
                 "BI3TUK",
                 "",
                 "",
                 false,
                 false,
+                "",
+                "",
                 ""
         );
-        RxSessionSnapshot fallbackSnapshot = new RxSessionSnapshot(
+        RxSessionSnapshot summarySnapshot = new RxSessionSnapshot(
                 1L,
                 "mic",
                 "active",
@@ -94,24 +94,22 @@ public final class RxSessionSnapshotTest {
                 20,
                 20,
                 "CQ",
-                "DE BI3TUK",
-                "CQ? / DE?",
-                "CQ",
+                "CQ DE BI3TUK",
                 "BI3TUK",
-                "",
+                "healthy",
                 "",
                 false,
                 false,
+                "Turn 4 active",
+                "SQL open / tone stable",
                 ""
         );
 
-        assertFalse(emptyFallbackSnapshot.hasFallbackSuggestedText());
-        assertFalse(emptyFallbackSnapshot.hasFallbackNotesText());
-        assertTrue(emptyFallbackSnapshot.hasRawText());
-        assertFalse(emptyFallbackSnapshot.hasDistinctFallbackSuggestedText());
-        assertTrue(fallbackSnapshot.hasFallbackSuggestedText());
-        assertTrue(fallbackSnapshot.hasFallbackNotesText());
-        assertTrue(fallbackSnapshot.hasDistinctFallbackSuggestedText());
+        assertTrue(emptySummarySnapshot.hasRawText());
+        assertFalse(emptySummarySnapshot.hasCurrentTurnSummary());
+        assertFalse(emptySummarySnapshot.hasRawGateSummary());
+        assertTrue(summarySnapshot.hasCurrentTurnSummary());
+        assertTrue(summarySnapshot.hasRawGateSummary());
     }
 
     @Test
@@ -131,10 +129,10 @@ public final class RxSessionSnapshotTest {
                 "",
                 "",
                 "",
-                "",
-                "",
                 false,
                 false,
+                "",
+                "",
                 ""
         );
 
@@ -154,14 +152,14 @@ public final class RxSessionSnapshotTest {
                 20,
                 20,
                 "CQ",
-                "",
-                "",
                 "CQ DE BI3TUK",
                 "BI3TUK",
                 "",
                 "move mic away",
                 false,
                 false,
+                "",
+                "",
                 ""
         );
         RxSessionSnapshot blankSnapshot = new RxSessionSnapshot(
@@ -175,14 +173,14 @@ public final class RxSessionSnapshotTest {
                 20,
                 20,
                 "CQ",
-                "",
-                "",
                 "CQ",
                 "BI3TUK",
                 "",
                 "   ",
                 false,
                 false,
+                "",
+                "",
                 ""
         );
 

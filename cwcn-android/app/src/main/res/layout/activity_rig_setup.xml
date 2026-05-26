@@ -39,7 +39,7 @@
                 android:layout_width="30dp"
                 android:layout_height="30dp"
                 android:layout_marginStart="8dp"
-                android:background="@drawable/operate_chip_background"
+                android:background="@drawable/logbook_toolbar_button_background"
                 android:contentDescription="@string/rig_setup_back"
                 android:padding="6dp"
                 android:scaleType="centerInside"
@@ -164,11 +164,40 @@
 
             <Button
                 android:id="@+id/saveSelectedProfileButton"
-                style="@style/Widget.CWCN.CompactActionButton"
+                style="@style/Widget.CWCN.PrimaryButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/rig_setup_select_current_path" />
+
+            <TextView
+                android:id="@+id/routeModeLabelText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/rig_setup_route_mode_title"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <Spinner
+                android:id="@+id/routeModeSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bootstrap_field_background"
+                android:padding="10dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/routeModeHintText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="11sp"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/selectedProfileStatusText"
@@ -250,7 +279,7 @@
 
                 <Button
                     android:id="@+id/requestUsbKeyerPermissionButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
@@ -258,7 +287,7 @@
 
                 <Button
                     android:id="@+id/testUsbKeyerPulseButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -272,7 +301,7 @@
 
                     <Button
                         android:id="@+id/sendUsbKeyerTestTextButton"
-                        style="@style/Widget.CWCN.CompactActionButton"
+                        style="@style/Widget.CWCN.PrimaryButton"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
@@ -280,7 +309,7 @@
 
                     <Button
                         android:id="@+id/stopUsbKeyerTextButton"
-                        style="@style/Widget.CWCN.CompactActionButton"
+                        style="@style/Widget.CWCN.PrimaryButton"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="10dp"
@@ -444,7 +473,7 @@
 
                 <Button
                     android:id="@+id/requestSerialCatPermissionButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
@@ -452,7 +481,7 @@
 
                 <Button
                     android:id="@+id/testSerialCatConnectionButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -460,7 +489,7 @@
 
                 <Button
                     android:id="@+id/testSerialCatPttButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -468,7 +497,7 @@
 
                 <Button
                     android:id="@+id/testSerialCatKeyingButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -476,7 +505,7 @@
 
                 <Button
                     android:id="@+id/holdSerialCatKeyingButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -484,7 +513,7 @@
 
                 <Button
                     android:id="@+id/openCloseSerialCatKeyingPortButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -492,7 +521,7 @@
 
                 <Button
                     android:id="@+id/runSerialCatKeyingSweepButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -593,7 +622,7 @@
 
                 <Button
                     android:id="@+id/runSerialCatTimingLabButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -665,7 +694,7 @@
 
                 <Button
                     android:id="@+id/runSerialCatShortPulseLabButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -732,7 +761,7 @@
 
                 <Button
                     android:id="@+id/testNetworkCatConnectionButton"
-                    style="@style/Widget.CWCN.CompactActionButton"
+                    style="@style/Widget.CWCN.PrimaryButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
@@ -788,7 +817,7 @@
 
             <Button
                 android:id="@+id/saveProfileConfigButton"
-                style="@style/Widget.CWCN.CompactActionButton"
+                style="@style/Widget.CWCN.PrimaryButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
@@ -796,7 +825,7 @@
 
             <Button
                 android:id="@+id/resetProfileConfigButton"
-                style="@style/Widget.CWCN.CompactActionButton"
+                style="@style/Widget.CWCN.PrimaryButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"

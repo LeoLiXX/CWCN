@@ -50,7 +50,8 @@ public final class SerialCatProbe {
             if (response == null || response.isEmpty()) {
                 return new ProbeResult(
                         false,
-                        "串口 CAT 链路已打开，但电台对 FA;/IF; 没有返回可读响应。请检查波特率、USB CDC 模式和电台端 CAT 设置。"
+                        "串口 CAT 链路已打开，但电台对 FA;/IF; 没有返回可读响应。"
+                                + " Yaesu / FT-891 请重点检查：CAT 波特率、菜单里的 CAT/RTS 相关设置，以及是否把 CAT 选到了 Enhanced 端口（常见是 #1），而把 TX 控制留给 Standard 端口（常见是 #0）。"
                 );
             }
             return new ProbeResult(

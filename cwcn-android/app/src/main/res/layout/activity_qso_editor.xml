@@ -58,7 +58,7 @@
             android:id="@+id/editorModeChip"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="@drawable/operate_chip_background"
+            android:background="@drawable/logbook_toolbar_button_background"
             android:gravity="center"
             android:minHeight="22dp"
             android:paddingStart="8dp"
@@ -445,6 +445,7 @@
 
         <Button
             android:id="@+id/resetButton"
+            style="@style/Widget.CWCN.CompactActionButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -452,6 +453,7 @@
 
         <Button
             android:id="@+id/openLogbookButton"
+            style="@style/Widget.CWCN.CompactActionButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
@@ -460,6 +462,7 @@
 
         <Button
             android:id="@+id/saveButton"
+            style="@style/Widget.CWCN.PrimaryButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"

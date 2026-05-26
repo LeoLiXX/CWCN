@@ -171,7 +171,10 @@ public final class QsoLogbookActivity extends AppCompatActivity implements QsoLo
         binding.bottomNavView.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();
             if (itemId == R.id.menu_nav_operate) {
-                startActivity(new Intent(this, OperateActivity.class));
+                Intent intent = new Intent(this, OperateActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(intent);
+                finish();
                 return true;
             }
             if (itemId == R.id.menu_nav_spectrum) {

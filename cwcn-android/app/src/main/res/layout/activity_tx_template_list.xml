@@ -55,6 +55,30 @@
         </LinearLayout>
 
         <ImageButton
+            android:id="@+id/importButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/logbook_toolbar_button_background"
+            android:contentDescription="@string/tx_template_list_import"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_download"
+            android:tint="@color/cwcn_body" />
+
+        <ImageButton
+            android:id="@+id/exportButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/logbook_toolbar_button_background"
+            android:contentDescription="@string/tx_template_list_export"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ui_share"
+            android:tint="@color/cwcn_body" />
+
+        <ImageButton
             android:id="@+id/newButton"
             android:layout_width="34dp"
             android:layout_height="34dp"
