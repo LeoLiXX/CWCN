@@ -46,6 +46,7 @@ import org.bi9clt.cwcn.core.rig.CatProtocolFamily;
 import org.bi9clt.cwcn.core.rig.RigCapability;
 import org.bi9clt.cwcn.core.rig.RigProfile;
 import org.bi9clt.cwcn.core.rig.RigProfileSettings;
+import org.bi9clt.cwcn.core.rig.RigProfileFamilies;
 import org.bi9clt.cwcn.core.rig.RigRouteStatusFormatter;
 import org.bi9clt.cwcn.core.rig.RigSelectionStore;
 import org.bi9clt.cwcn.core.rig.KeyingPolarity;
@@ -663,6 +664,7 @@ public final class SettingsActivity extends AppCompatActivity {
         syncRouteEditors();
         syncRouteFallbackEditor();
         updateRoutePanelVisibility();
+        syncRouteEditorHints();
         binding.stationProfileText.setText(renderStationProfileText(overview));
         binding.operatingDefaultsText.setText(renderOperatingDefaultsText());
         binding.radioRouteText.setText(renderRadioRouteText());
@@ -696,6 +698,17 @@ public final class SettingsActivity extends AppCompatActivity {
                 ? R.string.settings_developer_tools_note_visible
                 : R.string.settings_developer_tools_note_hidden);
         syncUsbRouteState();
+    }
+
+    private void syncRouteEditorHints() {
+        RigProfile profile = rigSelectionStore.selectedProfile();
+        if (profile != null && RigProfileFamilies.isXieguFamily(profile)) {
+            binding.serialCatPortHintEditText.setHint(R.string.settings_hint_serial_port_xiegu);
+            binding.serialCatCivAddressEditText.setHint(R.string.settings_hint_xiegu_address);
+            return;
+        }
+        binding.serialCatPortHintEditText.setHint(R.string.settings_hint_serial_port);
+        binding.serialCatCivAddressEditText.setHint(R.string.settings_hint_civ);
     }
 
     private String renderStationProfileText(@Nullable AppOverviewSnapshot overview) {
@@ -1551,16 +1564,34 @@ public final class SettingsActivity extends AppCompatActivity {
         if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
             if (!hasMeaningfulText(settings.serialCatPortHint())
                     && !hasMeaningfulText(settings.serialCatKeyingPortHint())) {
-                return getString(R.string.settings_route_action_hint_serial_fill_ports);
+                return getString(
+                        RigProfileFamilies.isXieguFamily(profile)
+                                ? R.string.settings_route_action_hint_xiegu_fill_ports
+                                : R.string.settings_route_action_hint_serial_fill_ports
+                );
             }
             if (adapter != null && adapter.isReady()) {
+                if (RigProfileFamilies.isXieguPortableUsbFamily(profile)) {
+                    return getString(R.string.settings_route_action_hint_xiegu_portable_ready);
+                }
+                if (RigProfileFamilies.isXieguG90Line(profile)) {
+                    return getString(R.string.settings_route_action_hint_xiegu_g90_ready);
+                }
                 return getString(R.string.settings_route_action_hint_serial_ready);
             }
             if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
                     && !hasMeaningfulText(settings.serialCatCivAddressHex())) {
-                return getString(R.string.settings_route_action_hint_serial_need_civ);
+                return getString(
+                        RigProfileFamilies.isXieguFamily(profile)
+                                ? R.string.settings_route_action_hint_xiegu_need_address
+                                : R.string.settings_route_action_hint_serial_need_civ
+                );
             }
-            return getString(R.string.settings_route_action_hint_serial_check);
+            return getString(
+                    RigProfileFamilies.isXieguFamily(profile)
+                            ? R.string.settings_route_action_hint_xiegu_check
+                            : R.string.settings_route_action_hint_serial_check
+            );
         }
         if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
             if (!hasMeaningfulText(settings.networkHost())) {

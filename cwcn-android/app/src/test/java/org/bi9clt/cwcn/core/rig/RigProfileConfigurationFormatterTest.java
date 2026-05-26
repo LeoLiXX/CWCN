@@ -122,5 +122,29 @@ public final class RigProfileConfigurationFormatterTest {
         assertTrue(summary.contains("Xiegu"));
         assertTrue(summary.contains("19200 baud"));
         assertTrue(summary.contains("Xiegu 提示"));
+        assertTrue(summary.contains("Xiegu 串口 CAT"));
+    }
+
+    @Test
+    public void xieguSerialSummaryUsesDeviceAddressLabel() {
+        RigProfile profile = RigProfileCatalog.findById("xiegu-g90-serial");
+        RigProfileSettings settings = new RigProfileSettings(
+                18,
+                650,
+                SerialKeyerTxOutput.KeyLine.RTS,
+                null,
+                CatProtocolFamily.ICOM_CIV,
+                19200,
+                "USB3",
+                "A4",
+                CatProtocolFamily.HAMLIB_RIGCTLD,
+                null,
+                4532,
+                null
+        );
+
+        String summary = RigProfileConfigurationFormatter.renderCompactSummary(profile, settings);
+
+        assertTrue(summary.contains("设备地址：0xA4"));
     }
 }

@@ -170,9 +170,11 @@
     <string name="settings_cat_keying_info_cd">CAT 与键控说明</string>
     <string name="settings_serial_cat_title">串口 CAT</string>
     <string name="settings_hint_serial_port">串口端口提示</string>
+    <string name="settings_hint_serial_port_xiegu">Xiegu CAT 端口提示</string>
     <string name="settings_hint_baud">波特率</string>
     <string name="settings_hint_keying_port">键控端口提示</string>
     <string name="settings_hint_civ">CI-V 地址（十六进制）</string>
+    <string name="settings_hint_xiegu_address">Xiegu 设备地址（十六进制）</string>
     <string name="settings_network_cat_title">网络 CAT</string>
     <string name="settings_hint_host">主机</string>
     <string name="settings_hint_port">端口</string>
@@ -601,6 +603,11 @@
     <string name="settings_route_action_hint_serial_ready">下一步：串口 CAT 基础链路已具备，可开始 PTT / 键控联调。</string>
     <string name="settings_route_action_hint_serial_need_civ">下一步：补充 CI-V 地址，再继续做串口 CAT 联调。</string>
     <string name="settings_route_action_hint_serial_check">下一步：检查串口权限、波特率和端口提示是否与实际电台一致。</string>
+    <string name="settings_route_action_hint_xiegu_fill_ports">下一步：先补齐 Xiegu 的 CAT 端口；如果现场还准备用独立键控口，再把键控端口一并填好后保存。</string>
+    <string name="settings_route_action_hint_xiegu_need_address">下一步：补充 Xiegu 设备地址，再继续做串口 CAT 联调。</string>
+    <string name="settings_route_action_hint_xiegu_check">下一步：检查 Xiegu 的串口权限、波特率、设备地址与端口提示是否和当前电台一致。</string>
+    <string name="settings_route_action_hint_xiegu_portable_ready">下一步：Xiegu 串口 CAT 已就绪，可继续验证读频，并按现场条件决定 RX 走 USB 音频还是手机麦克风混合模式。</string>
+    <string name="settings_route_action_hint_xiegu_g90_ready">下一步：Xiegu 串口 CAT 已就绪，可继续验证读频，并把 G90 系列的 RX / TX 音频链路接入后再联调。</string>
     <string name="settings_route_action_hint_network_fill">下一步：填写 rigctld 主机和端口，再保存设置。</string>
     <string name="settings_route_action_hint_network_ready">下一步：网络 CAT 已具备基础配置，可开始验证 rigctld 连通和发射控制。</string>
     <string name="settings_route_action_hint_network_check">下一步：确认 rigctld 已在目标主机启动，并且手机当前网络可达。</string>
@@ -802,7 +809,9 @@
     <string name="rig_setup_detected_cat_ports_title">检测到的 CAT 端口</string>
     <string name="rig_setup_detected_keying_ports_title">检测到的键控端口</string>
     <string name="rig_setup_cat_port_hint">CAT 端口手动填写（可选）</string>
+    <string name="rig_setup_cat_port_hint_xiegu">Xiegu CAT 端口手动填写（可选）</string>
     <string name="rig_setup_civ_address_hint">CI-V 地址（如 94）</string>
+    <string name="rig_setup_xiegu_address_hint">Xiegu 设备地址（如 A4）</string>
     <string name="rig_setup_action_request_serial_cat_permission">请求串口 CAT USB 权限</string>
     <string name="rig_setup_action_test_serial_cat_connection">验证串口 CAT 连接</string>
     <string name="rig_setup_action_test_serial_cat_ptt">CAT 发射脉冲验证</string>
@@ -879,9 +888,14 @@
     <string name="rig_setup_serial_ports_one">已检测到串口：%1$s。</string>
     <string name="rig_setup_serial_ports_many">已检测到 %1$d 个串口 CAT 端口，请先在端口选择器里选中要测试的那个。</string>
     <string name="rig_setup_serial_probe_basic_yaesu_hybrid">%1$s Yaesu 当前推荐按混合链路使用：CAT 走 USB 串口，TX 走独立线控，RX 走手机麦克风或独立 USB 音频接口。像 FT-891 这类机型不要把机身 USB 当作接收音频输入。</string>
+    <string name="rig_setup_serial_probe_basic_xiegu_portable">%1$s Xiegu X6100 / X6200 当前推荐按单 USB 方案使用：CAT 走 USB 串口，RX 优先接 USB 外部音频；现场条件不够时，再切到“混合模式：RX 手机麦克风”。</string>
+    <string name="rig_setup_serial_probe_basic_xiegu_g90">%1$s Xiegu G90 系列当前按“CAT 与音频分离”的现场形态处理：先保证串口 CAT 正常，RX 可先走手机麦克风，或后续接外置音频接口。</string>
     <string name="rig_setup_serial_probe_basic_supported">%1$s 现在只保留最小握手检查。更深入的控制线实验已移到开发工具入口。</string>
     <string name="rig_setup_serial_probe_basic_unsupported">%1$s 目前串口 CAT 连接验证已优先接到 Yaesu 风格、Icom CI-V 和 Kenwood 风格。</string>
     <string name="rig_setup_serial_probe_yaesu">%1$s Yaesu 说明：旧 CAT TX/PTT 脉冲仍在覆盖早期 TX1/TX0 路径；如果你要验证 DTR/RTS，请优先使用独立键控口脉冲。若问题集中在短 E/T/EEE/VVV 行为，请优先用短脉冲实验，而不是长保持验证。FT-710 当前经验是：当电台菜单设为 PC KEYING = DTR 时，RTS + DTR 仍是当前接受度最高的组合；仅 RTS 可能出现 TX/RF 但侧音不正常，仅 DTR 目前仍视作不可用。</string>
+    <string name="rig_setup_serial_probe_xiegu_without_address">%1$s Xiegu 串口 CAT 已接入当前探测骨架。下一步先补设备地址，再做安全读频或机型查询；若 RX 音频暂时没接进来，可先用“混合模式：RX 手机麦克风”完成第一轮联调。</string>
+    <string name="rig_setup_serial_probe_xiegu_portable">%1$s Xiegu X6100 / X6200 当前建议先验证设备地址、读频与 USB 串口连通；RX 优先接 USB 外部音频，现场条件不足时再切到“混合模式：RX 手机麦克风”。</string>
+    <string name="rig_setup_serial_probe_xiegu_g90">%1$s Xiegu G90 系列当前建议先完成设备地址与读频验证；它更像“CAT 与音频分离”的现场形态，后续再把 RX / TX 音频单独接入。</string>
     <string name="rig_setup_serial_probe_icom_without_civ">%1$s Icom CI-V 已可探测。先设置 CI-V 地址，再发起一次安全的收发机 ID 查询，之后再用短 CI-V PTT 脉冲做下一步冒烟验证。</string>
     <string name="rig_setup_serial_probe_icom_with_civ">%1$s Icom CI-V 已可探测。确认收发机 ID 查询正常后，再用短 CI-V PTT 脉冲做下一步冒烟验证。</string>
     <string name="rig_setup_serial_probe_kenwood">%1$s Kenwood 风格 CAT 已可探测。建议先做 ID;/FA;/IF; 这类安全 ASCII 读操作，再进入 TX 侧验证。</string>
@@ -897,8 +911,11 @@
     <string name="rig_setup_connection_notes">说明：</string>
     <string name="rig_setup_connection_next_serial_prefix">\n下一步：先确认波特率</string>
     <string name="rig_setup_connection_next_serial_civ"> 和 CI-V 地址</string>
+    <string name="rig_setup_connection_next_serial_xiegu_address"> 和设备地址</string>
     <string name="rig_setup_connection_next_serial_suffix">，再选择 CAT 端口；如果电台还有独立键控口，再补上键控线和键控端口，最后保存这条路径。</string>
     <string name="rig_setup_connection_yaesu_hybrid_combo">\n推荐组合：RX 用手机麦克风或独立 USB 音频接口，TX 用独立线控，CAT 用机身 USB 串口。像 FT-891 这类 Yaesu 机型，机身 USB 不承担接收音频输入。</string>
+    <string name="rig_setup_connection_xiegu_portable_combo">\n推荐组合：CAT 走机身 USB 串口，RX 优先走 USB 外部音频；如果现场 USB 音频条件不理想，可临时切到“混合模式：RX 手机麦克风”。</string>
+    <string name="rig_setup_connection_xiegu_g90_combo">\n推荐组合：先把 CAT 固定到串口链路，RX 走手机麦克风或外置音频接口；如果后续要做正式 CW 发射，再补独立键控口或完整音频链路。</string>
     <string name="rig_setup_connection_hybrid_enabled">\n当前已启用混合模式：RX 走手机麦克风，TX 继续走当前线控，CAT 继续走当前 USB 串口。</string>
     <string name="rig_setup_connection_deep_hidden">\n更深入的协议验证在正常模式下会保持隐藏。</string>
     <string name="rig_setup_connection_deep_entry">\n更深入的协议验证已收纳到开发工具入口。</string>

@@ -56,6 +56,28 @@ public final class RigProfileFamilies {
                 || model.contains("g90");
     }
 
+    public static boolean isXieguPortableUsbFamily(RigProfile profile) {
+        if (profile == null) {
+            return false;
+        }
+        String id = safeLower(profile.id());
+        String model = safeLower(profile.modelLabel());
+        return id.contains("x6100")
+                || id.contains("x6200")
+                || model.contains("x6100")
+                || model.contains("x6200");
+    }
+
+    public static boolean isXieguG90Line(RigProfile profile) {
+        if (profile == null) {
+            return false;
+        }
+        String id = safeLower(profile.id());
+        String model = safeLower(profile.modelLabel());
+        return id.contains("g90")
+                || model.contains("g90");
+    }
+
     private static String safeLower(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.US);
     }

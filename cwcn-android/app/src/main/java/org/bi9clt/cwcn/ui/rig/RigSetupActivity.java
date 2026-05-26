@@ -28,6 +28,7 @@ import org.bi9clt.cwcn.core.rig.KeyingPolarity;
 import org.bi9clt.cwcn.core.rig.PortAvailability;
 import org.bi9clt.cwcn.core.rig.RigCapability;
 import org.bi9clt.cwcn.core.rig.RigProfileConfigurationFormatter;
+import org.bi9clt.cwcn.core.rig.RigProfileFamilies;
 import org.bi9clt.cwcn.core.rig.RigProfile;
 import org.bi9clt.cwcn.core.rig.RigProfileSettings;
 import org.bi9clt.cwcn.core.rig.RigRegistry;
@@ -1119,6 +1120,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         syncUsbDeviceOptions(profile, settings);
         syncSerialCatPortOptions(profile, settings);
         updateConfigVisibility(profile, settings, developerModeEnabled);
+        syncSerialCatEditorHints(profile);
         binding.resetProfileConfigButton.setEnabled(profile != null && hasSavedOverride);
         syncRouteModeViews(profile, routeMode);
         syncProfileActionButton(profile, pinnedProfile, routeModeDirty);
@@ -1135,6 +1137,16 @@ public final class RigSetupActivity extends AppCompatActivity {
                 routeModeDirty
         ));
         binding.profileConfigStatusText.setText(renderProfileConfigStatus(profile, settings, hasSavedOverride));
+    }
+
+    private void syncSerialCatEditorHints(@Nullable RigProfile profile) {
+        if (profile != null && RigProfileFamilies.isXieguFamily(profile)) {
+            binding.serialCatPortHintEditText.setHint(R.string.rig_setup_cat_port_hint_xiegu);
+            binding.serialCatCivAddressEditText.setHint(R.string.rig_setup_xiegu_address_hint);
+            return;
+        }
+        binding.serialCatPortHintEditText.setHint(R.string.rig_setup_cat_port_hint);
+        binding.serialCatCivAddressEditText.setHint(R.string.rig_setup_civ_address_hint);
     }
 
     private void syncRouteModeSelection(
@@ -1503,12 +1515,13 @@ public final class RigSetupActivity extends AppCompatActivity {
         if (!serialCatVisible) {
             return;
         }
+        boolean xieguSelected = RigProfileFamilies.isXieguFamily(profile);
         boolean yaesuSelected = settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE;
         boolean icomSelected = settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV;
         boolean kenwoodSelected = settings.serialCatProtocolFamily() == CatProtocolFamily.KENWOOD_STYLE;
-        binding.testSerialCatConnectionButton.setEnabled((yaesuSelected || icomSelected || kenwoodSelected) && !serialProbeInFlight);
+        binding.testSerialCatConnectionButton.setEnabled((yaesuSelected || icomSelected || kenwoodSelected || xieguSelected) && !serialProbeInFlight);
         binding.testSerialCatPttButton.setEnabled(
-                (yaesuSelected || (icomSelected && settings.serialCatCivAddressHex() != null))
+                (yaesuSelected || ((icomSelected || xieguSelected) && settings.serialCatCivAddressHex() != null))
                         && !serialProbeInFlight
         );
         binding.testSerialCatKeyingButton.setVisibility(serialCatVisible && developerLabsVisible ? View.VISIBLE : View.GONE);
@@ -1516,7 +1529,7 @@ public final class RigSetupActivity extends AppCompatActivity {
         binding.openCloseSerialCatKeyingPortButton.setVisibility(serialCatVisible && developerLabsVisible ? View.VISIBLE : View.GONE);
         binding.runSerialCatTimingLabButton.setVisibility(serialCatVisible && developerLabsVisible ? View.VISIBLE : View.GONE);
         binding.runSerialCatShortPulseLabButton.setVisibility(serialCatVisible && developerLabsVisible ? View.VISIBLE : View.GONE);
-        boolean dedicatedKeyingEligible = (yaesuSelected || icomSelected || kenwoodSelected)
+        boolean dedicatedKeyingEligible = (yaesuSelected || icomSelected || kenwoodSelected || xieguSelected)
                 && settings.serialCatKeyingPortHint() != null;
         binding.testSerialCatKeyingButton.setEnabled(
                 dedicatedKeyingEligible
@@ -1562,6 +1575,10 @@ public final class RigSetupActivity extends AppCompatActivity {
         if (!developerLabsVisible) {
             binding.serialCatProbeStatusText.setText(yaesuSelected
                     ? getString(R.string.rig_setup_serial_probe_basic_yaesu_hybrid, pickerHint)
+                    : xieguSelected
+                    ? RigProfileFamilies.isXieguPortableUsbFamily(profile)
+                        ? getString(R.string.rig_setup_serial_probe_basic_xiegu_portable, pickerHint)
+                        : getString(R.string.rig_setup_serial_probe_basic_xiegu_g90, pickerHint)
                     : icomSelected || kenwoodSelected
                     ? getString(R.string.rig_setup_serial_probe_basic_supported, pickerHint)
                     : getString(R.string.rig_setup_serial_probe_basic_unsupported, pickerHint));
@@ -1569,6 +1586,12 @@ public final class RigSetupActivity extends AppCompatActivity {
         }
         binding.serialCatProbeStatusText.setText(yaesuSelected
                 ? getString(R.string.rig_setup_serial_probe_yaesu, pickerHint)
+                : xieguSelected
+                        ? settings.serialCatCivAddressHex() == null
+                                ? getString(R.string.rig_setup_serial_probe_xiegu_without_address, pickerHint)
+                                : RigProfileFamilies.isXieguPortableUsbFamily(profile)
+                                    ? getString(R.string.rig_setup_serial_probe_xiegu_portable, pickerHint)
+                                    : getString(R.string.rig_setup_serial_probe_xiegu_g90, pickerHint)
                 : icomSelected
                         ? settings.serialCatCivAddressHex() == null
                                 ? getString(R.string.rig_setup_serial_probe_icom_without_civ, pickerHint)
@@ -1615,13 +1638,21 @@ public final class RigSetupActivity extends AppCompatActivity {
         if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
             builder.append(getString(R.string.rig_setup_connection_next_serial_prefix));
             if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
-                builder.append(getString(R.string.rig_setup_connection_next_serial_civ));
+                builder.append(getString(
+                        RigProfileFamilies.isXieguFamily(profile)
+                                ? R.string.rig_setup_connection_next_serial_xiegu_address
+                                : R.string.rig_setup_connection_next_serial_civ
+                ));
             }
             builder.append(getString(R.string.rig_setup_connection_next_serial_suffix));
             if (routeMode == OperateRouteModeStore.Mode.HYBRID_PHONE_RX) {
                 builder.append(getString(R.string.rig_setup_connection_hybrid_enabled));
             } else if (settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE) {
                 builder.append(getString(R.string.rig_setup_connection_yaesu_hybrid_combo));
+            } else if (RigProfileFamilies.isXieguPortableUsbFamily(profile)) {
+                builder.append(getString(R.string.rig_setup_connection_xiegu_portable_combo));
+            } else if (RigProfileFamilies.isXieguG90Line(profile)) {
+                builder.append(getString(R.string.rig_setup_connection_xiegu_g90_combo));
             }
             if (!developerModeEnabled) {
                 builder.append(getString(R.string.rig_setup_connection_deep_hidden));

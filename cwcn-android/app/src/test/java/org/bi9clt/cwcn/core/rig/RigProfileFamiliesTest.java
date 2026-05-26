@@ -14,6 +14,16 @@ public final class RigProfileFamiliesTest {
     }
 
     @Test
+    public void splitsXieguPortableAndG90Lines() {
+        assertTrue(RigProfileFamilies.isXieguPortableUsbFamily(RigProfileCatalog.findById("xiegu-x6100-serial")));
+        assertTrue(RigProfileFamilies.isXieguPortableUsbFamily(RigProfileCatalog.findById("xiegu-x6200-serial")));
+        assertFalse(RigProfileFamilies.isXieguPortableUsbFamily(RigProfileCatalog.findById("xiegu-g90-serial")));
+
+        assertFalse(RigProfileFamilies.isXieguG90Line(RigProfileCatalog.findById("xiegu-x6100-serial")));
+        assertTrue(RigProfileFamilies.isXieguG90Line(RigProfileCatalog.findById("xiegu-g90-serial")));
+    }
+
+    @Test
     public void doesNotMisclassifyExistingFamiliesAsXiegu() {
         assertFalse(RigProfileFamilies.isXieguFamily(RigProfileCatalog.findById("yaesu-cat-serial-generic")));
         assertFalse(RigProfileFamilies.isXieguFamily(RigProfileCatalog.findById("icom-civ-serial-generic")));

@@ -33,12 +33,16 @@ public final class RigProfileConfigurationFormatter {
         }
         if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
             builder.append("\n串口 CAT：")
-                    .append(settings.serialCatProtocolFamily().displayName())
+                    .append(renderSerialCatFamilyLabel(profile, settings))
                     .append(" / ")
                     .append(settings.serialCatBaudRate())
                     .append(" baud");
             if (RigProfileFamilies.isXieguFamily(profile)) {
-                builder.append("\nXiegu 提示：当前先按 USB 串口 CAT 骨架承接，RX 优先建议使用 USB 外部音频；现场条件不足时可切到手机麦克风混合模式。");
+                if (RigProfileFamilies.isXieguPortableUsbFamily(profile)) {
+                    builder.append("\nXiegu 提示：当前优先建议走单 USB 现场方案，CAT 走 USB 串口，RX 优先接 USB 外部音频；现场条件不足时可切到手机麦克风混合模式。");
+                } else {
+                    builder.append("\nXiegu 提示：G90 系列当前先按“CAT 与音频分离”的现场形态承接；RX 可先走手机麦克风或外置音频接口。");
+                }
             }
             if (settings.serialCatPortHint() != null) {
                 builder.append("\n串口端口提示：").append(settings.serialCatPortHint());
@@ -52,7 +56,10 @@ public final class RigProfileConfigurationFormatter {
             }
             if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
                     && settings.serialCatCivAddressHex() != null) {
-                builder.append("\nCI-V 地址：0x").append(settings.serialCatCivAddressHex());
+                builder.append("\n")
+                        .append(RigProfileFamilies.isXieguFamily(profile) ? "设备地址" : "CI-V 地址")
+                        .append("：0x")
+                        .append(settings.serialCatCivAddressHex());
             }
         }
         if (profile.hasCapability(RigCapability.NETWORK_CAT)) {
@@ -101,5 +108,15 @@ public final class RigProfileConfigurationFormatter {
             default:
                 return kind.name();
         }
+    }
+
+    private static String renderSerialCatFamilyLabel(
+            RigProfile profile,
+            RigProfileSettings settings
+    ) {
+        if (RigProfileFamilies.isXieguFamily(profile)) {
+            return "Xiegu 串口 CAT";
+        }
+        return settings.serialCatProtocolFamily().displayName();
     }
 }

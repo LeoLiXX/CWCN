@@ -179,7 +179,9 @@ public final class RigRouteStatusFormatter {
         if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
             StringBuilder builder = new StringBuilder();
             builder.append("串口 CAT: ")
-                    .append(safeSettings.serialCatProtocolFamily().displayName())
+                    .append(RigProfileFamilies.isXieguFamily(profile)
+                            ? "Xiegu 串口 CAT"
+                            : safeSettings.serialCatProtocolFamily().displayName())
                     .append(" / ")
                     .append(safeSettings.serialCatBaudRate())
                     .append(" 波特");
@@ -194,7 +196,10 @@ public final class RigRouteStatusFormatter {
                 builder.append("\n键控端口: ").append(safeSettings.serialCatKeyingPortHint());
             }
             if (safeSettings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
-                builder.append("\nCI-V 地址: ").append(fallback(safeSettings.serialCatCivAddressHex(), "-"));
+                builder.append("\n")
+                        .append(RigProfileFamilies.isXieguFamily(profile) ? "设备地址" : "CI-V 地址")
+                        .append(": ")
+                        .append(fallback(safeSettings.serialCatCivAddressHex(), "-"));
             }
             return builder.toString();
         }
@@ -234,7 +239,7 @@ public final class RigRouteStatusFormatter {
             return describeUsbKeyerReadiness((UsbSerialKeyerRigControlAdapter) adapter, stickyMessage);
         }
         if (adapter instanceof SerialCatRigControlAdapter) {
-            return describeSerialCatReadiness((SerialCatRigControlAdapter) adapter, settings);
+            return describeSerialCatReadiness(profile, (SerialCatRigControlAdapter) adapter, settings);
         }
         if (adapter instanceof HamlibRigctldRigControlAdapter) {
             return describeHamlibReadiness((HamlibRigctldRigControlAdapter) adapter, settings);
@@ -315,6 +320,7 @@ public final class RigRouteStatusFormatter {
     }
 
     public static String describeSerialCatReadiness(
+            @Nullable RigProfile profile,
             @Nullable SerialCatRigControlAdapter adapter,
             @Nullable RigProfileSettings settings
     ) {
@@ -322,7 +328,14 @@ public final class RigRouteStatusFormatter {
             return "串口 CAT 适配器尚未挂接。";
         }
         if (adapter.isReady()) {
-            if (settings != null && settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
+            if (RigProfileFamilies.isXieguFamily(profile)) {
+                if (RigProfileFamilies.isXieguPortableUsbFamily(profile)) {
+                    return "Xiegu 串口 CAT 已具备基础连通条件，可继续验证读频，并按现场条件决定 RX 走 USB 音频还是手机麦克风混合模式。";
+                }
+                return "Xiegu 串口 CAT 已具备基础连通条件，可继续验证读频，并把 RX / TX 音频按 G90 系列的外置链路接入。";
+            }
+            if (settings != null
+                    && settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
                 return "串口 CAT 路由已具备基础连通条件，可继续验证读频、PTT 与外部音频 / 独立键控联调。";
             }
             return "串口 CAT 路由已具备基础连通条件，可继续做 PTT / 键控联调。";
@@ -333,6 +346,12 @@ public final class RigRouteStatusFormatter {
         if (!hasMeaningfulText(settings.serialCatPortHint())
                 && !hasMeaningfulText(settings.serialCatKeyingPortHint())) {
             return "请先在设置中填写串口 CAT 端口，或补充独立键控端口。";
+        }
+        if (settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV
+                && !hasMeaningfulText(settings.serialCatCivAddressHex())) {
+            return RigProfileFamilies.isXieguFamily(profile)
+                    ? "请先补充设备地址，再继续验证 Xiegu 串口 CAT 的读频与控制链路。"
+                    : "请先补充 CI-V 地址，再继续验证串口 CAT 的读频与控制链路。";
         }
         return fallback(adapter.describeAvailability(), "串口 CAT 尚未就绪。");
     }

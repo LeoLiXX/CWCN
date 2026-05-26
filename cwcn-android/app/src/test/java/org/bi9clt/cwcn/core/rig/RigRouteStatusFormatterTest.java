@@ -42,6 +42,30 @@ public final class RigRouteStatusFormatterTest {
         assertEquals("Xiegu CAT 已就绪 | RX 待接入", status);
     }
 
+    @Test
+    public void xieguSettingsSummaryUsesDeviceAddressLabel() {
+        RigProfile profile = RigProfileCatalog.findById("xiegu-x6100-serial");
+        RigProfileSettings settings = new RigProfileSettings(
+                18,
+                650,
+                SerialKeyerTxOutput.KeyLine.RTS,
+                null,
+                CatProtocolFamily.ICOM_CIV,
+                19200,
+                "USB3",
+                "A4",
+                CatProtocolFamily.HAMLIB_RIGCTLD,
+                null,
+                4532,
+                null
+        );
+
+        String summary = RigRouteStatusFormatter.describeSettingsCatKeyingSummary(profile, settings);
+
+        assertTrue(summary.contains("Xiegu 串口 CAT"));
+        assertTrue(summary.contains("设备地址: A4"));
+    }
+
     private static final class ReadySessionFactory implements SerialCatSessionFactory {
         @Override
         public PortAvailability availability(String portHint) {
