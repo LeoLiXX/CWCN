@@ -252,6 +252,114 @@ public final class RigProfileCatalog {
                     )
             ),
             new RigProfile(
+                    "xiegu-x6100-serial",
+                    "Xiegu X6100",
+                    "Xiegu",
+                    "X6100 一体化 USB CAT / 音频电台",
+                    RigTransport.TransportKind.USB_SERIAL,
+                    "generic-cat",
+                    RigSupportLevel.BENCH_READY,
+                    EnumSet.of(
+                            RigCapability.PTT_CONTROL,
+                            RigCapability.SERIAL_CAT,
+                            RigCapability.FREQUENCY_READ,
+                            RigCapability.FREQUENCY_SET,
+                            RigCapability.MODE_READ,
+                            RigCapability.MODE_SET
+                    ),
+                    "这是面向 X6100 的首条正式支持骨架：先用原生 USB 串口承接 CAT，并配合 USB 外部音频或混合 RX 路由完成联调。",
+                    "优先使用 USB 串口做 CAT；若 Android 侧 USB 音频未稳定接入，可先切到“混合模式：RX 手机麦克风”，让 TX / CAT 保持在电台链路上。",
+                    Arrays.asList(
+                            "当前先复用 CI-V 风格配置骨架承接 Xiegu 串口控制，后续再视真机结果决定是否拆成独立 Xiegu CAT 家族。",
+                            "正式 CW 文本发射仍优先建议配独立键控口，而不是假设原生 CAT 一定覆盖。"
+                    ),
+                    new RigProfileSettings(
+                            18,
+                            650,
+                            SerialKeyerTxOutput.KeyLine.RTS,
+                            null,
+                            CatProtocolFamily.ICOM_CIV,
+                            19200,
+                            null,
+                            CatProtocolFamily.HAMLIB_RIGCTLD,
+                            null,
+                            4532,
+                            null
+                    )
+            ),
+            new RigProfile(
+                    "xiegu-x6200-serial",
+                    "Xiegu X6200",
+                    "Xiegu",
+                    "X6200 一体化 USB CAT / 音频电台",
+                    RigTransport.TransportKind.USB_SERIAL,
+                    "generic-cat",
+                    RigSupportLevel.BENCH_READY,
+                    EnumSet.of(
+                            RigCapability.PTT_CONTROL,
+                            RigCapability.SERIAL_CAT,
+                            RigCapability.FREQUENCY_READ,
+                            RigCapability.FREQUENCY_SET,
+                            RigCapability.MODE_READ,
+                            RigCapability.MODE_SET
+                    ),
+                    "这是面向 X6200 的首条正式支持骨架：优先按单 USB 串口 CAT + 外部 USB 音频的产品路径承接。",
+                    "优先验证 USB 串口 CAT 与 USB 外接音频的组合；如果现场 USB 音频条件不理想，也可以先切到“混合模式：RX 手机麦克风”。",
+                    Arrays.asList(
+                            "当前先复用 CI-V 风格配置骨架承接 Xiegu 串口控制，后续再根据真机抓包决定是否补独立 Xiegu CAT 家族。",
+                            "正式 CW 文本发射仍优先建议配独立键控口，而不是把 PTT 当摩尔斯键控。"
+                    ),
+                    new RigProfileSettings(
+                            18,
+                            650,
+                            SerialKeyerTxOutput.KeyLine.RTS,
+                            null,
+                            CatProtocolFamily.ICOM_CIV,
+                            19200,
+                            null,
+                            CatProtocolFamily.HAMLIB_RIGCTLD,
+                            null,
+                            4532,
+                            null
+                    )
+            ),
+            new RigProfile(
+                    "xiegu-g90-serial",
+                    "Xiegu G90 / G90N / G90S",
+                    "Xiegu",
+                    "G90 系列串口 CAT 电台",
+                    RigTransport.TransportKind.USB_SERIAL,
+                    "generic-cat",
+                    RigSupportLevel.BENCH_READY,
+                    EnumSet.of(
+                            RigCapability.PTT_CONTROL,
+                            RigCapability.SERIAL_CAT,
+                            RigCapability.FREQUENCY_READ,
+                            RigCapability.FREQUENCY_SET,
+                            RigCapability.MODE_READ,
+                            RigCapability.MODE_SET
+                    ),
+                    "这是面向 G90 系列的首条正式支持骨架：先承接串口 CAT，RX 与 TX 音频按外置接口或手机兜底路径处理。",
+                    "G90 系列更像“CAT 与音频分离”的现场形态。优先验证串口 CAT；RX 可先走手机麦克风，或后续配合外置音频接口。",
+                    Arrays.asList(
+                            "当前不把 G90 系列假定为单 USB 一体化音频机型。",
+                            "正式 CW 发射仍优先建议配独立键控口，避免把串口 PTT 当摩尔斯键控。"
+                    ),
+                    new RigProfileSettings(
+                            18,
+                            650,
+                            SerialKeyerTxOutput.KeyLine.RTS,
+                            null,
+                            CatProtocolFamily.ICOM_CIV,
+                            19200,
+                            null,
+                            CatProtocolFamily.HAMLIB_RIGCTLD,
+                            null,
+                            4532,
+                            null
+                    )
+            ),
+            new RigProfile(
                     "kenwood-cat-serial-generic",
                     "通用 Kenwood 串口 CAT",
                     "Kenwood 风格",

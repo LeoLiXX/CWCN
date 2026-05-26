@@ -721,6 +721,9 @@ public final class TxActivity extends AppCompatActivity {
             if (RigProfileFamilies.isYaesuFamily(pinnedProfile)) {
                 return getString(R.string.tx_recovery_generic_cat_yaesu);
             }
+            if (RigProfileFamilies.isXieguFamily(pinnedProfile)) {
+                return getString(R.string.tx_recovery_generic_cat_xiegu);
+            }
             if (RigProfileFamilies.isIcomFamily(pinnedProfile)) {
                 return getString(R.string.tx_recovery_generic_cat_icom);
             }

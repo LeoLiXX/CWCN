@@ -68,6 +68,9 @@ public final class RigRouteStatusFormatter {
         }
         RigProfileSettings safeSettings = settings == null ? profile.defaultSettings() : settings;
         if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
+            if (RigProfileFamilies.isXieguFamily(profile)) {
+                return "Xiegu CAT";
+            }
             if (safeSettings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE) {
                 return "USB CAT";
             }
@@ -99,6 +102,9 @@ public final class RigRouteStatusFormatter {
             return "当前没有选中的电台路由，也没有启用手机兜底。";
         }
         if (profile.hasCapability(RigCapability.SERIAL_CAT)) {
+            if (RigProfileFamilies.isXieguFamily(profile)) {
+                return "当前是 Xiegu 串口 CAT 路由：CAT 走 USB 串口；RX 优先建议接入 USB 外部音频，必要时可切到手机麦克风混合模式。";
+            }
             return "当前是混合电台链路：CAT 走 USB 串口，发射可走独立线控；正式 RX 仍需手机麦克风或外部 USB 音频。";
         }
         return "已选电台发射路由，但正式 RX 仍未接入电台音频。";
@@ -126,6 +132,9 @@ public final class RigRouteStatusFormatter {
             return adapter.isReady() ? "网络 CAT | RX 未接入" : "网络 CAT | 待配置";
         }
         if (adapter instanceof SerialCatRigControlAdapter) {
+            if (RigProfileFamilies.isXieguFamily(profile)) {
+                return adapter.isReady() ? "Xiegu CAT 已就绪 | RX 待接入" : "Xiegu CAT 待配置";
+            }
             return adapter.isReady() ? "CAT 已就绪 | RX 未接入" : "CAT 待配置";
         }
         if (adapter instanceof AudioVoxRigControlAdapter) {
@@ -313,6 +322,9 @@ public final class RigRouteStatusFormatter {
             return "串口 CAT 适配器尚未挂接。";
         }
         if (adapter.isReady()) {
+            if (settings != null && settings.serialCatProtocolFamily() == CatProtocolFamily.ICOM_CIV) {
+                return "串口 CAT 路由已具备基础连通条件，可继续验证读频、PTT 与外部音频 / 独立键控联调。";
+            }
             return "串口 CAT 路由已具备基础连通条件，可继续做 PTT / 键控联调。";
         }
         if (settings == null) {

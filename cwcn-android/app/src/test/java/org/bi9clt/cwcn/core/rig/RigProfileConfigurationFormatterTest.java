@@ -25,7 +25,7 @@ public final class RigProfileConfigurationFormatterTest {
 
         String summary = RigProfileConfigurationFormatter.renderCompactSummary(profile, settings);
 
-        assertTrue(summary.contains("Yaesu-style CAT"));
+        assertTrue(summary.contains("Yaesu 风格 CAT"));
         assertTrue(summary.contains("38400 baud"));
         assertTrue(summary.contains("COM5"));
     }
@@ -85,8 +85,8 @@ public final class RigProfileConfigurationFormatterTest {
         String summary = RigProfileConfigurationFormatter.renderCompactSummary(profile, settings);
 
         assertTrue(summary.contains("Hamlib rigctld"));
-        assertTrue(summary.contains("Yaesu note"));
         assertTrue(summary.contains("192.168.1.9:4532"));
+        assertTrue(summary.contains("Yaesu 提示"));
     }
 
     @Test
@@ -110,6 +110,17 @@ public final class RigProfileConfigurationFormatterTest {
         String summary = RigProfileConfigurationFormatter.renderCompactSummary(profile, settings);
 
         assertTrue(summary.contains("Icom CI-V"));
-        assertTrue(summary.contains("CI-V address: 0x94"));
+        assertTrue(summary.contains("CI-V 地址：0x94"));
+    }
+
+    @Test
+    public void xieguSerialSummaryIncludesXieguHint() {
+        RigProfile profile = RigProfileCatalog.findById("xiegu-x6200-serial");
+
+        String summary = RigProfileConfigurationFormatter.renderCompactSummary(profile, profile.defaultSettings());
+
+        assertTrue(summary.contains("Xiegu"));
+        assertTrue(summary.contains("19200 baud"));
+        assertTrue(summary.contains("Xiegu 提示"));
     }
 }

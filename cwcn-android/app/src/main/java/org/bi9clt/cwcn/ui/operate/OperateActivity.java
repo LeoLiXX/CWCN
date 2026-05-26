@@ -97,6 +97,7 @@ import org.bi9clt.cwcn.core.rig.CatProtocolFamily;
 import org.bi9clt.cwcn.core.rig.RigCapability;
 import org.bi9clt.cwcn.core.rig.RigControlAdapter;
 import org.bi9clt.cwcn.core.rig.RigFrequencyResolver;
+import org.bi9clt.cwcn.core.rig.RigProfileFamilies;
 import org.bi9clt.cwcn.core.rig.RigProfile;
 import org.bi9clt.cwcn.core.rig.RigProfileSettings;
 import org.bi9clt.cwcn.core.rig.RigRouteStatusFormatter;
@@ -1344,6 +1345,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             return false;
         }
         return settings.serialCatProtocolFamily() == CatProtocolFamily.YAESU_STYLE
+                || RigProfileFamilies.isXieguFamily(profile)
                 || settings.serialCatProtocolFamily() == CatProtocolFamily.KENWOOD_STYLE;
     }
 

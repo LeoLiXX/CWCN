@@ -494,20 +494,29 @@ public final class RigSetupActivity extends AppCompatActivity {
         if ("yaesu-cat-serial-generic".equals(profileId)) {
             return 2;
         }
-        if ("icom-civ-serial-generic".equals(profileId)) {
+        if ("xiegu-x6100-serial".equals(profileId)) {
             return 3;
         }
-        if ("kenwood-cat-serial-generic".equals(profileId)) {
+        if ("xiegu-x6200-serial".equals(profileId)) {
             return 4;
         }
-        if ("yaesu-rigctld-network-family".equals(profileId)) {
+        if ("xiegu-g90-serial".equals(profileId)) {
             return 5;
         }
-        if ("icom-rigctld-network-family".equals(profileId)) {
+        if ("icom-civ-serial-generic".equals(profileId)) {
             return 6;
         }
-        if ("kenwood-rigctld-network-family".equals(profileId)) {
+        if ("kenwood-cat-serial-generic".equals(profileId)) {
             return 7;
+        }
+        if ("yaesu-rigctld-network-family".equals(profileId)) {
+            return 8;
+        }
+        if ("icom-rigctld-network-family".equals(profileId)) {
+            return 9;
+        }
+        if ("kenwood-rigctld-network-family".equals(profileId)) {
+            return 10;
         }
         return Integer.MAX_VALUE;
     }

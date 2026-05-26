@@ -37,6 +37,9 @@ public final class RigProfileConfigurationFormatter {
                     .append(" / ")
                     .append(settings.serialCatBaudRate())
                     .append(" baud");
+            if (RigProfileFamilies.isXieguFamily(profile)) {
+                builder.append("\nXiegu 提示：当前先按 USB 串口 CAT 骨架承接，RX 优先建议使用 USB 外部音频；现场条件不足时可切到手机麦克风混合模式。");
+            }
             if (settings.serialCatPortHint() != null) {
                 builder.append("\n串口端口提示：").append(settings.serialCatPortHint());
             }
@@ -66,6 +69,9 @@ public final class RigProfileConfigurationFormatter {
             if (RigProfileFamilies.isYaesuFamily(profile)
                     && settings.networkCatProtocolFamily() == CatProtocolFamily.HAMLIB_RIGCTLD) {
                 builder.append("\nYaesu 提示：这一家族当前更适合先通过可用的 rigctld 桥接路径联调。");
+            } else if (RigProfileFamilies.isXieguFamily(profile)
+                    && settings.networkCatProtocolFamily() == CatProtocolFamily.HAMLIB_RIGCTLD) {
+                builder.append("\nXiegu 提示：当前优先建议先走原生 USB 串口 CAT；rigctld 仅适合作为后续桥接实验路径。");
             }
         }
         if (profile.hasCapability(RigCapability.BLUETOOTH_SERIAL)) {

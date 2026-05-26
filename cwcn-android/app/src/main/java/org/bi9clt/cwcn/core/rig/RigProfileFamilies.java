@@ -42,6 +42,20 @@ public final class RigProfileFamilies {
                 || model.contains("ts-");
     }
 
+    public static boolean isXieguFamily(RigProfile profile) {
+        if (profile == null) {
+            return false;
+        }
+        String vendor = safeLower(profile.vendorLabel());
+        String id = safeLower(profile.id());
+        String model = safeLower(profile.modelLabel());
+        return vendor.contains("xiegu")
+                || id.contains("xiegu")
+                || model.contains("x6100")
+                || model.contains("x6200")
+                || model.contains("g90");
+    }
+
     private static String safeLower(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.US);
     }

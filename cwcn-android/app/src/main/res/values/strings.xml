@@ -695,6 +695,7 @@
     <string name="tx_recovery_local_sidetone">直接点“开始 TX”做一次脱机演练；如果声音偏大，请降低手机音量或佩戴耳机。</string>
     <string name="tx_recovery_audio_vox">先接好音频链路并打开 VOX，再从保守音量和短模板开始测试。</string>
     <string name="tx_recovery_generic_cat_yaesu">先固定 Yaesu 串口 CAT 配置，在电台配置里确认检测到的串口和波特率，并验证 CAT 探测成功后，再重试一段很短的 VVV 或 DIT 发射。</string>
+    <string name="tx_recovery_generic_cat_xiegu">先固定 Xiegu 串口 CAT 配置，在电台配置里确认串口、波特率和必要的 CI-V 风格参数；若 RX 音频尚未接入，可先切到“混合模式：RX 手机麦克风”，再重试一段很短的发射。</string>
     <string name="tx_recovery_generic_cat_icom">先固定 Icom CI-V 配置，在电台配置里确认串口、波特率和 CI-V 地址，并验证探测成功后，再重试一段很短的发射。</string>
     <string name="tx_recovery_generic_cat_kenwood">先固定 Kenwood 串口 CAT 配置，在电台配置里确认串口链路就绪并验证探测响应后，再重试一段很短的发射。</string>
     <string name="tx_recovery_generic_cat_generic">先打开电台配置，固定匹配的串口 CAT 配置，确认探测就绪后，再重试一段很短的独立键控 CW 发射。</string>

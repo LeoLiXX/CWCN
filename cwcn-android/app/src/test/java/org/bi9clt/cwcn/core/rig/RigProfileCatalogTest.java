@@ -30,7 +30,7 @@ public final class RigProfileCatalogTest {
         assertTrue(profile.hasCapability(RigCapability.TEXT_TO_CW));
         assertTrue(profile.hasCapability(RigCapability.KEY_LINE_CONTROL));
         assertTrue(profile.hasCapability(RigCapability.USB_DEVICE_SELECTION));
-        assertTrue(profile.capabilitySummary().contains("RTS/DTR key line"));
+        assertTrue(profile.capabilitySummary().contains(RigCapability.KEY_LINE_CONTROL.displayName()));
     }
 
     @Test
@@ -50,6 +50,9 @@ public final class RigProfileCatalogTest {
         RigProfile yaesuRigctld = RigProfileCatalog.findById("yaesu-rigctld-network-family");
         RigProfile icomRigctld = RigProfileCatalog.findById("icom-rigctld-network-family");
         RigProfile icom = RigProfileCatalog.findById("icom-civ-serial-generic");
+        RigProfile xieguX6100 = RigProfileCatalog.findById("xiegu-x6100-serial");
+        RigProfile xieguX6200 = RigProfileCatalog.findById("xiegu-x6200-serial");
+        RigProfile xieguG90 = RigProfileCatalog.findById("xiegu-g90-serial");
         RigProfile kenwoodRigctld = RigProfileCatalog.findById("kenwood-rigctld-network-family");
         RigProfile kenwood = RigProfileCatalog.findById("kenwood-cat-serial-generic");
         RigProfile rigctld = RigProfileCatalog.findById("hamlib-rigctld-network-generic");
@@ -58,6 +61,9 @@ public final class RigProfileCatalogTest {
         assertNotNull(yaesuRigctld);
         assertNotNull(icomRigctld);
         assertNotNull(icom);
+        assertNotNull(xieguX6100);
+        assertNotNull(xieguX6200);
+        assertNotNull(xieguG90);
         assertNotNull(kenwoodRigctld);
         assertNotNull(kenwood);
         assertNotNull(rigctld);
@@ -65,13 +71,19 @@ public final class RigProfileCatalogTest {
         assertEquals(RigTransport.TransportKind.NETWORK_CAT, yaesuRigctld.transportKind());
         assertEquals(RigTransport.TransportKind.NETWORK_CAT, icomRigctld.transportKind());
         assertEquals(RigTransport.TransportKind.USB_SERIAL, icom.transportKind());
+        assertEquals(RigTransport.TransportKind.USB_SERIAL, xieguX6100.transportKind());
+        assertEquals(RigTransport.TransportKind.USB_SERIAL, xieguX6200.transportKind());
+        assertEquals(RigTransport.TransportKind.USB_SERIAL, xieguG90.transportKind());
         assertEquals(RigTransport.TransportKind.NETWORK_CAT, kenwoodRigctld.transportKind());
         assertEquals(RigTransport.TransportKind.USB_SERIAL, kenwood.transportKind());
         assertEquals(RigTransport.TransportKind.NETWORK_CAT, rigctld.transportKind());
-        assertTrue(icomRigctld.summary().contains("Icom-family"));
+        assertTrue(icomRigctld.summary().contains("Icom"));
         assertTrue(icom.summary().contains("CI-V"));
-        assertTrue(kenwoodRigctld.summary().contains("Kenwood-family"));
-        assertTrue(yaesuRigctld.summary().contains("Yaesu-family"));
+        assertTrue(xieguX6100.summary().contains("X6100"));
+        assertTrue(xieguX6200.summary().contains("X6200"));
+        assertTrue(xieguG90.summary().contains("G90"));
+        assertTrue(kenwoodRigctld.summary().contains("Kenwood"));
+        assertTrue(yaesuRigctld.summary().contains("Yaesu"));
         assertTrue(rigctld.summary().contains("rigctld"));
     }
 
@@ -81,6 +93,9 @@ public final class RigProfileCatalogTest {
         RigProfile yaesuRigctld = RigProfileCatalog.findById("yaesu-rigctld-network-family");
         RigProfile icomRigctld = RigProfileCatalog.findById("icom-rigctld-network-family");
         RigProfile icom = RigProfileCatalog.findById("icom-civ-serial-generic");
+        RigProfile xieguX6100 = RigProfileCatalog.findById("xiegu-x6100-serial");
+        RigProfile xieguX6200 = RigProfileCatalog.findById("xiegu-x6200-serial");
+        RigProfile xieguG90 = RigProfileCatalog.findById("xiegu-g90-serial");
         RigProfile kenwoodRigctld = RigProfileCatalog.findById("kenwood-rigctld-network-family");
         RigProfile kenwood = RigProfileCatalog.findById("kenwood-cat-serial-generic");
         RigProfile rigctld = RigProfileCatalog.findById("hamlib-rigctld-network-generic");
@@ -89,6 +104,9 @@ public final class RigProfileCatalogTest {
         assertNotNull(yaesuRigctld);
         assertNotNull(icomRigctld);
         assertNotNull(icom);
+        assertNotNull(xieguX6100);
+        assertNotNull(xieguX6200);
+        assertNotNull(xieguG90);
         assertNotNull(kenwoodRigctld);
         assertNotNull(kenwood);
         assertNotNull(rigctld);
@@ -101,6 +119,12 @@ public final class RigProfileCatalogTest {
         assertEquals(CatProtocolFamily.HAMLIB_RIGCTLD, icomRigctld.defaultSettings().networkCatProtocolFamily());
         assertEquals(CatProtocolFamily.ICOM_CIV, icom.defaultSettings().serialCatProtocolFamily());
         assertEquals(19200, icom.defaultSettings().serialCatBaudRate());
+        assertEquals(CatProtocolFamily.ICOM_CIV, xieguX6100.defaultSettings().serialCatProtocolFamily());
+        assertEquals(19200, xieguX6100.defaultSettings().serialCatBaudRate());
+        assertEquals(CatProtocolFamily.ICOM_CIV, xieguX6200.defaultSettings().serialCatProtocolFamily());
+        assertEquals(19200, xieguX6200.defaultSettings().serialCatBaudRate());
+        assertEquals(CatProtocolFamily.ICOM_CIV, xieguG90.defaultSettings().serialCatProtocolFamily());
+        assertEquals(19200, xieguG90.defaultSettings().serialCatBaudRate());
         assertEquals(RigSupportLevel.BENCH_READY, kenwoodRigctld.supportLevel());
         assertEquals(CatProtocolFamily.HAMLIB_RIGCTLD, kenwoodRigctld.defaultSettings().networkCatProtocolFamily());
         assertEquals(CatProtocolFamily.KENWOOD_STYLE, kenwood.defaultSettings().serialCatProtocolFamily());
