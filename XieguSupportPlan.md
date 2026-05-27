@@ -66,6 +66,38 @@ CWCN implication:
 - This line should not be the first implementation target.
 - It needs a more careful CAT + audio matrix.
 
+Practical field interpretation:
+
+- the blue Xiegu USB cable should be treated primarily as `CAT`, not as a guaranteed RX audio path
+- for CWCN, `RX` means radio audio flowing from the rig into Android
+- if Android can see a real external recording-capable audio device over OTG, CWCN can use that as rig RX
+- otherwise CWCN should fall back to phone microphone RX
+
+Current recommended route shapes for G90 family:
+
+1. `USB CAT + external RX audio`
+2. `USB CAT + phone microphone RX`
+
+Avoid assuming:
+
+- that "USB connected" also means "USB audio connected"
+- that a passive 3.5 mm splitter automatically gives Android a usable RX source
+- that the rig's audio input path and RX audio output path are the same thing
+
+Meaning of audio direction:
+
+- `rig -> phone` audio path: RX
+- `phone -> rig` audio path: TX
+- ACC or line-in style paths on the rig are usually TX injection paths, not RX capture paths
+
+CWCN product consequence for G90 / G90S:
+
+- phase-one value is mostly CAT and route modeling
+- RX should be productized as:
+  - external USB audio when Android exposes a recording source
+  - otherwise `HYBRID_PHONE_RX`
+- TX remains a separate design decision and should not be inferred from FT8-style PTT + audio behavior
+
 ### Line B: X6100 / X6200
 
 Working assumption for now:
@@ -150,6 +182,23 @@ Scope:
 2. Separate CAT, RX, and TX expectations clearly
 3. Productize the external-audio / fallback story
 
+Detailed matrix to land in this phase:
+
+- `CAT`
+  - preferred: native USB serial CAT
+- `RX`
+  - preferred: external OTG audio interface that Android recognizes as an input device
+  - fallback: phone microphone RX
+- `TX`
+  - to be decided independently from CAT
+  - should not assume that FT8-style digital-audio TX maps directly to CW keying requirements
+
+Reference connection topologies to preserve in product language:
+
+1. `G90S USB -> Android OTG` for CAT
+2. `G90S audio out -> external USB audio input -> Android OTG` for rig RX
+3. `G90S speaker / monitor audio -> phone mic` only as fallback RX
+
 ## First implementation checklist
 
 1. Add Xiegu profiles to `RigProfileCatalog`
@@ -198,4 +247,3 @@ Mitigation:
 - route summaries read like product features instead of generic placeholders
 - no regression to current Yaesu paths
 - focused rig-related unit tests pass
-
