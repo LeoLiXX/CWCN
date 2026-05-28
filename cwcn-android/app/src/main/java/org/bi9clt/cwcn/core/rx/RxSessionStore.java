@@ -33,6 +33,7 @@ public final class RxSessionStore {
             object.put("estimatedWpm", snapshot.estimatedWpm());
             object.put("stableEstimatedWpm", snapshot.stableEstimatedWpm());
             object.put("rawText", snapshot.rawText());
+            object.put("previewRawText", snapshot.previewRawText());
             object.put("normalizedText", snapshot.normalizedText());
             object.put("primaryCallsignCandidate", snapshot.primaryCallsignCandidate());
             object.put("inputHealthLabel", snapshot.inputHealthLabel());
@@ -66,6 +67,7 @@ public final class RxSessionStore {
                     object.optInt("estimatedWpm", 0),
                     object.optInt("stableEstimatedWpm", object.optInt("estimatedWpm", 0)),
                     object.optString("rawText", ""),
+                    object.optString("previewRawText", ""),
                     object.optString("normalizedText", ""),
                     object.optString("primaryCallsignCandidate", ""),
                     object.optString("inputHealthLabel", ""),

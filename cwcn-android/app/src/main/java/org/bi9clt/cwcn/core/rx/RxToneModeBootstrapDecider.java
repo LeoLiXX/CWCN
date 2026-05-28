@@ -10,7 +10,7 @@ import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
  * to auto-track before trusted timing exists.
  */
 public final class RxToneModeBootstrapDecider {
-    private static final long PRE_TRUST_AUTOTRACK_FALLBACK_MS = 48L;
+    private static final long PRE_TRUST_AUTOTRACK_FALLBACK_MS = 96L;
     private static final double FIXED_BOOTSTRAP_PROGRESS_LOCKED_RATIO_MIN = 0.30d;
     private static final int FIXED_BOOTSTRAP_PROGRESS_CONSECUTIVE_LOCKED_FRAMES_MIN = 4;
     private static final int POST_TRUST_PENDING_RETUNE_DRIFT_MIN_HZ = 25;

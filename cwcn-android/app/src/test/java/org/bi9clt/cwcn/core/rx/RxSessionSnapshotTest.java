@@ -20,6 +20,7 @@ public final class RxSessionSnapshotTest {
                 20,
                 "CQ",
                 "CQ",
+                "CQ",
                 "BI3TUK",
                 "",
                 "",
@@ -45,6 +46,7 @@ public final class RxSessionSnapshotTest {
                 700,
                 20,
                 20,
+                "CQ",
                 "CQ",
                 "CQ",
                 "BI3TUK",
@@ -74,6 +76,7 @@ public final class RxSessionSnapshotTest {
                 20,
                 "CQ",
                 "CQ",
+                "CQ",
                 "BI3TUK",
                 "",
                 "",
@@ -93,6 +96,7 @@ public final class RxSessionSnapshotTest {
                 700,
                 20,
                 20,
+                "CQ",
                 "CQ",
                 "CQ DE BI3TUK",
                 "BI3TUK",
@@ -125,6 +129,7 @@ public final class RxSessionSnapshotTest {
                 20,
                 20,
                 "   ",
+                "   ",
                 "",
                 "",
                 "",
@@ -137,6 +142,7 @@ public final class RxSessionSnapshotTest {
         );
 
         assertFalse(snapshot.hasRawText());
+        assertFalse(snapshot.hasPreviewRawText());
     }
 
     @Test
@@ -151,6 +157,7 @@ public final class RxSessionSnapshotTest {
                 700,
                 20,
                 20,
+                "CQ",
                 "CQ",
                 "CQ DE BI3TUK",
                 "BI3TUK",
@@ -172,6 +179,7 @@ public final class RxSessionSnapshotTest {
                 700,
                 20,
                 20,
+                "CQ",
                 "CQ",
                 "CQ",
                 "BI3TUK",

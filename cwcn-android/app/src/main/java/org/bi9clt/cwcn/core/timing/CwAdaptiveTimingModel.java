@@ -177,13 +177,11 @@ public final class CwAdaptiveTimingModel {
         long dotCandidateMs = 0L;
         if (classification == CwTimingEvent.Classification.INTRA_SYMBOL_GAP) {
             dotCandidateMs = gapDurationMs;
-        } else if (classification == CwTimingEvent.Classification.LETTER_GAP) {
-            if (isAmbiguousLongLetterGap(gapDurationMs)) {
-                return;
-            }
-            dotCandidateMs = Math.max(1L, Math.round(gapDurationMs / 3.0d));
-        } else if (classification == CwTimingEvent.Classification.WORD_GAP) {
-            dotCandidateMs = Math.max(1L, Math.round(gapDurationMs / 7.0d));
+        } else if (classification == CwTimingEvent.Classification.LETTER_GAP
+                || classification == CwTimingEvent.Classification.WORD_GAP) {
+            // Experimental branch:
+            // boundary spacing should not contribute timing-learning candidates.
+            return;
         }
 
         if (dotCandidateMs > 0L) {

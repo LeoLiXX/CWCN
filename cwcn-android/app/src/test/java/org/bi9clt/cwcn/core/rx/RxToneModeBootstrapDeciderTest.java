@@ -50,6 +50,29 @@ public final class RxToneModeBootstrapDeciderTest {
     }
 
     @Test
+    public void preTrustFallbackWaitsForLongerStartupWindowBeforeTriggering() {
+        RxTurnController controller = new RxTurnController();
+        assertTrue(controller.observe(true, false, 100L, 0).startedNewTurn());
+
+        CwSignalProcessor.RxToneMode modeBeforeWindow = RxToneModeBootstrapDecider.resolveHybridBootstrapMode(
+                false,
+                controller,
+                snapshot(false, 0, new char[]{'L', 'L', '.', '.', '.', '.', '.', '.', '.', '.'}),
+                180L
+        );
+        CwSignalProcessor.RxToneMode modeAfterWindow = RxToneModeBootstrapDecider.resolveHybridBootstrapMode(
+                false,
+                controller,
+                snapshot(false, 0, new char[]{'L', 'L', '.', '.', '.', '.', '.', '.', '.', '.'}),
+                260L
+        );
+
+        assertEquals(CwSignalProcessor.RxToneMode.FIXED_TONE, modeBeforeWindow);
+        assertEquals(CwSignalProcessor.RxToneMode.AUTO_TRACK, modeAfterWindow);
+        assertTrue(controller.bootstrapAutoTrackFallbackLatched());
+    }
+
+    @Test
     public void postTrustKeepsFixedAcrossLaterValleyAfterHealthyBootstrapEvenWhenOnPreferred() {
         RxTurnController controller = new RxTurnController();
         assertTrue(controller.observe(true, false, 100L, 0).startedNewTurn());

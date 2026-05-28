@@ -65,6 +65,57 @@ public final class CwHybridTimingModel {
         CADENCE
     }
 
+    public static final class ExperimentalTrustedSlowUpdateTuning {
+        private final boolean boundarySlowUpdateEnabled;
+        private final double boundarySlowUpdateBlend;
+        private final boolean stableSlowUpdateEnabled;
+        private final double stableSlowUpdateBlend;
+        private final double maxPostTrustSlowUpRatio;
+
+        public ExperimentalTrustedSlowUpdateTuning(
+                boolean boundarySlowUpdateEnabled,
+                double boundarySlowUpdateBlend,
+                boolean stableSlowUpdateEnabled,
+                double stableSlowUpdateBlend,
+                double maxPostTrustSlowUpRatio
+        ) {
+            this.boundarySlowUpdateEnabled = boundarySlowUpdateEnabled;
+            this.boundarySlowUpdateBlend = clampUnitInterval(boundarySlowUpdateBlend);
+            this.stableSlowUpdateEnabled = stableSlowUpdateEnabled;
+            this.stableSlowUpdateBlend = clampUnitInterval(stableSlowUpdateBlend);
+            this.maxPostTrustSlowUpRatio = maxPostTrustSlowUpRatio <= 1.0d
+                    ? Double.POSITIVE_INFINITY
+                    : maxPostTrustSlowUpRatio;
+        }
+
+        public boolean boundarySlowUpdateEnabled() {
+            return boundarySlowUpdateEnabled;
+        }
+
+        public double boundarySlowUpdateBlend() {
+            return boundarySlowUpdateBlend;
+        }
+
+        public boolean stableSlowUpdateEnabled() {
+            return stableSlowUpdateEnabled;
+        }
+
+        public double stableSlowUpdateBlend() {
+            return stableSlowUpdateBlend;
+        }
+
+        public double maxPostTrustSlowUpRatio() {
+            return maxPostTrustSlowUpRatio;
+        }
+
+        private static double clampUnitInterval(double value) {
+            if (Double.isNaN(value)) {
+                return 0.0d;
+            }
+            return Math.max(0.0d, Math.min(1.0d, value));
+        }
+    }
+
     public static final class DebugSnapshot {
         private final String activeStrategyName;
         private final String lastEmissionStrategyName;
@@ -282,6 +333,7 @@ public final class CwHybridTimingModel {
     private TrustOrigin trustOrigin = TrustOrigin.NONE;
     private int postTrustStableDecodeCount;
     private boolean idleResetEnabled = true;
+    private ExperimentalTrustedSlowUpdateTuning experimentalTrustedSlowUpdateTuning;
 
     public synchronized List<CwTimingEvent> process(CwToneEvent toneEvent) {
         return process(toneEvent, true);
@@ -343,6 +395,12 @@ public final class CwHybridTimingModel {
      */
     public synchronized void setIdleResetEnabled(boolean enabled) {
         idleResetEnabled = enabled;
+    }
+
+    public synchronized void setExperimentalTrustedSlowUpdateTuning(
+            ExperimentalTrustedSlowUpdateTuning tuning
+    ) {
+        experimentalTrustedSlowUpdateTuning = tuning;
     }
 
     public synchronized void reset() {
@@ -531,11 +589,19 @@ public final class CwHybridTimingModel {
     ) {
         if (trustedDotEstimateMs > 0.0d) {
             if (candidateDotEstimateMs > trustedDotEstimateMs) {
+                if (!shouldAllowBoundarySlowUpdate(candidateDotEstimateMs)) {
+                    recordTrustedUpdate(
+                            "boundary-slow-block(" + Math.round(trustedDotEstimateMs) + "->"
+                                    + candidateDotEstimateMs + "ms)",
+                            timestampMs
+                    );
+                    return;
+                }
                 double previousTrustedDotEstimateMs = trustedDotEstimateMs;
                 trustedDotEstimateMs = blend(
                         trustedDotEstimateMs,
                         candidateDotEstimateMs,
-                        TRUSTED_SLOW_UPDATE_BLEND
+                        resolveBoundarySlowUpdateBlend()
                 );
                 rememberRetainedDotEstimate(trustedDotEstimateMs, timestampMs);
                 clearPendingFastReanchor();
@@ -673,8 +739,21 @@ public final class CwHybridTimingModel {
         }
 
         if (candidateDotEstimateMs >= trustedDotEstimateMs) {
+            if (!shouldAllowStableSlowUpdate(candidateDotEstimateMs)) {
+                lastStableDecodeTimestampMs = timestampMs;
+                recordTrustedUpdate(
+                        "slow-block(" + Math.round(trustedDotEstimateMs) + "->"
+                                + candidateDotEstimateMs + "ms)",
+                        timestampMs
+                );
+                return;
+            }
             double previousTrustedDotEstimateMs = trustedDotEstimateMs;
-            trustedDotEstimateMs = blend(trustedDotEstimateMs, candidateDotEstimateMs, TRUSTED_SLOW_UPDATE_BLEND);
+            trustedDotEstimateMs = blend(
+                    trustedDotEstimateMs,
+                    candidateDotEstimateMs,
+                    resolveStableSlowUpdateBlend()
+            );
             rememberRetainedDotEstimate(trustedDotEstimateMs, timestampMs);
             clearPendingFastReanchor();
             lastStableDecodeTimestampMs = timestampMs;
@@ -1494,6 +1573,54 @@ public final class CwHybridTimingModel {
 
     private double blend(double currentValue, double newValue, double ratio) {
         return currentValue + ((newValue - currentValue) * ratio);
+    }
+
+    private boolean shouldAllowBoundarySlowUpdate(double candidateDotEstimateMs) {
+        if (candidateDotEstimateMs <= trustedDotEstimateMs) {
+            return true;
+        }
+        if (experimentalTrustedSlowUpdateTuning == null) {
+            return true;
+        }
+        if (!experimentalTrustedSlowUpdateTuning.boundarySlowUpdateEnabled()) {
+            return false;
+        }
+        return candidateDotEstimateMs <= maximumAllowedSlowUpdateDotMs();
+    }
+
+    private boolean shouldAllowStableSlowUpdate(double candidateDotEstimateMs) {
+        if (candidateDotEstimateMs <= trustedDotEstimateMs) {
+            return true;
+        }
+        if (experimentalTrustedSlowUpdateTuning == null) {
+            return true;
+        }
+        if (!experimentalTrustedSlowUpdateTuning.stableSlowUpdateEnabled()) {
+            return false;
+        }
+        return candidateDotEstimateMs <= maximumAllowedSlowUpdateDotMs();
+    }
+
+    private double resolveBoundarySlowUpdateBlend() {
+        if (experimentalTrustedSlowUpdateTuning == null) {
+            return TRUSTED_SLOW_UPDATE_BLEND;
+        }
+        return experimentalTrustedSlowUpdateTuning.boundarySlowUpdateBlend();
+    }
+
+    private double resolveStableSlowUpdateBlend() {
+        if (experimentalTrustedSlowUpdateTuning == null) {
+            return TRUSTED_SLOW_UPDATE_BLEND;
+        }
+        return experimentalTrustedSlowUpdateTuning.stableSlowUpdateBlend();
+    }
+
+    private double maximumAllowedSlowUpdateDotMs() {
+        if (experimentalTrustedSlowUpdateTuning == null
+                || !Double.isFinite(experimentalTrustedSlowUpdateTuning.maxPostTrustSlowUpRatio())) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return trustedDotEstimateMs * experimentalTrustedSlowUpdateTuning.maxPostTrustSlowUpRatio();
     }
 
     private double trustedWpm() {

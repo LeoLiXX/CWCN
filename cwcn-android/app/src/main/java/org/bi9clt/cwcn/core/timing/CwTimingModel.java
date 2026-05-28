@@ -227,29 +227,12 @@ public final class CwTimingModel {
             return;
         }
 
-        if (classification == CwTimingEvent.Classification.LETTER_GAP) {
-            if (isAmbiguousLongLetterGap(gapDurationMs)) {
-                return;
-            }
-            double inferredDot = gapDurationMs / 3.0d;
-            if (!shouldLearnFromLetterGap(gapDurationMs, inferredDot)) {
-                return;
-            }
-            if (initialized) {
-                dotEstimateMs = clampDot(limitGapDrivenDotShift(
-                        dotEstimateMs,
-                        smoothEstimate(
-                                dotEstimateMs,
-                                inferredDot,
-                                gapDotSmoothing(inferredDot) * LETTER_GAP_DOT_SMOOTHING_SCALE
-                        )
-                ));
-            }
-            intraGapEstimateMs = smoothEstimate(
-                    intraGapEstimateMs,
-                    inferredDot,
-                    gapSmoothing(inferredDot) * LETTER_GAP_INTRA_SMOOTHING_SCALE
-            );
+        if (classification == CwTimingEvent.Classification.LETTER_GAP
+                || classification == CwTimingEvent.Classification.WORD_GAP) {
+            // Experimental branch:
+            // keep boundary gaps available for classification/decoding only.
+            // Do not let letter/word spacing feed back into timing learning.
+            return;
         }
     }
 

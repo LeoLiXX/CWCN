@@ -259,8 +259,64 @@ public final class CwSignalProcessor {
         AUTO_TRACK
     }
 
+    public static final class ExperimentalLockedRetuneGuardTuning {
+        private final int minDriftHz;
+        private final int nearFrequencyMinDriftHz;
+        private final int farDriftHz;
+        private final int requiredScans;
+        private final int farRequiredScans;
+        private final int weakReferenceExtraScans;
+
+        public ExperimentalLockedRetuneGuardTuning(
+                int minDriftHz,
+                int nearFrequencyMinDriftHz,
+                int farDriftHz,
+                int requiredScans,
+                int farRequiredScans,
+                int weakReferenceExtraScans
+        ) {
+            int safeMinDriftHz = Math.max(1, minDriftHz);
+            int safeNearFrequencyMinDriftHz = Math.max(1, nearFrequencyMinDriftHz);
+            int safeFarDriftHz = Math.max(
+                    Math.max(safeMinDriftHz, safeNearFrequencyMinDriftHz) + 1,
+                    farDriftHz
+            );
+            this.minDriftHz = safeMinDriftHz;
+            this.nearFrequencyMinDriftHz = safeNearFrequencyMinDriftHz;
+            this.farDriftHz = safeFarDriftHz;
+            this.requiredScans = Math.max(1, requiredScans);
+            this.farRequiredScans = Math.max(this.requiredScans, farRequiredScans);
+            this.weakReferenceExtraScans = Math.max(0, weakReferenceExtraScans);
+        }
+
+        int minDriftHz() {
+            return minDriftHz;
+        }
+
+        int nearFrequencyMinDriftHz() {
+            return nearFrequencyMinDriftHz;
+        }
+
+        int farDriftHz() {
+            return farDriftHz;
+        }
+
+        int requiredScans() {
+            return requiredScans;
+        }
+
+        int farRequiredScans() {
+            return farRequiredScans;
+        }
+
+        int weakReferenceExtraScans() {
+            return weakReferenceExtraScans;
+        }
+    }
+
     private boolean initialized;
     private boolean experimentalForceWideAcquisitionEnabled;
+    private ExperimentalLockedRetuneGuardTuning experimentalLockedRetuneGuardTuning;
     private boolean toneActive;
     private boolean targetToneLocked;
     private double noiseFloorEstimate;
@@ -3740,6 +3796,7 @@ public final class CwSignalProcessor {
         recentHypothesisHistoryNextIndex = 0;
         experimentalHypothesisGuardEnabled = false;
         experimentalForceWideAcquisitionEnabled = false;
+        experimentalLockedRetuneGuardTuning = null;
         pendingHypothesisGuardEligible = false;
         lastHypothesisGuardEligible = false;
         lastHypothesisGuardApplied = false;
@@ -3811,6 +3868,12 @@ public final class CwSignalProcessor {
 
     public synchronized void setExperimentalForceWideAcquisitionEnabled(boolean enabled) {
         experimentalForceWideAcquisitionEnabled = enabled;
+    }
+
+    public synchronized void setExperimentalLockedRetuneGuardTuning(
+            ExperimentalLockedRetuneGuardTuning tuning
+    ) {
+        experimentalLockedRetuneGuardTuning = tuning;
     }
 
     public synchronized double lastDetectionLevel() {
@@ -5275,16 +5338,22 @@ public final class CwSignalProcessor {
     }
 
     private int lockedRetuneGuardMinDriftHz() {
+        int configuredMinDriftHz = experimentalLockedRetuneGuardTuning == null
+                ? LOCKED_RETUNE_GUARD_MIN_DRIFT_HZ
+                : experimentalLockedRetuneGuardTuning.minDriftHz();
+        int configuredNearFrequencyMinDriftHz = experimentalLockedRetuneGuardTuning == null
+                ? LOCKED_RETUNE_GUARD_NEAR_FREQUENCY_MIN_DRIFT_HZ
+                : experimentalLockedRetuneGuardTuning.nearFrequencyMinDriftHz();
         if (representativeLockedToneFrameCount < REPRESENTATIVE_LOCKED_TONE_REPLACEMENT_MIN_FRAMES) {
-            return LOCKED_RETUNE_GUARD_MIN_DRIFT_HZ;
+            return configuredMinDriftHz;
         }
         int activeCenterFrequencyHz = histogramLeaderFrequencyHz(activeAcquisitionWinnerHistogram);
         if (activeCenterFrequencyHz > 0
                 && Math.abs(activeCenterFrequencyHz - representativeLockedToneFrequencyHz)
                 > REPRESENTATIVE_LOCKED_TONE_CLUSTER_WINDOW_HZ) {
-            return LOCKED_RETUNE_GUARD_MIN_DRIFT_HZ;
+            return configuredMinDriftHz;
         }
-        return LOCKED_RETUNE_GUARD_NEAR_FREQUENCY_MIN_DRIFT_HZ;
+        return configuredNearFrequencyMinDriftHz;
     }
 
     private boolean shouldUseSoftSearchTarget(
@@ -6634,11 +6703,20 @@ public final class CwSignalProcessor {
     }
 
     private int lockedRetuneGuardRequiredScans(int driftHz, boolean weakReferenceCandidate) {
-        int requiredScans = driftHz >= LOCKED_RETUNE_GUARD_FAR_DRIFT_HZ
+        int farDriftHz = experimentalLockedRetuneGuardTuning == null
+                ? LOCKED_RETUNE_GUARD_FAR_DRIFT_HZ
+                : experimentalLockedRetuneGuardTuning.farDriftHz();
+        int requiredScans = driftHz >= farDriftHz
+                ? experimentalLockedRetuneGuardTuning == null
                 ? LOCKED_RETUNE_GUARD_FAR_REQUIRED_SCANS
-                : LOCKED_RETUNE_GUARD_REQUIRED_SCANS;
+                : experimentalLockedRetuneGuardTuning.farRequiredScans()
+                : experimentalLockedRetuneGuardTuning == null
+                ? LOCKED_RETUNE_GUARD_REQUIRED_SCANS
+                : experimentalLockedRetuneGuardTuning.requiredScans();
         if (weakReferenceCandidate) {
-            requiredScans += LOCKED_RETUNE_GUARD_WEAK_REFERENCE_EXTRA_SCANS;
+            requiredScans += experimentalLockedRetuneGuardTuning == null
+                    ? LOCKED_RETUNE_GUARD_WEAK_REFERENCE_EXTRA_SCANS
+                    : experimentalLockedRetuneGuardTuning.weakReferenceExtraScans();
         }
         return requiredScans;
     }
@@ -6648,10 +6726,13 @@ public final class CwSignalProcessor {
             ToneFrequencyEstimate previousTargetEstimate,
             int driftHz
     ) {
-        double scoreRatio = driftHz >= LOCKED_RETUNE_GUARD_FAR_DRIFT_HZ
+        int farDriftHz = experimentalLockedRetuneGuardTuning == null
+                ? LOCKED_RETUNE_GUARD_FAR_DRIFT_HZ
+                : experimentalLockedRetuneGuardTuning.farDriftHz();
+        double scoreRatio = driftHz >= farDriftHz
                 ? LOCKED_RETUNE_GUARD_FAR_STRONG_SCORE_RATIO
                 : LOCKED_RETUNE_GUARD_STRONG_SCORE_RATIO;
-        double toneRatio = driftHz >= LOCKED_RETUNE_GUARD_FAR_DRIFT_HZ
+        double toneRatio = driftHz >= farDriftHz
                 ? LOCKED_RETUNE_GUARD_FAR_STRONG_TONE_RATIO
                 : LOCKED_RETUNE_GUARD_STRONG_TONE_RATIO;
         return retainedEstimate.selectionScore >= (previousTargetEstimate.selectionScore * scoreRatio)
@@ -6745,7 +6826,10 @@ public final class CwSignalProcessor {
         lockedRetuneGuardObservedScans = observedScans;
         lockedRetuneGuardRequiredScans = requiredScans;
         lockedRetuneGuardRemainingScans = Math.max(0, requiredScans - observedScans);
-        lockedRetuneGuardBand = driftHz >= LOCKED_RETUNE_GUARD_FAR_DRIFT_HZ ? "FAR" : "MID";
+        int farDriftHz = experimentalLockedRetuneGuardTuning == null
+                ? LOCKED_RETUNE_GUARD_FAR_DRIFT_HZ
+                : experimentalLockedRetuneGuardTuning.farDriftHz();
+        lockedRetuneGuardBand = driftHz >= farDriftHz ? "FAR" : "MID";
     }
 
     private boolean isAcquisitionCandidate(ToneFrequencyEstimate estimate) {

@@ -11,6 +11,7 @@ public final class RxSessionSnapshot {
     private final int estimatedWpm;
     private final int stableEstimatedWpm;
     private final String rawText;
+    private final String previewRawText;
     private final String normalizedText;
     private final String primaryCallsignCandidate;
     private final String inputHealthLabel;
@@ -32,6 +33,7 @@ public final class RxSessionSnapshot {
             int estimatedWpm,
             int stableEstimatedWpm,
             String rawText,
+            String previewRawText,
             String normalizedText,
             String primaryCallsignCandidate,
             String inputHealthLabel,
@@ -52,6 +54,7 @@ public final class RxSessionSnapshot {
         this.estimatedWpm = estimatedWpm;
         this.stableEstimatedWpm = stableEstimatedWpm;
         this.rawText = safeText(rawText);
+        this.previewRawText = safeText(previewRawText);
         this.normalizedText = safeText(normalizedText);
         this.primaryCallsignCandidate = safeText(primaryCallsignCandidate);
         this.inputHealthLabel = safeText(inputHealthLabel);
@@ -105,6 +108,14 @@ public final class RxSessionSnapshot {
 
     public boolean hasRawText() {
         return !rawText.trim().isEmpty();
+    }
+
+    public String previewRawText() {
+        return previewRawText;
+    }
+
+    public boolean hasPreviewRawText() {
+        return !previewRawText.trim().isEmpty();
     }
 
     public String normalizedText() {
