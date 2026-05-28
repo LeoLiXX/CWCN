@@ -27,7 +27,9 @@ public final class CwLocalAudioRepeatedSessionProbeTest {
     private static final int REPEAT_COUNT = 3;
     private static final long INTER_REPEAT_SILENCE_MS = 8000L;
     private static final int PREFERRED_TONE_HZ = 700;
+    private static final int OFF_TARGET_PREFERRED_TONE_HZ = 650;
     private static final int SEED_WPM = 15;
+    private static final int OFF_TARGET_SEED_WPM = 18;
     private static final int SQL_PERCENT = 55;
     private static final int[] SEED_SWEEP_WPMS = new int[]{0, 12, 15, 18, 20, 24, 28};
     private static final String EXPECTED_CQ_24WPM_TEXT =
@@ -49,6 +51,23 @@ public final class CwLocalAudioRepeatedSessionProbeTest {
                 "录音 (16)",
                 buildFrames(waveData.samples(), waveData.sampleRateHz()),
                 PREFERRED_TONE_HZ
+        );
+    }
+
+    @Test
+    public void printRepeatedLiveLikeProbeForRecording16_withOffTargetSeedAndTone() throws Exception {
+        Path wavFile = LocalAudioDecodeTestSupport.listConvertedWavFiles().stream()
+                .filter(path -> path.getFileName().toString().endsWith("(16).wav"))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Missing WAV fixture for 录音 (16)"));
+        LocalAudioDecodeTestSupport.WaveDataProbe waveData =
+                LocalAudioDecodeTestSupport.readWaveFileForProbe(wavFile);
+        runRepeatedLiveLikeProbe(
+                "录音 (16) pref650 seed18",
+                buildFrames(waveData.samples(), waveData.sampleRateHz()),
+                OFF_TARGET_PREFERRED_TONE_HZ,
+                OFF_TARGET_SEED_WPM,
+                SQL_PERCENT
         );
     }
 
@@ -856,6 +875,22 @@ public final class CwLocalAudioRepeatedSessionProbeTest {
             List<AudioFrame> baseFrames,
             int preferredToneHz
     ) {
+        runRepeatedLiveLikeProbe(
+                sourceLabel,
+                baseFrames,
+                preferredToneHz,
+                SEED_WPM,
+                SQL_PERCENT
+        );
+    }
+
+    private static void runRepeatedLiveLikeProbe(
+            String sourceLabel,
+            List<AudioFrame> baseFrames,
+            int preferredToneHz,
+            int seedWpm,
+            int sqlPercent
+    ) {
         if (baseFrames == null || baseFrames.isEmpty()) {
             throw new IllegalArgumentException("baseFrames is empty");
         }
@@ -866,8 +901,8 @@ public final class CwLocalAudioRepeatedSessionProbeTest {
                         sourceLabel,
                         timeline.sessionFrames(),
                         preferredToneHz,
-                        SEED_WPM,
-                        SQL_PERCENT,
+                        seedWpm,
+                        sqlPercent,
                         false,
                         org.bi9clt.cwcn.core.interpreter.CwInterpreter.RecoveryMode.RAW_COPY_FOCUS
                 );
@@ -878,8 +913,8 @@ public final class CwLocalAudioRepeatedSessionProbeTest {
                 sourceLabel,
                 REPEAT_COUNT,
                 INTER_REPEAT_SILENCE_MS,
-                SEED_WPM,
-                SQL_PERCENT
+                seedWpm,
+                sqlPercent
         ));
 
         String referenceSettledRoundText = null;

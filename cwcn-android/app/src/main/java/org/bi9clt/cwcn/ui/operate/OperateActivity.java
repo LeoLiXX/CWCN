@@ -347,6 +347,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private RxToneTimingRunner operateToneTimingRunner;
     private CwDecoder operateDecoder;
     private CwInterpreter operateRawInterpreter;
+    private CwInterpreter operatePreviewInterpreter;
     private RxUnknownFallbackTracker operateUnknownFallbackTracker;
     private AudioSpectrumAnalyzer operateAudioSpectrumAnalyzer;
     private LiveRxTraceRecorder operateLiveRxTraceRecorder;
@@ -1904,6 +1905,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         syncOperateTimingSeedWpm();
         operateDecoder = operateRxCore.decoder();
         operateRawInterpreter = operateRxCore.rawInterpreter();
+        operatePreviewInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
         operateUnknownFallbackTracker = new RxUnknownFallbackTracker();
         operateCommittedOutputController = new RxCommittedOutputController(
                 operateRawInterpreter,
@@ -2182,6 +2184,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             if (operateCommittedOutputController != null) {
                 operateCommittedOutputController.reset();
             }
+            if (operatePreviewInterpreter != null) {
+                operatePreviewInterpreter.reset();
+            }
             finishOperateLiveTraceSession("clear");
             lastOperateStableDecodeAtElapsedMs = -1L;
             lastOperateTimingResetAtElapsedMs = -1L;
@@ -2199,6 +2204,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             }
             if (operateCommittedOutputController != null) {
                 operateCommittedOutputController.reset();
+            }
+            if (operatePreviewInterpreter != null) {
+                operatePreviewInterpreter.reset();
             }
             lastRxSessionSnapshot = null;
             lastOperateRxPublishAtElapsedMs = 0L;
@@ -2226,6 +2234,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             }
             if (operateCommittedOutputController != null) {
                 operateCommittedOutputController.reset();
+            }
+            if (operatePreviewInterpreter != null) {
+                operatePreviewInterpreter.reset();
             }
             lastOperateStableDecodeAtElapsedMs = -1L;
             lastOperateTimingResetAtElapsedMs = -1L;
@@ -2864,6 +2875,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     private String renderReceiveMeta(RxSessionSnapshot snapshot) {
         ArrayList<String> parts = new ArrayList<>();
+        if (snapshot.captureActive()
+                && hasMeaningfulText(snapshot.previewRawText())
+                && operateRawCommitGate != null
+                && !operateRawCommitGate.gateOpenInCurrentTurn()) {
+            parts.add(getString(R.string.operate_status_capture_hold));
+        }
         if (!snapshot.captureActive()) {
             parts.add(renderAge(snapshot.updatedAtEpochMs()));
         }
@@ -2884,6 +2901,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 || operateTurnSessionFinalizer == null) {
             return;
         }
+        processOperatePreviewDecodeEvent(decodeEvent);
         boolean stableDecodeAccepted = shouldTreatAsStableOperateDecode(decodeEvent);
         if (stableDecodeAccepted) {
             lastOperateStableDecodeAtElapsedMs = SystemClock.elapsedRealtime();
@@ -2899,6 +2917,16 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 updateActiveRxTranscriptEntryFromDecodeEvent(admittedEvent, System.currentTimeMillis());
             }
         }
+    }
+
+    private void processOperatePreviewDecodeEvent(@Nullable CwDecodeEvent decodeEvent) {
+        if (decodeEvent == null
+                || operatePreviewInterpreter == null
+                || (decodeEvent.type() != CwDecodeEvent.Type.CHARACTER_DECODED
+                && decodeEvent.type() != CwDecodeEvent.Type.WORD_BREAK)) {
+            return;
+        }
+        operatePreviewInterpreter.process(decodeEvent);
     }
 
     @Nullable
@@ -3998,6 +4026,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             if (activeRxTranscriptEntryId != -1L) {
                 finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
             }
+            if (operatePreviewInterpreter != null) {
+                operatePreviewInterpreter.reset();
+            }
             clearOperateRxCarryoverForFreshTurn();
             beginActiveRxTranscriptTurn(System.currentTimeMillis());
             traceOperateMarker("turn-start", observation.reason(), nowElapsedMs);
@@ -4010,6 +4041,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             );
             finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
             traceOperateMarker("turn-end", observation.reason(), nowElapsedMs);
+            if (operatePreviewInterpreter != null) {
+                operatePreviewInterpreter.reset();
+            }
             if (observation.frontEndResetApplied()) {
                 syncOperatePreferredTone();
                 syncOperateRxToneMode(nowElapsedMs);
@@ -4182,6 +4216,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         CwInterpreterSnapshot rawSnapshot = operateCommittedOutputController == null
                 ? null
                 : operateCommittedOutputController.rawSnapshot();
+        CwInterpreterSnapshot previewSnapshot = operatePreviewInterpreter == null
+                ? null
+                : operatePreviewInterpreter.snapshot();
         AudioInputHealthSnapshot inputHealthSnapshot = operateAudioInputHealthTracker == null
                 ? null
                 : operateAudioInputHealthTracker.snapshot();
@@ -4205,6 +4242,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 timingSnapshot.estimatedWpm(),
                 stableEstimatedWpm,
                 rawSnapshot == null ? "" : rawSnapshot.rawText(),
+                previewSnapshot == null ? "" : previewSnapshot.rawText(),
                 rawSnapshot == null ? "" : rawSnapshot.normalizedText(),
                 rawPrimaryCallsign == null ? "" : rawPrimaryCallsign,
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.summaryLabel(inputHealthSnapshot),
@@ -6082,7 +6120,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     null
             ));
         } else {
-            String rawText = normalizedTextOrNull(snapshot.rawText());
+            String rawText = normalizedTextOrNull(resolveVisibleRxCardText(snapshot));
             entries.add(new StreamEntry(
                     "RX",
                     renderTranscriptTimestamp(snapshot.updatedAtEpochMs()),
@@ -6114,6 +6152,27 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             ));
         }
         return entries;
+    }
+
+    private String resolveVisibleRxCardText(@Nullable RxSessionSnapshot snapshot) {
+        if (snapshot == null) {
+            return "";
+        }
+        String committedText = normalizedTextOrNull(snapshot.rawText());
+        String previewText = normalizedTextOrNull(snapshot.previewRawText());
+        if (snapshot.captureActive()
+                && hasMeaningfulText(previewText)
+                && !hasMeaningfulText(committedText)) {
+            return previewText;
+        }
+        if (snapshot.captureActive()
+                && hasMeaningfulText(previewText)
+                && operateRawCommitGate != null
+                && !operateRawCommitGate.gateOpenInCurrentTurn()
+                && previewText.length() > (committedText == null ? 0 : committedText.length())) {
+            return previewText;
+        }
+        return committedText == null ? "" : committedText;
     }
 }
 

@@ -58,13 +58,29 @@ final class LocalAudioDecodeTestSupport {
     private static final int DEFAULT_SQL_PERCENT = 55;
     private static final double LIVE_CHARACTER_FLUSH_GAP_RATIO = 3.35d;
     private static final long FRONT_END_AUTHORITY_HOLD_MS = 420L;
+    private static final long DEFAULT_LIVE_LIKE_PRE_TRUST_AUTOTRACK_FALLBACK_DELAY_MS = 48L;
+    private static final double LIVE_LIKE_FIXED_BOOTSTRAP_PROGRESS_LOCKED_RATIO_MIN = 0.30d;
+    private static final int LIVE_LIKE_FIXED_BOOTSTRAP_PROGRESS_CONSECUTIVE_LOCKED_FRAMES_MIN = 4;
+    private static final int LIVE_LIKE_POST_TRUST_PENDING_RETUNE_DRIFT_MIN_HZ = 25;
+    private static final int LIVE_LIKE_POST_TRUST_FIXED_HOLD_MIN_OFFSET_HZ = 60;
+    private static final long LIVE_LIKE_POST_TRUST_FIXED_GRACE_MS = 320L;
+    private static final double LIVE_LIKE_POST_TRUST_FIXED_GRACE_LOCKED_RATIO_MIN = 0.45d;
+    private static final int LIVE_LIKE_POST_TRUST_FIXED_GRACE_CONSECUTIVE_LOCKED_FRAMES_MIN = 2;
+    private static final double LIVE_LIKE_POST_TRUST_FIXED_GRACE_NEAR_TARGET_LOCKED_RATIO_MIN =
+            0.68d;
     private static final ThreadLocal<LiveLikeProbeDiagnosticsCollector> LIVE_LIKE_DIAGNOSTICS =
             new ThreadLocal<>();
     private static final ThreadLocal<Long> LIVE_LIKE_FIXED_HOLD_UNTIL_MS = new ThreadLocal<>();
+    private static final ThreadLocal<Long> LIVE_LIKE_PRE_TRUST_AUTOTRACK_FALLBACK_DELAY_MS =
+            new ThreadLocal<>();
     private static final ThreadLocal<LiveLikeFrameHook> LIVE_LIKE_FRAME_HOOK = new ThreadLocal<>();
     private static final ThreadLocal<Boolean> LIVE_LIKE_FORCE_WIDE_ACQUISITION = new ThreadLocal<>();
     private static final ThreadLocal<Integer> LIVE_LIKE_FIXED_TONE_LEARNING_WINDOW_HZ =
             new ThreadLocal<>();
+    private static final ThreadLocal<CwSignalProcessor.ExperimentalLockedRetuneGuardTuning>
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING = new ThreadLocal<>();
+    private static final ThreadLocal<CwHybridTimingModel.ExperimentalTrustedSlowUpdateTuning>
+            LIVE_LIKE_TRUSTED_SLOW_UPDATE_TUNING = new ThreadLocal<>();
 
     private enum LiveLikeRxToneModeStrategy {
         HYBRID_BOOTSTRAP,
@@ -261,6 +277,11 @@ final class LocalAudioDecodeTestSupport {
         Integer fixedToneLearningWindowHz = LIVE_LIKE_FIXED_TONE_LEARNING_WINDOW_HZ.get();
         if (fixedToneLearningWindowHz != null) {
             signalProcessor.setFixedToneLearningWindowHz(fixedToneLearningWindowHz);
+        }
+        CwSignalProcessor.ExperimentalLockedRetuneGuardTuning lockedRetuneGuardTuning =
+                LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.get();
+        if (lockedRetuneGuardTuning != null) {
+            signalProcessor.setExperimentalLockedRetuneGuardTuning(lockedRetuneGuardTuning);
         }
         signalProcessor.setExperimentalHypothesisGuardEnabled(experimentalHypothesisGuardEnabled);
         signalProcessor.setExperimentalForceWideAcquisitionEnabled(
@@ -570,6 +591,139 @@ final class LocalAudioDecodeTestSupport {
                     recoveryMode
             );
         } finally {
+            LIVE_LIKE_FIXED_TONE_LEARNING_WINDOW_HZ.remove();
+            LIVE_LIKE_FIXED_HOLD_UNTIL_MS.remove();
+        }
+    }
+
+    static OfflineDetailedProbeResult decodeFramesDetailedLiveLikeHybridBootstrapExperimental(
+            String sourceLabel,
+            List<AudioFrame> frames,
+            int preferredToneFrequencyHz,
+            int seedWpm,
+            int sqlPercent,
+            boolean experimentalHypothesisGuardEnabled,
+            long preTrustAutoTrackFallbackDelayMs,
+            @Nullable CwSignalProcessor.ExperimentalLockedRetuneGuardTuning lockedRetuneGuardTuning,
+            CwInterpreter.RecoveryMode recoveryMode
+    ) {
+        LIVE_LIKE_PRE_TRUST_AUTOTRACK_FALLBACK_DELAY_MS.set(
+                Math.max(0L, preTrustAutoTrackFallbackDelayMs)
+        );
+        if (lockedRetuneGuardTuning != null) {
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.set(lockedRetuneGuardTuning);
+        } else {
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.remove();
+        }
+        try {
+            return decodeFramesDetailedLiveLike(
+                    sourceLabel,
+                    frames,
+                    preferredToneFrequencyHz,
+                    seedWpm,
+                    sqlPercent,
+                    experimentalHypothesisGuardEnabled,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    LiveLikeRxToneModeStrategy.HYBRID_BOOTSTRAP,
+                    recoveryMode
+            );
+        } finally {
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.remove();
+            LIVE_LIKE_PRE_TRUST_AUTOTRACK_FALLBACK_DELAY_MS.remove();
+        }
+    }
+
+    static OfflineDetailedProbeResult decodeFramesDetailedLiveLikeHybridBootstrapExperimental(
+            String sourceLabel,
+            List<AudioFrame> frames,
+            int preferredToneFrequencyHz,
+            int seedWpm,
+            int sqlPercent,
+            boolean experimentalHypothesisGuardEnabled,
+            long preTrustAutoTrackFallbackDelayMs,
+            @Nullable CwSignalProcessor.ExperimentalLockedRetuneGuardTuning lockedRetuneGuardTuning,
+            @Nullable CwHybridTimingModel.ExperimentalTrustedSlowUpdateTuning trustedSlowUpdateTuning,
+            CwInterpreter.RecoveryMode recoveryMode
+    ) {
+        LIVE_LIKE_PRE_TRUST_AUTOTRACK_FALLBACK_DELAY_MS.set(
+                Math.max(0L, preTrustAutoTrackFallbackDelayMs)
+        );
+        if (lockedRetuneGuardTuning != null) {
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.set(lockedRetuneGuardTuning);
+        } else {
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.remove();
+        }
+        if (trustedSlowUpdateTuning != null) {
+            LIVE_LIKE_TRUSTED_SLOW_UPDATE_TUNING.set(trustedSlowUpdateTuning);
+        } else {
+            LIVE_LIKE_TRUSTED_SLOW_UPDATE_TUNING.remove();
+        }
+        try {
+            return decodeFramesDetailedLiveLike(
+                    sourceLabel,
+                    frames,
+                    preferredToneFrequencyHz,
+                    seedWpm,
+                    sqlPercent,
+                    experimentalHypothesisGuardEnabled,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    LiveLikeRxToneModeStrategy.HYBRID_BOOTSTRAP,
+                    recoveryMode
+            );
+        } finally {
+            LIVE_LIKE_TRUSTED_SLOW_UPDATE_TUNING.remove();
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.remove();
+            LIVE_LIKE_PRE_TRUST_AUTOTRACK_FALLBACK_DELAY_MS.remove();
+        }
+    }
+
+    static OfflineDetailedProbeResult decodeFramesDetailedLiveLikeFixedHoldThenAutoExperimental(
+            String sourceLabel,
+            List<AudioFrame> frames,
+            int preferredToneFrequencyHz,
+            int seedWpm,
+            int sqlPercent,
+            boolean experimentalHypothesisGuardEnabled,
+            long fixedHoldUntilMs,
+            int fixedToneLearningWindowHz,
+            @Nullable CwSignalProcessor.ExperimentalLockedRetuneGuardTuning lockedRetuneGuardTuning,
+            CwInterpreter.RecoveryMode recoveryMode
+    ) {
+        LIVE_LIKE_FIXED_HOLD_UNTIL_MS.set(Math.max(0L, fixedHoldUntilMs));
+        LIVE_LIKE_FIXED_TONE_LEARNING_WINDOW_HZ.set(
+                CwSignalProcessor.clampFixedToneLearningWindowHz(fixedToneLearningWindowHz)
+        );
+        if (lockedRetuneGuardTuning != null) {
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.set(lockedRetuneGuardTuning);
+        } else {
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.remove();
+        }
+        try {
+            return decodeFramesDetailedLiveLike(
+                    sourceLabel,
+                    frames,
+                    preferredToneFrequencyHz,
+                    seedWpm,
+                    sqlPercent,
+                    experimentalHypothesisGuardEnabled,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    LiveLikeRxToneModeStrategy.FIXED_HOLD_THEN_AUTO,
+                    recoveryMode
+            );
+        } finally {
+            LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.remove();
             LIVE_LIKE_FIXED_TONE_LEARNING_WINDOW_HZ.remove();
             LIVE_LIKE_FIXED_HOLD_UNTIL_MS.remove();
         }
@@ -1139,11 +1293,24 @@ final class LocalAudioDecodeTestSupport {
         if (fixedToneLearningWindowHz != null) {
             signalProcessor.setFixedToneLearningWindowHz(fixedToneLearningWindowHz);
         }
+        CwSignalProcessor.ExperimentalLockedRetuneGuardTuning lockedRetuneGuardTuning =
+                LIVE_LIKE_LOCKED_RETUNE_GUARD_TUNING.get();
+        if (lockedRetuneGuardTuning != null) {
+            signalProcessor.setExperimentalLockedRetuneGuardTuning(lockedRetuneGuardTuning);
+        }
         signalProcessor.setExperimentalHypothesisGuardEnabled(experimentalHypothesisGuardEnabled);
+        signalProcessor.setExperimentalForceWideAcquisitionEnabled(
+                Boolean.TRUE.equals(LIVE_LIKE_FORCE_WIDE_ACQUISITION.get())
+        );
 
         CwHybridTimingModel timingModel = new CwHybridTimingModel();
         timingModel.setIdleResetEnabled(false);
         timingModel.setSeedWpm(seedWpm);
+        CwHybridTimingModel.ExperimentalTrustedSlowUpdateTuning trustedSlowUpdateTuning =
+                LIVE_LIKE_TRUSTED_SLOW_UPDATE_TUNING.get();
+        if (trustedSlowUpdateTuning != null) {
+            timingModel.setExperimentalTrustedSlowUpdateTuning(trustedSlowUpdateTuning);
+        }
         CwDecoder decoder = new CwDecoder();
         CwInterpreter interpreter = new CwInterpreter(recoveryMode);
         QsoStateMachine qsoStateMachine = new QsoStateMachine();
@@ -1618,8 +1785,10 @@ final class LocalAudioDecodeTestSupport {
             return false;
         }
         return signalSnapshot.targetToneLocked()
-                || signalSnapshot.consecutiveLockedFrames() >= 4
-                || signalSnapshot.recentLockedFrameRatio() >= 0.30d;
+                || signalSnapshot.consecutiveLockedFrames()
+                >= LIVE_LIKE_FIXED_BOOTSTRAP_PROGRESS_CONSECUTIVE_LOCKED_FRAMES_MIN
+                || signalSnapshot.recentLockedFrameRatio()
+                >= LIVE_LIKE_FIXED_BOOTSTRAP_PROGRESS_LOCKED_RATIO_MIN;
     }
 
     private static boolean isEligibleForPreTrustAutoTrackFallback(
@@ -1636,7 +1805,7 @@ final class LocalAudioDecodeTestSupport {
         if (turnStartedAtMs <= 0L || nowTimestampMs < turnStartedAtMs) {
             return false;
         }
-        if ((nowTimestampMs - turnStartedAtMs) < 48L) {
+        if ((nowTimestampMs - turnStartedAtMs) < liveLikePreTrustAutoTrackFallbackDelayMs()) {
             return false;
         }
         return !showsUsefulFixedToneBootstrapProgress(signalSnapshot);
@@ -1674,12 +1843,175 @@ final class LocalAudioDecodeTestSupport {
                     ? CwSignalProcessor.RxToneMode.AUTO_TRACK
                     : CwSignalProcessor.RxToneMode.FIXED_TONE;
         }
-        return RxToneModeBootstrapDecider.resolveHybridBootstrapMode(
+        if (LIVE_LIKE_PRE_TRUST_AUTOTRACK_FALLBACK_DELAY_MS.get() == null) {
+            return RxToneModeBootstrapDecider.resolveHybridBootstrapMode(
+                    trustedTimingEstablished,
+                    turnController,
+                    signalSnapshot,
+                    nowTimestampMs
+            );
+        }
+        return resolveHybridBootstrapModeForTest(
                 trustedTimingEstablished,
+                turnController,
+                signalSnapshot,
+                nowTimestampMs,
+                liveLikePreTrustAutoTrackFallbackDelayMs()
+        );
+    }
+
+    private static CwSignalProcessor.RxToneMode resolveHybridBootstrapModeForTest(
+            boolean trustedTimingEstablished,
+            @Nullable RxTurnController turnController,
+            @Nullable CwSignalSnapshot signalSnapshot,
+            long nowTimestampMs,
+            long preTrustAutoTrackFallbackDelayMs
+    ) {
+        if (turnController != null && showsUsefulFixedToneBootstrapProgress(signalSnapshot)) {
+            turnController.noteBootstrapFixedProgressObserved();
+        }
+        if (turnController != null && turnController.bootstrapAutoTrackFallbackLatched()) {
+            return CwSignalProcessor.RxToneMode.AUTO_TRACK;
+        }
+        if (trustedTimingEstablished) {
+            if (turnController != null) {
+                turnController.noteTrustedTimingEstablished(nowTimestampMs);
+            }
+            return shouldKeepFixedToneAfterTrustForTest(turnController, signalSnapshot, nowTimestampMs)
+                    ? CwSignalProcessor.RxToneMode.FIXED_TONE
+                    : CwSignalProcessor.RxToneMode.AUTO_TRACK;
+        }
+        if (shouldUseAutoTrackBeforeTrustForTest(
+                turnController,
+                signalSnapshot,
+                nowTimestampMs,
+                preTrustAutoTrackFallbackDelayMs
+        )) {
+            if (turnController != null) {
+                turnController.latchBootstrapAutoTrackFallback();
+            }
+            return CwSignalProcessor.RxToneMode.AUTO_TRACK;
+        }
+        return CwSignalProcessor.RxToneMode.FIXED_TONE;
+    }
+
+    private static boolean shouldUseAutoTrackBeforeTrustForTest(
+            @Nullable RxTurnController turnController,
+            @Nullable CwSignalSnapshot signalSnapshot,
+            long nowTimestampMs,
+            long preTrustAutoTrackFallbackDelayMs
+    ) {
+        if (turnController == null
+                || turnController.phase() != RxTurnController.Phase.ACTIVE
+                || nowTimestampMs <= 0L) {
+            return false;
+        }
+        long turnStartedAtMs = turnController.currentTurnStartedAtMs();
+        if (turnStartedAtMs <= 0L || nowTimestampMs < turnStartedAtMs) {
+            return false;
+        }
+        if ((nowTimestampMs - turnStartedAtMs) < Math.max(0L, preTrustAutoTrackFallbackDelayMs)) {
+            return false;
+        }
+        if (turnController.bootstrapFixedProgressObservedThisTurn()) {
+            return false;
+        }
+        return !showsUsefulFixedToneBootstrapProgress(signalSnapshot);
+    }
+
+    private static boolean shouldKeepFixedToneAfterTrustForTest(
+            @Nullable RxTurnController turnController,
+            @Nullable CwSignalSnapshot signalSnapshot,
+            long nowTimestampMs
+    ) {
+        if (!showsUsefulFixedToneBootstrapProgress(signalSnapshot)
+                && (turnController == null
+                || !turnController.bootstrapFixedProgressObservedThisTurn())) {
+            return false;
+        }
+        if (showsExplicitRetunePressureForTest(signalSnapshot)) {
+            return false;
+        }
+        if (turnController != null && turnController.bootstrapFixedProgressObservedThisTurn()) {
+            return true;
+        }
+        return showsMaterialOffPreferredTrackingForTest(signalSnapshot)
+                || shouldApplyShortPostTrustFixedGraceForTest(
                 turnController,
                 signalSnapshot,
                 nowTimestampMs
         );
+    }
+
+    private static boolean shouldApplyShortPostTrustFixedGraceForTest(
+            @Nullable RxTurnController turnController,
+            @Nullable CwSignalSnapshot signalSnapshot,
+            long nowTimestampMs
+    ) {
+        if (turnController == null
+                || signalSnapshot == null
+                || !turnController.bootstrapFixedProgressObservedThisTurn()) {
+            return false;
+        }
+        long trustedTimingEstablishedAtMs = turnController.trustedTimingEstablishedAtMs();
+        if (trustedTimingEstablishedAtMs <= 0L
+                || nowTimestampMs < trustedTimingEstablishedAtMs
+                || (nowTimestampMs - trustedTimingEstablishedAtMs)
+                > LIVE_LIKE_POST_TRUST_FIXED_GRACE_MS) {
+            return false;
+        }
+        if (!signalSnapshot.targetToneLocked()
+                && signalSnapshot.consecutiveLockedFrames()
+                < LIVE_LIKE_POST_TRUST_FIXED_GRACE_CONSECUTIVE_LOCKED_FRAMES_MIN) {
+            return false;
+        }
+        if (signalSnapshot.recentLockedFrameRatio()
+                < LIVE_LIKE_POST_TRUST_FIXED_GRACE_LOCKED_RATIO_MIN) {
+            return false;
+        }
+        return signalSnapshot.recentNearTargetLockedFrameRatio()
+                >= LIVE_LIKE_POST_TRUST_FIXED_GRACE_NEAR_TARGET_LOCKED_RATIO_MIN;
+    }
+
+    private static boolean showsExplicitRetunePressureForTest(
+            @Nullable CwSignalSnapshot signalSnapshot
+    ) {
+        if (signalSnapshot == null) {
+            return false;
+        }
+        int pendingCandidateHz = signalSnapshot.pendingRetuneCandidateFrequencyHz();
+        int targetToneHz = signalSnapshot.targetToneFrequencyHz();
+        boolean materiallyDifferentPendingCandidate = pendingCandidateHz > 0
+                && targetToneHz > 0
+                && Math.abs(pendingCandidateHz - targetToneHz)
+                >= LIVE_LIKE_POST_TRUST_PENDING_RETUNE_DRIFT_MIN_HZ;
+        return (signalSnapshot.pendingRetuneCandidateStableScans() > 0
+                && materiallyDifferentPendingCandidate)
+                || signalSnapshot.lockedRetuneGuardHolding()
+                || signalSnapshot.lockedRetuneGuardObservedScans() > 0;
+    }
+
+    private static boolean showsMaterialOffPreferredTrackingForTest(
+            @Nullable CwSignalSnapshot signalSnapshot
+    ) {
+        if (signalSnapshot == null) {
+            return false;
+        }
+        int preferredToneHz = signalSnapshot.preferredToneFrequencyHz();
+        if (preferredToneHz <= 0) {
+            return false;
+        }
+        return Math.abs(signalSnapshot.effectiveTrackedToneFrequencyHz() - preferredToneHz)
+                >= LIVE_LIKE_POST_TRUST_FIXED_HOLD_MIN_OFFSET_HZ
+                || Math.abs(signalSnapshot.toneHypothesisFrequencyHz() - preferredToneHz)
+                >= LIVE_LIKE_POST_TRUST_FIXED_HOLD_MIN_OFFSET_HZ;
+    }
+
+    private static long liveLikePreTrustAutoTrackFallbackDelayMs() {
+        Long value = LIVE_LIKE_PRE_TRUST_AUTOTRACK_FALLBACK_DELAY_MS.get();
+        return value == null
+                ? DEFAULT_LIVE_LIKE_PRE_TRUST_AUTOTRACK_FALLBACK_DELAY_MS
+                : Math.max(0L, value);
     }
 
     private static long liveLikeFixedHoldUntilMs() {

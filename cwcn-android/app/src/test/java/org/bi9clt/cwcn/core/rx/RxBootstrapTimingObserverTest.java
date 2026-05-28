@@ -178,6 +178,36 @@ public final class RxBootstrapTimingObserverTest {
         assertEquals("already-trusted", decision);
     }
 
+    @Test
+    public void structuredLetterGapCanStillBootstrapBoundaryTrust() {
+        String decision = RxBootstrapTimingObserver.diagnoseBootstrapTimingBoundaryDecision(
+                gapEvent(200L, 150L, 50L, 50L, CwTimingEvent.Classification.LETTER_GAP),
+                strongSignal(),
+                timingSnapshotFromDotMs(50L),
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertEquals("pass", decision);
+    }
+
+    @Test
+    public void raggedLetterGapDoesNotBootstrapBoundaryTrust() {
+        String decision = RxBootstrapTimingObserver.diagnoseBootstrapTimingBoundaryDecision(
+                gapEvent(200L, 260L, 50L, 50L, CwTimingEvent.Classification.LETTER_GAP),
+                strongSignal(),
+                timingSnapshotFromDotMs(50L),
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertEquals("not-bootstrap-gap", decision);
+    }
+
     private static CwTimingSnapshot timingSnapshotFromDotMs(long dotMs) {
         return new CwTimingSnapshot(
                 dotMs,
@@ -197,13 +227,29 @@ public final class RxBootstrapTimingObserverTest {
             long dotEstimateMs,
             CwTimingEvent.Classification classification
     ) {
+        return gapEvent(
+                timestampMs,
+                durationMs,
+                dotEstimateMs,
+                dotEstimateMs,
+                classification
+        );
+    }
+
+    private static CwTimingEvent gapEvent(
+            long timestampMs,
+            long durationMs,
+            long dotEstimateMs,
+            long intraGapEstimateMs,
+            CwTimingEvent.Classification classification
+    ) {
         return new CwTimingEvent(
                 CwTimingEvent.Kind.GAP,
                 classification,
                 timestampMs,
                 durationMs,
                 dotEstimateMs,
-                dotEstimateMs
+                intraGapEstimateMs
         );
     }
 

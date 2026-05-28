@@ -17,6 +17,14 @@ public final class RxBootstrapTimingObserver {
     private static final long BOOTSTRAP_CADENCE_MAX_GAP_MS = 85L;
     private static final double BOOTSTRAP_CADENCE_MIN_GAP_TO_DOT_RATIO = 0.78d;
     private static final double BOOTSTRAP_CADENCE_MAX_GAP_TO_DOT_RATIO = 1.22d;
+    private static final double BOOTSTRAP_BOUNDARY_LETTER_MIN_DOT_RATIO = 2.35d;
+    private static final double BOOTSTRAP_BOUNDARY_LETTER_MAX_DOT_RATIO = 4.20d;
+    private static final double BOOTSTRAP_BOUNDARY_LETTER_MIN_INTRA_RATIO = 2.20d;
+    private static final double BOOTSTRAP_BOUNDARY_LETTER_MAX_INTRA_RATIO = 4.50d;
+    private static final double BOOTSTRAP_BOUNDARY_WORD_MIN_DOT_RATIO = 5.20d;
+    private static final double BOOTSTRAP_BOUNDARY_WORD_MAX_DOT_RATIO = 8.80d;
+    private static final double BOOTSTRAP_BOUNDARY_WORD_MIN_INTRA_RATIO = 4.60d;
+    private static final double BOOTSTRAP_BOUNDARY_WORD_MAX_INTRA_RATIO = 9.20d;
 
     private RxBootstrapTimingObserver() {
     }
@@ -360,7 +368,7 @@ public final class RxBootstrapTimingObserver {
         }
         if (timingEvent.classification() == CwTimingEvent.Classification.LETTER_GAP
                 || timingEvent.classification() == CwTimingEvent.Classification.WORD_GAP) {
-            return true;
+            return isReliableStructuredBoundaryGap(timingEvent);
         }
         if (timingEvent.classification() != CwTimingEvent.Classification.UNKNOWN) {
             return false;
@@ -414,5 +422,33 @@ public final class RxBootstrapTimingObserver {
             return 0L;
         }
         return candidateDotEstimateMs;
+    }
+
+    private static boolean isReliableStructuredBoundaryGap(@Nullable CwTimingEvent timingEvent) {
+        if (timingEvent == null || timingEvent.kind() != CwTimingEvent.Kind.GAP) {
+            return false;
+        }
+        double dotRatio = timingEvent.ratioToDotEstimate();
+        double intraRatio = timingEvent.ratioToIntraGapEstimate();
+        boolean hasIntraReference = timingEvent.intraGapEstimateMs() > 0L;
+        if (timingEvent.classification() == CwTimingEvent.Classification.LETTER_GAP) {
+            if (dotRatio < BOOTSTRAP_BOUNDARY_LETTER_MIN_DOT_RATIO
+                    || dotRatio > BOOTSTRAP_BOUNDARY_LETTER_MAX_DOT_RATIO) {
+                return false;
+            }
+            return !hasIntraReference
+                    || (intraRatio >= BOOTSTRAP_BOUNDARY_LETTER_MIN_INTRA_RATIO
+                    && intraRatio <= BOOTSTRAP_BOUNDARY_LETTER_MAX_INTRA_RATIO);
+        }
+        if (timingEvent.classification() == CwTimingEvent.Classification.WORD_GAP) {
+            if (dotRatio < BOOTSTRAP_BOUNDARY_WORD_MIN_DOT_RATIO
+                    || dotRatio > BOOTSTRAP_BOUNDARY_WORD_MAX_DOT_RATIO) {
+                return false;
+            }
+            return !hasIntraReference
+                    || (intraRatio >= BOOTSTRAP_BOUNDARY_WORD_MIN_INTRA_RATIO
+                    && intraRatio <= BOOTSTRAP_BOUNDARY_WORD_MAX_INTRA_RATIO);
+        }
+        return false;
     }
 }

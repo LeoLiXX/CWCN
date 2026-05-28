@@ -3328,6 +3328,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 timingSnapshot.estimatedWpm(),
                 timingSnapshot.estimatedWpm(),
                 interpreterSnapshot == null ? "" : interpreterSnapshot.rawText(),
+                interpreterSnapshot == null ? "" : interpreterSnapshot.rawText(),
                 interpreterSnapshot == null ? "" : interpreterSnapshot.normalizedText(),
                 primaryCallsignCandidate,
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.summaryLabel(inputHealthSnapshot),
