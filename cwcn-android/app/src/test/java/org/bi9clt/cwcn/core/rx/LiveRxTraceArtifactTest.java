@@ -49,8 +49,8 @@ public final class LiveRxTraceArtifactTest {
         assertEquals(0, artifact.sampleRateHz());
         assertEquals(0L, artifact.sampleCount());
         assertFalse(artifact.hasPreferredToneFrequency());
-        assertTrue(artifact.hasSqlPercent());
-        assertEquals(100, artifact.sqlPercent());
+        assertTrue(artifact.hasSqlLevel());
+        assertEquals(120, artifact.sqlLevel());
         assertFalse(artifact.hasReplayableAudio());
         assertFalse(artifact.hasTraceLog());
     }

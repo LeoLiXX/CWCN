@@ -47,7 +47,7 @@ public final class LiveRxTraceRecorder {
     private long writtenSampleCount;
     private int sampleRateHz;
     private int preferredToneFrequencyHz = -1;
-    private int sqlPercent = -1;
+    private int sqlLevel = -1;
     private boolean active;
 
     public LiveRxTraceRecorder(Context context, LiveRxTraceStore traceStore) {
@@ -59,13 +59,13 @@ public final class LiveRxTraceRecorder {
         return active;
     }
 
-    public synchronized void startSession(String sourceLabel, int preferredToneFrequencyHz, int sqlPercent) {
+    public synchronized void startSession(String sourceLabel, int preferredToneFrequencyHz, int sqlLevel) {
         finishSession("restart");
         startedAtEpochMs = System.currentTimeMillis();
         startedAtElapsedMs = SystemClock.elapsedRealtime();
         this.sourceLabel = safeText(sourceLabel);
         this.preferredToneFrequencyHz = preferredToneFrequencyHz > 0 ? preferredToneFrequencyHz : -1;
-        this.sqlPercent = sqlPercent < 0 ? -1 : Math.min(100, sqlPercent);
+        this.sqlLevel = sqlLevel < 0 ? -1 : sqlLevel;
         sessionLabel = buildSessionLabel(this.sourceLabel, startedAtEpochMs);
         sessionDirectory = new File(resolveBaseDirectory(), sessionLabel);
         if (!sessionDirectory.exists() && !sessionDirectory.mkdirs()) {
@@ -82,7 +82,7 @@ public final class LiveRxTraceRecorder {
             logLine(0L, "SESSION",
                     "start source=" + sanitizeValue(this.sourceLabel)
                             + " preferredToneHz=" + preferredToneFrequencyHz
-                            + " sqlPercent=" + sqlPercent);
+                            + " sqlLevel=" + sqlLevel);
             active = true;
         } catch (IOException exception) {
             closeQuietly(logWriter);
@@ -241,7 +241,7 @@ public final class LiveRxTraceRecorder {
                     sampleRateHz,
                     writtenSampleCount,
                     preferredToneFrequencyHz,
-                    sqlPercent
+                    sqlLevel
             ));
             pruneOldTraceDirectories();
         }
@@ -382,7 +382,7 @@ public final class LiveRxTraceRecorder {
         writtenSampleCount = 0L;
         sampleRateHz = 0;
         preferredToneFrequencyHz = -1;
-        sqlPercent = -1;
+        sqlLevel = -1;
         active = false;
     }
 

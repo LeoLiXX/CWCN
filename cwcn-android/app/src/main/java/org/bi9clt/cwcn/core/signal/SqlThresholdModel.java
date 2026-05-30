@@ -1,8 +1,10 @@
 package org.bi9clt.cwcn.core.signal;
 
 public final class SqlThresholdModel {
-    public static final int DEFAULT_SQL_PERCENT = 55;
+    public static final int DEFAULT_SQL_PERCENT = 60;
     public static final int SAFETY_FLOOR_THRESHOLD = 90;
+    public static final int MIN_MANUAL_THRESHOLD = 100;
+    public static final int MAX_MANUAL_THRESHOLD = 20000;
     private static final int MIN_SQL_SAFETY_FLOOR_THRESHOLD = 60;
     private static volatile Integer testingSafetyFloorThresholdOverride;
 
@@ -14,6 +16,7 @@ public final class SqlThresholdModel {
     private static final int MIN_TONE_HEADROOM = 4;
     private static final double TONE_HEADROOM_RATIO = 0.05d;
     private static final double RELEASE_RETAIN_RATIO = 0.92d;
+    private static final double MANUAL_SQL_CURVE = 0.82d;
 
     private SqlThresholdModel() {
     }
@@ -162,6 +165,43 @@ public final class SqlThresholdModel {
 
     public static int clampSqlPercent(int sqlPercent) {
         return Math.max(0, Math.min(100, sqlPercent));
+    }
+
+    public static int clampManualThreshold(int threshold) {
+        return Math.max(MIN_MANUAL_THRESHOLD, Math.min(MAX_MANUAL_THRESHOLD, threshold));
+    }
+
+    public static int manualThresholdFromPercent(
+            int sqlPercent,
+            double noiseFloorEstimate,
+            double signalFloorEstimate,
+            double toneLevelEstimate
+    ) {
+        int clampedSqlPercent = clampSqlPercent(sqlPercent);
+        double noise = Math.max(0.0d, noiseFloorEstimate);
+        double signal = Math.max(noise, signalFloorEstimate);
+        double tone = Math.max(0.0d, toneLevelEstimate);
+        double referenceSignal = Math.max(signal, tone);
+        if (referenceSignal <= 0.0d) {
+            return (int) Math.round(safetyFloorThreshold(clampedSqlPercent) * (clampedSqlPercent / 100.0d));
+        }
+        int noiseClearance = Math.max(
+                MIN_NOISE_CLEARANCE,
+                (int) Math.round(noise * NOISE_CLEARANCE_RATIO)
+        );
+        double floor = noise + noiseClearance;
+        double span = Math.max(
+                USER_TRIM_MIN_RANGE,
+                Math.max(0.0d, referenceSignal - noise) * USER_TRIM_SIGNAL_RATIO
+        );
+        double ceiling = Math.max(referenceSignal, floor + span);
+        if (clampedSqlPercent >= 100) {
+            return (int) Math.round(ceiling);
+        }
+        double normalizedPercent = clampedSqlPercent / 100.0d;
+        double curvedPercent = Math.pow(normalizedPercent, MANUAL_SQL_CURVE);
+        double mappedThreshold = floor + ((ceiling - floor) * curvedPercent);
+        return Math.max(0, (int) Math.round(mappedThreshold));
     }
 
     public static final class Recommendation {

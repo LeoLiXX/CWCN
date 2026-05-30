@@ -605,8 +605,34 @@
                 android:id="@+id/sqlSeekBar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:max="100"
-                android:progress="55" />
+                android:max="2000"
+                android:progress="600" />
+
+            <TextView
+                android:id="@+id/sqlMeterDetailText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:lines="1"
+                android:textColor="@color/cwcn_body"
+                android:textSize="11sp" />
+
+            <org.bi9clt.cwcn.ui.spectrum.SqlSignalMeterView
+                android:id="@+id/sqlMeterView"
+                android:layout_width="match_parent"
+                android:layout_height="22dp"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/sqlMeterHintText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:lines="2"
+                android:textColor="@color/cwcn_subtitle"
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/wpmLabelText"

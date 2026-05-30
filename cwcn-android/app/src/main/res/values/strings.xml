@@ -363,7 +363,7 @@
     <string name="operate_tx_repeat_interval_value">15s</string>
     <string name="operate_tx_repeat_countdown_compact">重发 %1$d秒</string>
     <string name="operate_overlay_close_cd">关闭浮层</string>
-    <string name="operate_sql_label">SQL 门限</string>
+    <string name="operate_sql_label">手动 SQL</string>
     <string name="operate_wpm_label">发射速度</string>
     <string name="operate_open_template_library_cd">打开模板列表</string>
     <string name="operate_open_chart_overlay_cd">打开频谱浮层</string>
@@ -480,9 +480,10 @@
     <string name="operate_overlay_line_input">输入: %1$s</string>
     <string name="operate_overlay_line_updated">更新时间: %1$s</string>
     <string name="operate_sql_chip">SQL %1$d</string>
-    <string name="operate_overlay_sql_threshold">SQL 门限: %1$d%%</string>
+    <string name="operate_overlay_sql_threshold">手动 SQL: %1$d</string>
     <string name="operate_overlay_sql_tx_speed">发射速度: %1$d WPM</string>
-    <string name="operate_overlay_sql_recommendation">系统建议线: %1$d  |  噪声 %2$d</string>
+    <string name="operate_overlay_sql_live_values">MAN %1$d  |  IN %2$d  |  REC %3$d</string>
+    <string name="operate_overlay_sql_recommendation">推荐线: %1$d  |  噪声 %2$d</string>
     <string name="operate_overlay_sql_limited_floor">受系统下限保护</string>
     <string name="operate_overlay_sql_limited_headroom">为弱 CW 预留过线空间</string>
     <string name="operate_overlay_sql_reference">把这组值作为当前收发调谐参考。</string>

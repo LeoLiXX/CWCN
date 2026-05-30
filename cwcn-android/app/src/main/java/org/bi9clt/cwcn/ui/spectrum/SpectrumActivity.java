@@ -50,6 +50,8 @@ public final class SpectrumActivity extends AppCompatActivity {
     private long waterfallSequence;
     private int manualFocusFrequencyHz = -1;
     private int sqlLevel = SqlLevelStore.DEFAULT_SQL_LEVEL;
+    private int sqlDisplayMax = SqlLevelStore.DEFAULT_SQL_DISPLAY_MAX;
+    private boolean suppressSqlSeekbarCallback;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Runnable liveRefreshRunnable = new Runnable() {
         @Override
@@ -70,6 +72,7 @@ public final class SpectrumActivity extends AppCompatActivity {
         sqlLevelStore = new SqlLevelStore(this);
         spectrumHistoryStore = new SpectrumHistoryStore(this);
         sqlLevel = sqlLevelStore.load();
+        sqlDisplayMax = sqlLevelStore.loadDisplayMax(sqlLevel);
         binding.rulerFrequencyView.setMaxFrequencyHz(DISPLAY_MAX_FREQUENCY_HZ);
         binding.columnarView.setMaxFrequencyHz(DISPLAY_MAX_FREQUENCY_HZ);
         binding.waterfallView.setMaxFrequencyHz(DISPLAY_MAX_FREQUENCY_HZ);
@@ -142,6 +145,7 @@ public final class SpectrumActivity extends AppCompatActivity {
         binding.spectrumStatusMainText.setText(renderStatusMain(snapshot, profile, latestSpectrum));
         binding.spectrumStatusDetailText.setText(renderStatusDetail(snapshot, spectrumHistory, latestSpectrum));
         binding.spectrumSqlValueText.setText(renderSqlValue(latestSpectrum));
+        binding.spectrumSqlDetailText.setText(renderSqlDetail(latestSpectrum));
         binding.spectrumSqlHintText.setText(renderSqlHint(latestSpectrum));
         String summaryText = renderSummary(snapshot, latestSpectrum);
         binding.spectrumSummaryText.setText(summaryText);
@@ -150,12 +154,16 @@ public final class SpectrumActivity extends AppCompatActivity {
         binding.spectrumDraftText.setVisibility(View.GONE);
         binding.emptySpectrumStateText.setText(latestSpectrum == null ? "Waiting for live spectrum" : "");
         binding.emptySpectrumStateText.setVisibility(latestSpectrum == null ? View.VISIBLE : View.GONE);
+        syncSqlSeekBarRange();
         if (binding.spectrumSqlSeekBar.getProgress() != sqlLevel) {
+            suppressSqlSeekbarCallback = true;
             binding.spectrumSqlSeekBar.setProgress(sqlLevel);
+            suppressSqlSeekbarCallback = false;
         }
 
         applyFocusFrequency(focusFrequencyHz, autoTrackedFrequencyHz);
         binding.columnarView.setSqlReferenceLevel(resolveSqlReferenceWaveLevel(latestSpectrum), sqlLevel);
+        binding.columnarView.setSqlRecommendedLevel(resolveRecommendedSqlWaveLevel(latestSpectrum));
         applySqlMeter(latestSpectrum);
         binding.columnarView.setWaveData(waveData);
         binding.waterfallView.setWaveData(waveData, waterfallSequence++);
@@ -193,16 +201,16 @@ public final class SpectrumActivity extends AppCompatActivity {
     }
 
     private void setupSqlControls() {
-        binding.spectrumSqlSeekBar.setMax(100);
+        syncSqlSeekBarRange();
         binding.spectrumSqlSeekBar.setProgress(sqlLevel);
-        binding.spectrumSqlValueText.setText("SET " + sqlLevel);
+        binding.spectrumSqlValueText.setText(renderSqlValue(null));
         binding.spectrumSqlSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (!fromUser) {
+                if (!fromUser || suppressSqlSeekbarCallback) {
                     return;
                 }
-                sqlLevel = progress;
+                sqlLevel = clampSqlThreshold(progress);
                 binding.spectrumSqlValueText.setText(renderSqlValue(latestSpectrum(loadSpectrumHistory(rxSessionStore.load()))));
                 if (sqlLevelStore != null) {
                     sqlLevelStore.save(sqlLevel);
@@ -216,8 +224,38 @@ public final class SpectrumActivity extends AppCompatActivity {
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
+                updateSqlDisplayMaxAfterRelease(seekBar.getProgress());
             }
         });
+    }
+
+    private void syncSqlSeekBarRange() {
+        int normalizedDisplayMax = SqlLevelStore.ensureDisplayMaxCoversLevel(sqlDisplayMax, sqlLevel);
+        if (normalizedDisplayMax != sqlDisplayMax) {
+            sqlDisplayMax = normalizedDisplayMax;
+            if (sqlLevelStore != null) {
+                sqlLevelStore.saveDisplayMax(sqlDisplayMax);
+            }
+        }
+        if (binding.spectrumSqlSeekBar.getMax() != sqlDisplayMax) {
+            binding.spectrumSqlSeekBar.setMax(sqlDisplayMax);
+        }
+    }
+
+    private void updateSqlDisplayMaxAfterRelease(int releasedProgress) {
+        int releasedSqlLevel = clampSqlThreshold(releasedProgress);
+        int adjustedDisplayMax = SqlLevelStore.adjustDisplayMaxForReleasedLevel(sqlDisplayMax, releasedSqlLevel);
+        if (adjustedDisplayMax == sqlDisplayMax) {
+            return;
+        }
+        sqlDisplayMax = adjustedDisplayMax;
+        if (sqlLevelStore != null) {
+            sqlLevelStore.saveDisplayMax(sqlDisplayMax);
+        }
+        syncSqlSeekBarRange();
+        suppressSqlSeekbarCallback = true;
+        binding.spectrumSqlSeekBar.setProgress(sqlLevel);
+        suppressSqlSeekbarCallback = false;
     }
 
     private void applyFocusFrequency(int focusFrequencyHz, int autoTrackedFrequencyHz) {
@@ -278,38 +316,68 @@ public final class SpectrumActivity extends AppCompatActivity {
 
         float floor = latestSpectrum.noiseFloorMagnitude();
         float ceiling = Math.max(latestSpectrum.peakMagnitude(), floor + 1f);
-        float sqlReferenceMagnitude = resolveSqlReferenceMagnitude(latestSpectrum, floor, ceiling);
+        float sqlReferenceMagnitude = resolveThresholdMagnitude(
+                latestSpectrum.sqlAttackThreshold(),
+                latestSpectrum.sqlNoiseFloorEstimate(),
+                latestSpectrum.sqlSignalFloorEstimate(),
+                latestSpectrum.sqlToneRmsAmplitude(),
+                latestSpectrum.peakMagnitude(),
+                floor,
+                ceiling
+        );
         float normalized = (sqlReferenceMagnitude - floor) / Math.max(1f, ceiling - floor);
         return Math.round(Math.max(0f, Math.min(1f, normalized)) * 255f);
     }
 
-    private float resolveSqlReferenceMagnitude(
-            SpectrumSnapshotData latestSpectrum,
+    private int resolveRecommendedSqlWaveLevel(@Nullable SpectrumSnapshotData latestSpectrum) {
+        if (latestSpectrum == null || latestSpectrum.sqlRecommendedThreshold() <= 0) {
+            return -1;
+        }
+        float[] magnitudes = latestSpectrum.magnitudes();
+        if (magnitudes.length == 0) {
+            return -1;
+        }
+        float floor = latestSpectrum.noiseFloorMagnitude();
+        float ceiling = Math.max(latestSpectrum.peakMagnitude(), floor + 1f);
+        float sqlReferenceMagnitude = resolveThresholdMagnitude(
+                latestSpectrum.sqlRecommendedThreshold(),
+                latestSpectrum.sqlNoiseFloorEstimate(),
+                latestSpectrum.sqlSignalFloorEstimate(),
+                latestSpectrum.sqlToneRmsAmplitude(),
+                latestSpectrum.peakMagnitude(),
+                floor,
+                ceiling
+        );
+        float normalized = (sqlReferenceMagnitude - floor) / Math.max(1f, ceiling - floor);
+        return Math.round(Math.max(0f, Math.min(1f, normalized)) * 255f);
+    }
+
+    private float resolveThresholdMagnitude(
+            int threshold,
+            int sqlNoiseFloorEstimate,
+            int sqlSignalFloorEstimate,
+            float sqlToneRmsAmplitude,
+            float peakMagnitude,
             float floor,
             float ceiling
     ) {
-        int sqlAttackThreshold = latestSpectrum.sqlAttackThreshold();
-        int sqlNoiseFloorEstimate = latestSpectrum.sqlNoiseFloorEstimate();
-        int sqlSignalFloorEstimate = latestSpectrum.sqlSignalFloorEstimate();
-        float sqlToneRmsAmplitude = latestSpectrum.sqlToneRmsAmplitude();
-
-        if (sqlAttackThreshold <= 0) {
-            return floor + ((ceiling - floor) * (sqlLevel / 100f));
+        if (threshold <= 0) {
+            return floor;
         }
 
         float thresholdRatio = 0f;
         if (sqlSignalFloorEstimate > sqlNoiseFloorEstimate) {
-            thresholdRatio = (sqlAttackThreshold - sqlNoiseFloorEstimate)
+            thresholdRatio = (threshold - sqlNoiseFloorEstimate)
                     / (float) Math.max(1, sqlSignalFloorEstimate - sqlNoiseFloorEstimate);
         } else if (sqlToneRmsAmplitude > 0f) {
-            thresholdRatio = sqlAttackThreshold / Math.max(1f, sqlToneRmsAmplitude);
+            thresholdRatio = threshold / Math.max(1f, sqlToneRmsAmplitude);
         }
         thresholdRatio = Math.max(0f, Math.min(1.35f, thresholdRatio));
         float mappedMagnitude = floor + ((ceiling - floor) * thresholdRatio);
 
-        if (sqlToneRmsAmplitude > 0f && latestSpectrum.peakMagnitude() > 0f) {
-            float tonePeakRatio = sqlAttackThreshold / Math.max(1f, sqlToneRmsAmplitude);
-            float peakMappedMagnitude = latestSpectrum.peakMagnitude() * Math.max(0f, Math.min(1.2f, tonePeakRatio));
+        if (sqlToneRmsAmplitude > 0f && peakMagnitude > 0f) {
+            float tonePeakRatio = threshold / Math.max(1f, sqlToneRmsAmplitude);
+            float peakMappedMagnitude = peakMagnitude * Math.max(0f, Math.min(1.2f, tonePeakRatio));
             mappedMagnitude = Math.max(mappedMagnitude, floor + ((peakMappedMagnitude - floor) * 0.5f));
         }
 
@@ -328,62 +396,73 @@ public final class SpectrumActivity extends AppCompatActivity {
                 latestSpectrum.sqlNoiseFloorEstimate(),
                 latestSpectrum.sqlAttackThreshold(),
                 latestSpectrum.sqlReleaseThreshold(),
-                recommendation.available() ? recommendation.recommendedThresholdLevel() : 0f
+                latestSpectrum.sqlRecommendedThreshold() > 0
+                        ? latestSpectrum.sqlRecommendedThreshold()
+                        : (recommendation.available() ? recommendation.recommendedThresholdLevel() : 0f)
         );
     }
 
     private String renderSqlValue(@Nullable SpectrumSnapshotData latestSpectrum) {
+        return "SQL " + sqlLevel;
+    }
+
+    private String renderSqlDetail(@Nullable SpectrumSnapshotData latestSpectrum) {
         if (latestSpectrum == null || latestSpectrum.sqlAttackThreshold() <= 0) {
-            return "SET " + sqlLevel;
+            return "MAN -  |  IN -  |  REC -";
         }
         int threshold = latestSpectrum.sqlAttackThreshold();
         int current = Math.round(latestSpectrum.sqlFrameRmsAmplitude());
-        int delta = current - threshold;
-        SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(latestSpectrum);
+        int recommendation = latestSpectrum.sqlRecommendedThreshold();
         StringBuilder builder = new StringBuilder();
-        builder.append("IN ").append(current)
-                .append(" / SQL ").append(threshold)
-                .append(" (").append(String.format(Locale.US, "%+d", delta)).append(")");
-        if (recommendation.available()) {
-            builder.append(" / REC ").append(recommendation.recommendedThresholdLevel());
+        builder.append("MAN ").append(threshold)
+                .append("  |  IN ").append(current);
+        if (recommendation > 0) {
+            builder.append("  |  REC ").append(recommendation);
+        } else {
+            builder.append("  |  REC -");
         }
         return builder.toString();
     }
 
     private String renderSqlHint(@Nullable SpectrumSnapshotData latestSpectrum) {
         if (latestSpectrum == null || latestSpectrum.sqlAttackThreshold() <= 0) {
-            return "把环境底噪压在线左侧，让有效 CW 过线。";
+            return "MAN 是手动门限，IN 是当前输入，REC 是推荐门限。";
         }
         float frameLevel = latestSpectrum.sqlFrameRmsAmplitude();
         float toneLevel = latestSpectrum.sqlToneRmsAmplitude();
         int threshold = latestSpectrum.sqlAttackThreshold();
         int noise = latestSpectrum.sqlNoiseFloorEstimate();
         int delta = Math.round(frameLevel) - threshold;
-        SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(latestSpectrum);
-        String recommendationSuffix = recommendation.available()
-                ? buildSqlRecommendationHintSuffix(recommendation)
+        int toneDelta = Math.round(toneLevel) - threshold;
+        String recommendationSuffix = latestSpectrum.sqlRecommendedThreshold() > 0
+                ? buildSqlRecommendationHintSuffix(latestSpectrum)
                 : "";
         if (frameLevel < threshold) {
             if ((threshold - frameLevel) <= Math.max(4f, threshold * 0.08f)) {
-                return "当前总体输入刚好在线下方，适合等有效 CW 冲线。" + recommendationSuffix;
+                return "MAN 是手动门限，IN 刚好在线下方，适合等有效 CW 过线。" + recommendationSuffix;
             }
-            return "当前总体输入低于 SQL 线 " + Math.abs(delta) + "，背景噪声会被压住。" + recommendationSuffix;
+            return "MAN 是手动门限，IN 比它低 " + Math.abs(delta) + "；背景噪声应被压住。" + recommendationSuffix;
         }
         if (toneLevel > threshold) {
-            return "当前音调分量已越过 SQL 线 " + Math.abs(Math.round(toneLevel) - threshold) + "，应允许 CW 通过。"
+            return "MAN 是手动门限，Tone 比它高 " + Math.abs(toneDelta) + "；应允许有效 CW 通过。"
                     + recommendationSuffix;
         }
         if (noise >= threshold) {
-            return "背景噪声已经贴近或越过 SQL 线，建议继续上调 SQL。" + recommendationSuffix;
+            return "MAN 是手动门限；当前噪声已经贴近或越过它，建议继续上调门限。" + recommendationSuffix;
         }
-        return "当前总体输入已越过 SQL 线 " + Math.abs(delta) + "，若不是 CW 可再提高 SQL。"
+        return "MAN 是手动门限，IN 比它高 " + Math.abs(delta) + "；若不是 CW，可继续提高门限。"
                 + recommendationSuffix;
     }
 
-    private String buildSqlRecommendationHintSuffix(SqlThresholdAdvisor.Recommendation recommendation) {
+    private int clampSqlThreshold(int threshold) {
+        return Math.max(SqlLevelStore.MIN_SQL_LEVEL, Math.min(SqlLevelStore.MAX_SQL_LEVEL, threshold));
+    }
+
+    private String buildSqlRecommendationHintSuffix(SpectrumSnapshotData snapshotData) {
         StringBuilder builder = new StringBuilder();
-        builder.append(" 建议线 ").append(recommendation.recommendedThresholdLevel())
-                .append("，噪声 ").append(recommendation.noiseFloorLevel());
+        builder.append(" 推荐线 ").append(snapshotData.sqlRecommendedThreshold())
+                .append("，噪声 ").append(snapshotData.sqlNoiseFloorEstimate());
+        SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(snapshotData);
         if (recommendation.limitedBySafetyFloor()) {
             builder.append("，当前受系统下限保护。");
             return builder.toString();

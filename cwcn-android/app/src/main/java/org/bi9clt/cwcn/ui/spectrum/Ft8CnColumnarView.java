@@ -54,7 +54,7 @@ public final class Ft8CnColumnarView extends View {
     private int trackingWindowHalfWidthHz = 0;
     private int maxFrequencyHz = 3000;
     private int sqlReferenceLevel = -1;
-    private int sqlPercent = -1;
+    private int sqlRecommendedLevel = -1;
 
     public Ft8CnColumnarView(Context context) {
         super(context);
@@ -90,7 +90,11 @@ public final class Ft8CnColumnarView extends View {
 
     public void setSqlReferenceLevel(int sqlReferenceLevel, int sqlPercent) {
         this.sqlReferenceLevel = sqlReferenceLevel >= 0 ? Math.min(255, sqlReferenceLevel) : -1;
-        this.sqlPercent = sqlPercent >= 0 ? Math.min(100, sqlPercent) : -1;
+        postInvalidateOnAnimation();
+    }
+
+    public void setSqlRecommendedLevel(int sqlRecommendedLevel) {
+        this.sqlRecommendedLevel = sqlRecommendedLevel >= 0 ? Math.min(255, sqlRecommendedLevel) : -1;
         postInvalidateOnAnimation();
     }
 
@@ -188,7 +192,7 @@ public final class Ft8CnColumnarView extends View {
         float y = sqlReferenceLevelToY(sqlReferenceLevel);
         canvas.drawRect(0f, y, getWidth(), getHeight(), sqlShadePaint);
         canvas.drawLine(0f, y, getWidth(), y, sqlReferencePaint);
-        drawSqlLabel(canvas, y);
+        drawSqlLabel(canvas, y, "MAN");
     }
 
     private float sqlReferenceLevelToY(int referenceLevel) {
@@ -196,8 +200,7 @@ public final class Ft8CnColumnarView extends View {
         return getHeight() - (Math.max(0, Math.min(255, referenceLevel)) * rateHeight);
     }
 
-    private void drawSqlLabel(Canvas canvas, float y) {
-        String label = "SQL";
+    private void drawSqlLabel(Canvas canvas, float y, String label) {
         float paddingHorizontal = dpToPixel(4);
         float paddingVertical = dpToPixel(2);
         Paint.FontMetrics fontMetrics = labelPaint.getFontMetrics();

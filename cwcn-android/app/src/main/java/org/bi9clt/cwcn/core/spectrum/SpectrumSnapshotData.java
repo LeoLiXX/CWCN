@@ -26,6 +26,8 @@ public final class SpectrumSnapshotData {
     private final int sqlReleaseThreshold;
     private final int sqlNoiseFloorEstimate;
     private final int sqlSignalFloorEstimate;
+    private final int sqlRecommendedThreshold;
+    private final int sqlManualThreshold;
     private final float sqlToneRmsAmplitude;
     private final float sqlFrameRmsAmplitude;
     private final boolean syntheticFallback;
@@ -76,6 +78,8 @@ public final class SpectrumSnapshotData {
                 0,
                 0,
                 0,
+                0,
+                0,
                 0.0f,
                 0.0f,
                 syntheticFallback
@@ -106,6 +110,8 @@ public final class SpectrumSnapshotData {
             int sqlReleaseThreshold,
             int sqlNoiseFloorEstimate,
             int sqlSignalFloorEstimate,
+            int sqlRecommendedThreshold,
+            int sqlManualThreshold,
             float sqlToneRmsAmplitude,
             float sqlFrameRmsAmplitude,
             boolean syntheticFallback
@@ -133,6 +139,8 @@ public final class SpectrumSnapshotData {
         this.sqlReleaseThreshold = Math.max(0, sqlReleaseThreshold);
         this.sqlNoiseFloorEstimate = Math.max(0, sqlNoiseFloorEstimate);
         this.sqlSignalFloorEstimate = Math.max(0, sqlSignalFloorEstimate);
+        this.sqlRecommendedThreshold = Math.max(0, sqlRecommendedThreshold);
+        this.sqlManualThreshold = Math.max(0, sqlManualThreshold);
         this.sqlToneRmsAmplitude = Math.max(0.0f, sqlToneRmsAmplitude);
         this.sqlFrameRmsAmplitude = Math.max(0.0f, sqlFrameRmsAmplitude);
         this.syntheticFallback = syntheticFallback;
@@ -147,9 +155,21 @@ public final class SpectrumSnapshotData {
             long capturedAtEpochMs,
             CwSignalSnapshot signalSnapshot
     ) {
+        return fromAudioSnapshot(snapshot, capturedAtEpochMs, signalSnapshot, 0);
+    }
+
+    public static SpectrumSnapshotData fromAudioSnapshot(
+            AudioSpectrumSnapshot snapshot,
+            long capturedAtEpochMs,
+            CwSignalSnapshot signalSnapshot,
+            int sqlManualThreshold
+    ) {
         if (snapshot == null) {
             return null;
         }
+        SqlThresholdAdvisor.Recommendation recommendation = signalSnapshot == null
+                ? SqlThresholdAdvisor.Recommendation.none()
+                : SqlThresholdAdvisor.recommend(signalSnapshot);
         return new SpectrumSnapshotData(
                 capturedAtEpochMs,
                 snapshot.frequenciesHz(),
@@ -174,6 +194,8 @@ public final class SpectrumSnapshotData {
                 signalSnapshot == null ? 0 : signalSnapshot.releaseThreshold(),
                 signalSnapshot == null ? 0 : signalSnapshot.noiseFloorEstimate(),
                 signalSnapshot == null ? 0 : signalSnapshot.signalFloorEstimate(),
+                recommendation.recommendedThresholdLevel(),
+                Math.max(0, sqlManualThreshold),
                 signalSnapshot == null ? 0.0f : (float) signalSnapshot.lastToneRmsAmplitude(),
                 signalSnapshot == null ? 0.0f : (float) signalSnapshot.lastRmsAmplitude(),
                 false
@@ -270,6 +292,14 @@ public final class SpectrumSnapshotData {
 
     public int sqlSignalFloorEstimate() {
         return sqlSignalFloorEstimate;
+    }
+
+    public int sqlRecommendedThreshold() {
+        return sqlRecommendedThreshold;
+    }
+
+    public int sqlManualThreshold() {
+        return sqlManualThreshold;
     }
 
     public float sqlToneRmsAmplitude() {

@@ -10,7 +10,7 @@ public final class LiveRxTraceArtifact {
     private final int sampleRateHz;
     private final long sampleCount;
     private final int preferredToneFrequencyHz;
-    private final int sqlPercent;
+    private final int sqlLevel;
 
     public LiveRxTraceArtifact(
             long capturedAtEpochMs,
@@ -46,7 +46,7 @@ public final class LiveRxTraceArtifact {
             int sampleRateHz,
             long sampleCount,
             int preferredToneFrequencyHz,
-            int sqlPercent
+            int sqlLevel
     ) {
         this.capturedAtEpochMs = capturedAtEpochMs;
         this.sessionLabel = safeText(sessionLabel);
@@ -57,7 +57,7 @@ public final class LiveRxTraceArtifact {
         this.sampleRateHz = Math.max(0, sampleRateHz);
         this.sampleCount = Math.max(0L, sampleCount);
         this.preferredToneFrequencyHz = sanitizePreferredToneFrequencyHz(preferredToneFrequencyHz);
-        this.sqlPercent = sanitizeSqlPercent(sqlPercent);
+        this.sqlLevel = sanitizeSqlLevel(sqlLevel);
     }
 
     public long capturedAtEpochMs() {
@@ -96,16 +96,16 @@ public final class LiveRxTraceArtifact {
         return preferredToneFrequencyHz;
     }
 
-    public int sqlPercent() {
-        return sqlPercent;
+    public int sqlLevel() {
+        return sqlLevel;
     }
 
     public boolean hasPreferredToneFrequency() {
         return preferredToneFrequencyHz > 0;
     }
 
-    public boolean hasSqlPercent() {
-        return sqlPercent >= 0;
+    public boolean hasSqlLevel() {
+        return sqlLevel >= 0;
     }
 
     public boolean hasReplayableAudio() {
@@ -123,7 +123,7 @@ public final class LiveRxTraceArtifact {
                 + "|"
                 + preferredToneFrequencyHz
                 + "|"
-                + sqlPercent
+                + sqlLevel
                 + "|"
                 + sampleCount;
     }
@@ -136,10 +136,10 @@ public final class LiveRxTraceArtifact {
         return value > 0 ? value : -1;
     }
 
-    private static int sanitizeSqlPercent(int value) {
+    private static int sanitizeSqlLevel(int value) {
         if (value < 0) {
             return -1;
         }
-        return Math.min(100, value);
+        return value;
     }
 }

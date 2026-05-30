@@ -183,7 +183,7 @@ public final class SqlSignalMeterView extends View {
         float x = levelToX(thresholdLevel);
         canvas.drawLine(x, trackRect.top - dp(1f), x, trackRect.bottom, thresholdPaint);
 
-        String label = "SQL";
+        String label = "MAN";
         float textWidth = labelPaint.measureText(label);
         float textLeft = Math.max(
                 trackRect.left,
@@ -199,6 +199,14 @@ public final class SqlSignalMeterView extends View {
         }
         float x = levelToX(recommendedThresholdLevel);
         canvas.drawLine(x, trackRect.top - dp(1f), x, trackRect.bottom, recommendedThresholdPaint);
+        String label = "REC";
+        float textWidth = labelPaint.measureText(label);
+        float textLeft = Math.max(
+                trackRect.left,
+                Math.min(x - (textWidth / 2f), trackRect.right - textWidth)
+        );
+        float baseline = getPaddingTop() + dp(7f);
+        canvas.drawText(label, textLeft, baseline, labelPaint);
     }
 
     private float levelToX(float level) {

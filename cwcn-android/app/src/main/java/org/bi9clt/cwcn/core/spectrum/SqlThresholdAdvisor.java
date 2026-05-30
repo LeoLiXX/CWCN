@@ -1,5 +1,6 @@
 package org.bi9clt.cwcn.core.spectrum;
 
+import org.bi9clt.cwcn.core.signal.CwSignalSnapshot;
 import org.bi9clt.cwcn.core.signal.SqlThresholdModel;
 
 public final class SqlThresholdAdvisor {
@@ -14,6 +15,24 @@ public final class SqlThresholdAdvisor {
                 snapshotData.sqlNoiseFloorEstimate(),
                 snapshotData.sqlSignalFloorEstimate(),
                 snapshotData.sqlToneRmsAmplitude()
+        );
+        return new Recommendation(
+                recommendation.recommendedThresholdLevel(),
+                recommendation.noiseFloorLevel(),
+                recommendation.referenceSignalLevel(),
+                recommendation.limitedBySafetyFloor(),
+                recommendation.limitedByToneHeadroom()
+        );
+    }
+
+    public static Recommendation recommend(CwSignalSnapshot signalSnapshot) {
+        if (signalSnapshot == null) {
+            return Recommendation.none();
+        }
+        SqlThresholdModel.Recommendation recommendation = SqlThresholdModel.recommend(
+                signalSnapshot.noiseFloorEstimate(),
+                signalSnapshot.signalFloorEstimate(),
+                signalSnapshot.lastToneRmsAmplitude()
         );
         return new Recommendation(
                 recommendation.recommendedThresholdLevel(),

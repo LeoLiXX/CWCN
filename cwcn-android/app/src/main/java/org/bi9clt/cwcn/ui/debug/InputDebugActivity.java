@@ -161,7 +161,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
     private long receivedSampleCount;
     private int lastPeakAmplitude;
     private double lastRmsAmplitude;
-    private int localReplayAnalysisSqlPercent = -1;
+    private int localReplayAnalysisSqlLevel = -1;
     private String localReplayAnalysisKey = "";
     private String localReplayAnalysisSummary = "";
     private long localReplayAnalysisGeneration;
@@ -1072,8 +1072,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 DeveloperToolsActivity.EXTRA_TRACE_PREFERRED_TONE_FREQUENCY_HZ,
                 -1
         );
-        int sqlPercent = intent.getIntExtra(
-                DeveloperToolsActivity.EXTRA_TRACE_SQL_PERCENT,
+        int sqlLevel = intent.getIntExtra(
+                DeveloperToolsActivity.EXTRA_TRACE_SQL_LEVEL,
                 -1
         );
         Uri uri = Uri.fromFile(wavFile);
@@ -1084,26 +1084,26 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                     cwSignalProcessor.snapshot().preferredToneFrequencyHz()
             ));
         }
-        if (sqlPercent >= 0) {
-            cwSignalProcessor.setSqlPercent(sqlPercent);
+        if (sqlLevel >= 0) {
+            cwSignalProcessor.setManualSqlThreshold(sqlLevel);
         }
-        localReplayAnalysisSqlPercent = sqlPercent >= 0 ? sqlPercent : -1;
+        localReplayAnalysisSqlLevel = sqlLevel >= 0 ? sqlLevel : -1;
         binding.inputSourceSpinner.setSelection(InputSourceOption.LOCAL_FILE_REPLAY.ordinal());
         StringBuilder footer = new StringBuilder("已载入最近一次 Operate 现场 trace: " + wavFile.getName());
-        if (preferredToneFrequencyHz > 0 || sqlPercent >= 0) {
+        if (preferredToneFrequencyHz > 0 || sqlLevel >= 0) {
             footer.append(" | 现场设置");
             if (preferredToneFrequencyHz > 0) {
                 footer.append(" Tone ").append(cwSignalProcessor.snapshot().preferredToneFrequencyHz()).append(" Hz");
             }
-            if (sqlPercent >= 0) {
+            if (sqlLevel >= 0) {
                 footer.append(preferredToneFrequencyHz > 0 ? " /" : "");
-                footer.append(" SQL ").append(sqlPercent).append("%");
+                footer.append(" SQL ").append(sqlLevel);
             }
         }
         binding.footerText.setText(footer.toString());
         intent.removeExtra(DeveloperToolsActivity.EXTRA_TRACE_WAV_FILE_PATH);
         intent.removeExtra(DeveloperToolsActivity.EXTRA_TRACE_PREFERRED_TONE_FREQUENCY_HZ);
-        intent.removeExtra(DeveloperToolsActivity.EXTRA_TRACE_SQL_PERCENT);
+        intent.removeExtra(DeveloperToolsActivity.EXTRA_TRACE_SQL_LEVEL);
     }
 
     private void ensureLocalReplayAnalysis(boolean localFileSelected) {
@@ -1121,7 +1121,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 selectedFileUri,
                 localFileRxAudioSource.selectedFileLabel(),
                 preferredToneFrequencyHz,
-                localReplayAnalysisSqlPercent
+                    localReplayAnalysisSqlLevel
         );
         if (analysisKey.isEmpty()) {
             if (!localReplayAnalysisKey.isEmpty() || !localReplayAnalysisSummary.isEmpty()) {
@@ -1144,7 +1144,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                         replayFileUri,
                         replayFileLabel,
                         preferredToneFrequencyHz,
-                        localReplayAnalysisSqlPercent,
+                        localReplayAnalysisSqlLevel,
                         analysisKey,
                         generation
                 ),
@@ -1156,7 +1156,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             Uri replayFileUri,
             String replayFileLabel,
             int preferredToneFrequencyHz,
-            int sqlPercent,
+            int sqlLevel,
             String analysisKey,
             long generation
     ) {
@@ -1166,7 +1166,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                     replayFileUri,
                     replayFileLabel,
                     preferredToneFrequencyHz,
-                    sqlPercent
+                    sqlLevel
             );
             summary = formatLocalReplayAnalysisSummary(
                     analysisBundle.analysisResult(),
@@ -1192,7 +1192,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             Uri replayFileUri,
             String replayFileLabel,
             int preferredToneFrequencyHz,
-            int sqlPercent
+            int sqlLevel
     ) throws IOException {
         try (InputStream inputStream = getContentResolver().openInputStream(replayFileUri)) {
             if (inputStream == null) {
@@ -1206,7 +1206,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                     new RxReplayAnalysisRunner().analyze(
                             loadedWav.frames(),
                             preferredToneFrequencyHz,
-                            sqlPercent,
+                            sqlLevel,
                             DEFAULT_DEBUG_SEED_WPM
                     ),
                     new RxDeveloperStartupToneHintAnalyzer().analyze(
@@ -1221,7 +1221,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
             Uri replayFileUri,
             String replayFileLabel,
             int preferredToneFrequencyHz,
-            int sqlPercent
+            int sqlLevel
     ) {
         if (replayFileUri == null) {
             return "";
@@ -1232,7 +1232,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 + "|"
                 + preferredToneFrequencyHz
                 + "|"
-                + sqlPercent;
+                + sqlLevel;
     }
 
     private String formatLocalReplayAnalysisSummary(
@@ -1416,7 +1416,7 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         tryPersistableReadPermission(uri);
         String label = localFileRxAudioSource.resolveDisplayName(uri);
         localFileRxAudioSource.setSelectedFile(uri, label);
-        localReplayAnalysisSqlPercent = -1;
+        localReplayAnalysisSqlLevel = -1;
         getSharedPreferences(DEBUG_PREFERENCES, MODE_PRIVATE)
                 .edit()
                 .putString(PREF_LOCAL_FILE_URI, uri.toString())
@@ -2039,7 +2039,8 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
         SpectrumSnapshotData snapshotData = SpectrumSnapshotData.fromAudioSnapshot(
                 lastSpectrumSnapshot,
                 System.currentTimeMillis(),
-                cwSignalProcessor == null ? null : cwSignalProcessor.snapshot()
+                cwSignalProcessor == null ? null : cwSignalProcessor.snapshot(),
+                localReplayAnalysisSqlLevel >= 0 ? localReplayAnalysisSqlLevel : 600
         );
         if (snapshotData != null) {
             spectrumHistoryStore.append(snapshotData);

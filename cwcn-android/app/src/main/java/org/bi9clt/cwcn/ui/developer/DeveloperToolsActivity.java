@@ -28,8 +28,8 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
             "org.bi9clt.cwcn.ui.developer.extra.TRACE_WAV_FILE_PATH";
     public static final String EXTRA_TRACE_PREFERRED_TONE_FREQUENCY_HZ =
             "org.bi9clt.cwcn.ui.developer.extra.TRACE_PREFERRED_TONE_FREQUENCY_HZ";
-    public static final String EXTRA_TRACE_SQL_PERCENT =
-            "org.bi9clt.cwcn.ui.developer.extra.TRACE_SQL_PERCENT";
+    public static final String EXTRA_TRACE_SQL_LEVEL =
+            "org.bi9clt.cwcn.ui.developer.extra.TRACE_SQL_LEVEL";
 
     private static final int DEFAULT_TRACE_ANALYSIS_SEED_WPM = 18;
     private static final int TRACE_ANALYSIS_PREVIEW_MAX_CHARS = 96;
@@ -107,8 +107,8 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
         if (latestTrace.hasPreferredToneFrequency()) {
             intent.putExtra(EXTRA_TRACE_PREFERRED_TONE_FREQUENCY_HZ, latestTrace.preferredToneFrequencyHz());
         }
-        if (latestTrace.hasSqlPercent()) {
-            intent.putExtra(EXTRA_TRACE_SQL_PERCENT, latestTrace.sqlPercent());
+        if (latestTrace.hasSqlLevel()) {
+            intent.putExtra(EXTRA_TRACE_SQL_LEVEL, latestTrace.sqlLevel());
         }
         startActivity(intent);
     }
@@ -122,8 +122,8 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
         String toneSummary = artifact.hasPreferredToneFrequency()
                 ? artifact.preferredToneFrequencyHz() + " Hz"
                 : getString(R.string.developer_tools_not_recorded);
-        String sqlSummary = artifact.hasSqlPercent()
-                ? artifact.sqlPercent() + "%"
+        String sqlSummary = artifact.hasSqlLevel()
+                ? String.valueOf(artifact.sqlLevel())
                 : getString(R.string.developer_tools_not_recorded);
         StringBuilder builder = new StringBuilder();
         builder.append(getString(R.string.developer_tools_trace_latest, artifact.sessionLabel()));
@@ -185,7 +185,7 @@ public final class DeveloperToolsActivity extends AppCompatActivity {
             RxReplayAnalysisResult analysisResult = new RxReplayAnalysisRunner().analyze(
                     loadedWav.frames(),
                     artifact.preferredToneFrequencyHz(),
-                    artifact.sqlPercent(),
+                    artifact.sqlLevel(),
                     DEFAULT_TRACE_ANALYSIS_SEED_WPM
             );
             RxDeveloperStartupToneHintAnalyzer.Result startupToneHint =

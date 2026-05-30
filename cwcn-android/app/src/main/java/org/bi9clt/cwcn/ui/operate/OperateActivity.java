@@ -393,7 +393,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private ArrayAdapter<String> templateSelectorAdapter;
     private String selectedTemplateId;
     private String lastAutoPopulatedTemplateText = "";
-    private int sqlLevel = 55;
+    private int sqlLevel = SqlLevelStore.DEFAULT_SQL_LEVEL;
+    private int sqlDisplayMax = SqlLevelStore.DEFAULT_SQL_DISPLAY_MAX;
     private boolean templateSelectorInitialized;
     private boolean templateSelectorSyncing;
     private boolean txSendInProgress;
@@ -490,6 +491,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 )
         );
         sqlLevel = sqlLevelStore.load();
+        sqlDisplayMax = sqlLevelStore.loadDisplayMax(sqlLevel);
         syncOperateSql();
         consumeLaunchIntent(getIntent());
         setupActions();
@@ -699,7 +701,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void setupSqlControls() {
-        binding.sqlSeekBar.setMax(100);
+        syncSqlSeekBarRange();
         syncSqlSeekBar();
         binding.wpmSeekBar.setMax(75);
         syncWpmSeekBarFromSettings();
@@ -709,9 +711,12 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 if (!fromUser) {
                     return;
                 }
-                sqlLevel = progress;
+                sqlLevel = clampSqlThreshold(progress);
                 persistSqlLevel();
                 syncOperateSql();
+                applyOperateSqlMeter(lastUiSpectrumSnapshot);
+                binding.sqlMeterDetailText.setText(renderOperateSqlMeterDetail(lastUiSpectrumSnapshot));
+                binding.sqlMeterHintText.setText(renderOperateSqlMeterHint(lastUiSpectrumSnapshot));
                 binding.sqlOverlayText.setText(renderSqlOverlayText(lastRxSessionSnapshot));
                 refreshConversationOnly();
             }
@@ -722,6 +727,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
+                updateSqlDisplayMaxAfterRelease(seekBar.getProgress());
             }
         });
         binding.wpmSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -747,9 +753,37 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void syncSqlSeekBar() {
+        syncSqlSeekBarRange();
         if (binding.sqlSeekBar.getProgress() != sqlLevel) {
             binding.sqlSeekBar.setProgress(sqlLevel);
         }
+    }
+
+    private void syncSqlSeekBarRange() {
+        int normalizedDisplayMax = SqlLevelStore.ensureDisplayMaxCoversLevel(sqlDisplayMax, sqlLevel);
+        if (normalizedDisplayMax != sqlDisplayMax) {
+            sqlDisplayMax = normalizedDisplayMax;
+            if (sqlLevelStore != null) {
+                sqlLevelStore.saveDisplayMax(sqlDisplayMax);
+            }
+        }
+        if (binding.sqlSeekBar.getMax() != sqlDisplayMax) {
+            binding.sqlSeekBar.setMax(sqlDisplayMax);
+        }
+    }
+
+    private void updateSqlDisplayMaxAfterRelease(int releasedProgress) {
+        int releasedSqlLevel = clampSqlThreshold(releasedProgress);
+        int adjustedDisplayMax = SqlLevelStore.adjustDisplayMaxForReleasedLevel(sqlDisplayMax, releasedSqlLevel);
+        if (adjustedDisplayMax == sqlDisplayMax) {
+            return;
+        }
+        sqlDisplayMax = adjustedDisplayMax;
+        if (sqlLevelStore != null) {
+            sqlLevelStore.saveDisplayMax(sqlDisplayMax);
+        }
+        syncSqlSeekBarRange();
+        binding.sqlSeekBar.setProgress(sqlLevel);
     }
 
     private void persistSqlLevel() {
@@ -2039,7 +2073,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             if (operateSignalProcessor == null) {
                 return;
             }
-            operateSignalProcessor.setSqlPercent(sqlLevel);
+            operateSignalProcessor.setManualSqlThreshold(sqlLevel);
         }
     }
 
@@ -3261,6 +3295,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 binding.overlaySubtitleText.setText(R.string.operate_overlay_subtitle_sql);
                 syncSqlSeekBar();
                 syncWpmSeekBarFromSettings();
+                applyOperateSqlMeter(lastUiSpectrumSnapshot);
+                binding.sqlMeterDetailText.setText(renderOperateSqlMeterDetail(lastUiSpectrumSnapshot));
+                binding.sqlMeterHintText.setText(renderOperateSqlMeterHint(lastUiSpectrumSnapshot));
                 binding.sqlOverlayText.setText(renderSqlOverlayText(lastRxSessionSnapshot));
                 break;
             case TEMPLATE:
@@ -3321,11 +3358,108 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return getString(R.string.operate_sql_chip, sqlLevel);
     }
 
+    private void applyOperateSqlMeter(@Nullable SpectrumSnapshotData latestSpectrum) {
+        if (latestSpectrum == null) {
+            binding.sqlMeterView.setLevels(0f, 0f, 0f, 0f, 0f, 0f);
+            return;
+        }
+        SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(latestSpectrum);
+        int manualThreshold = latestSpectrum.sqlManualThreshold() > 0
+                ? latestSpectrum.sqlManualThreshold()
+                : sqlLevel;
+        binding.sqlMeterView.setLevels(
+                latestSpectrum.sqlFrameRmsAmplitude(),
+                latestSpectrum.sqlToneRmsAmplitude(),
+                latestSpectrum.sqlNoiseFloorEstimate(),
+                manualThreshold,
+                latestSpectrum.sqlReleaseThreshold(),
+                latestSpectrum.sqlRecommendedThreshold() > 0
+                        ? latestSpectrum.sqlRecommendedThreshold()
+                        : (recommendation.available() ? recommendation.recommendedThresholdLevel() : 0f)
+        );
+    }
+
+    private String renderOperateSqlMeterDetail(@Nullable SpectrumSnapshotData latestSpectrum) {
+        if (latestSpectrum == null) {
+            return "MAN -  |  IN -  |  REC -";
+        }
+        int manualThreshold = latestSpectrum.sqlManualThreshold() > 0
+                ? latestSpectrum.sqlManualThreshold()
+                : sqlLevel;
+        int current = Math.round(latestSpectrum.sqlFrameRmsAmplitude());
+        int recommendation = latestSpectrum.sqlRecommendedThreshold();
+        StringBuilder builder = new StringBuilder();
+        builder.append("MAN ").append(manualThreshold)
+                .append("  |  IN ").append(current);
+        if (recommendation > 0) {
+            builder.append("  |  REC ").append(recommendation);
+        } else {
+            builder.append("  |  REC -");
+        }
+        return builder.toString();
+    }
+
+    private String renderOperateSqlMeterHint(@Nullable SpectrumSnapshotData latestSpectrum) {
+        if (latestSpectrum == null) {
+            return "MAN 是手动门限，IN 是当前输入，REC 是推荐门限。";
+        }
+        float frameLevel = latestSpectrum.sqlFrameRmsAmplitude();
+        float toneLevel = latestSpectrum.sqlToneRmsAmplitude();
+        int manualThreshold = latestSpectrum.sqlManualThreshold() > 0
+                ? latestSpectrum.sqlManualThreshold()
+                : sqlLevel;
+        int noise = latestSpectrum.sqlNoiseFloorEstimate();
+        int delta = Math.round(frameLevel) - manualThreshold;
+        int toneDelta = Math.round(toneLevel) - manualThreshold;
+        String recommendationSuffix = latestSpectrum.sqlRecommendedThreshold() > 0
+                ? buildOperateSqlRecommendationHintSuffix(latestSpectrum)
+                : "";
+        if (frameLevel < manualThreshold) {
+            if ((manualThreshold - frameLevel) <= Math.max(4f, manualThreshold * 0.08f)) {
+                return "MAN 在线上，IN 刚好压在下方，适合等有效 CW 过线。" + recommendationSuffix;
+            }
+            return "MAN 高于当前输入 " + Math.abs(delta) + "，背景噪声应被压住。" + recommendationSuffix;
+        }
+        if (toneLevel > manualThreshold) {
+            return "Tone 高于 MAN " + Math.abs(toneDelta) + "，有效 CW 应该可以通过。"
+                    + recommendationSuffix;
+        }
+        if (noise >= manualThreshold) {
+            return "当前噪声已经贴近或越过 MAN，建议继续上调门限。" + recommendationSuffix;
+        }
+        return "IN 高于 MAN " + Math.abs(delta) + "；若这不是 CW，建议继续提高门限。"
+                + recommendationSuffix;
+    }
+
+    private String buildOperateSqlRecommendationHintSuffix(SpectrumSnapshotData snapshotData) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(" 推荐 ").append(snapshotData.sqlRecommendedThreshold())
+                .append("，噪声 ").append(snapshotData.sqlNoiseFloorEstimate());
+        SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(snapshotData);
+        if (recommendation.limitedBySafetyFloor()) {
+            builder.append("，当前受系统下限保护。");
+            return builder.toString();
+        }
+        if (recommendation.limitedByToneHeadroom()) {
+            builder.append("，已给弱 CW 留出过线空间。");
+            return builder.toString();
+        }
+        return builder.toString();
+    }
+
     private String renderSqlOverlayText(@Nullable RxSessionSnapshot snapshot) {
         StringBuilder builder = new StringBuilder();
         builder.append(getString(R.string.operate_overlay_sql_threshold, sqlLevel))
                 .append("\n")
                 .append(getString(R.string.operate_overlay_sql_tx_speed, resolveOperateWpm()));
+        if (lastUiSpectrumSnapshot != null && lastUiSpectrumSnapshot.sqlAttackThreshold() > 0) {
+            builder.append("\n").append(getString(
+                    R.string.operate_overlay_sql_live_values,
+                    lastUiSpectrumSnapshot.sqlAttackThreshold(),
+                    Math.round(lastUiSpectrumSnapshot.sqlFrameRmsAmplitude()),
+                    lastUiSpectrumSnapshot.sqlRecommendedThreshold()
+            ));
+        }
         SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(lastUiSpectrumSnapshot);
         if (recommendation.available()) {
             builder.append("\n").append(getString(
@@ -3534,7 +3668,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         SpectrumSnapshotData snapshotData = SpectrumSnapshotData.fromAudioSnapshot(
                 lastOperateSpectrumSnapshot,
                 System.currentTimeMillis(),
-                operateSignalProcessor == null ? null : operateSignalProcessor.snapshot()
+                operateSignalProcessor == null ? null : operateSignalProcessor.snapshot(),
+                sqlLevel
         );
         if (snapshotData != null) {
             spectrumHistoryStore.append(snapshotData);
@@ -4790,9 +4925,22 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             return;
         }
         synchronized (activeInstance.operateRxRuntimeLock) {
-            activeInstance.sqlLevel = Math.max(0, Math.min(100, sqlLevel));
-            activeInstance.operateSignalProcessor.setSqlPercent(activeInstance.sqlLevel);
+            activeInstance.sqlLevel = activeInstance.clampSqlThreshold(sqlLevel);
+            activeInstance.sqlDisplayMax = SqlLevelStore.ensureDisplayMaxCoversLevel(
+                    activeInstance.sqlDisplayMax,
+                    activeInstance.sqlLevel
+            );
+            activeInstance.operateSignalProcessor.setManualSqlThreshold(activeInstance.sqlLevel);
         }
+        if (activeInstance.sqlLevelStore != null) {
+            activeInstance.sqlLevelStore.save(activeInstance.sqlLevel);
+            activeInstance.sqlLevelStore.saveDisplayMax(activeInstance.sqlDisplayMax);
+        }
+        activeInstance.runOnUiThread(activeInstance::syncSqlSeekBar);
+    }
+
+    private int clampSqlThreshold(int threshold) {
+        return Math.max(SqlLevelStore.MIN_SQL_LEVEL, Math.min(SqlLevelStore.MAX_SQL_LEVEL, threshold));
     }
 
     private void syncActiveTxPlaybackSnapshot() {

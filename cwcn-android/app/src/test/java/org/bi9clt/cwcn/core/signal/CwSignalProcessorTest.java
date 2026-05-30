@@ -14,7 +14,7 @@ public final class CwSignalProcessorTest {
     private static final int SAMPLE_RATE_HZ = 16000;
     private static final int FRAME_SIZE = 256;
     private static final int[] FRONT_END_MATRIX_TONES_HZ = new int[]{600, 650, 700, 750, 800};
-    private static final int DEFAULT_SQL_PERCENT = 55;
+    private static final int DEFAULT_SQL_PERCENT = 60;
 
     @Test
     public void locksNearPreferredToneFrequencyWhenTargetToneAppears() {
@@ -327,6 +327,64 @@ public final class CwSignalProcessorTest {
         assertTrue("releaseThreshold=" + releaseThreshold, releaseThreshold < SqlThresholdModel.SAFETY_FLOOR_THRESHOLD);
         assertEquals(60, attackThreshold);
         assertEquals(60, releaseThreshold);
+    }
+
+    @Test
+    public void manualSqlThresholdHundredPercentPinsToObservedCeiling() {
+        int threshold = SqlThresholdModel.manualThresholdFromPercent(100, 1300.0d, 1800.0d, 2000.0d);
+
+        assertEquals(2000, threshold);
+    }
+
+    @Test
+    public void manualSqlThresholdDefaultSkewsSlightlyConservativeForVisualGating() {
+        int threshold = SqlThresholdModel.manualThresholdFromPercent(DEFAULT_SQL_PERCENT, 1000.0d, 1600.0d, 1600.0d);
+
+        assertTrue("threshold=" + threshold, threshold > 1300);
+        assertTrue("threshold=" + threshold, threshold < 1600);
+    }
+
+    @Test
+    public void percentSqlThresholdCanAdaptAfterInitialSampling() {
+        CwSignalProcessor processor = createProcessor(650, DEFAULT_SQL_PERCENT);
+        processNoisyFrames(processor, 12, 0.0d, 0.0d, 1800.0d, 0);
+        int initialThreshold = processor.snapshot().currentThreshold();
+
+        processNoisyFrames(processor, 12, 0.0d, 0.0d, 2600.0d, 12);
+        int thresholdAfterNoiseShift = processor.snapshot().currentThreshold();
+
+        assertTrue(
+                "initial=" + initialThreshold + " after=" + thresholdAfterNoiseShift,
+                thresholdAfterNoiseShift > initialThreshold
+        );
+    }
+
+    @Test
+    public void percentSqlThresholdStartsFromSafetyFloorBeforeSampling() {
+        CwSignalProcessor processor = createProcessor(650, DEFAULT_SQL_PERCENT);
+        int beforeSampling = processor.snapshot().currentThreshold();
+
+        processNoisyFrames(processor, 12, 0.0d, 0.0d, 1800.0d, 0);
+        int afterSampling = processor.snapshot().currentThreshold();
+
+        assertEquals(SqlThresholdModel.SAFETY_FLOOR_THRESHOLD, beforeSampling);
+        assertTrue("before=" + beforeSampling + " after=" + afterSampling, afterSampling > beforeSampling);
+    }
+
+    @Test
+    public void absoluteManualSqlThresholdStaysExactlyAtConfiguredValue() {
+        CwSignalProcessor processor = new CwSignalProcessor();
+        processor.setPreferredToneFrequencyHz(650);
+        processor.setManualSqlThreshold(1350);
+
+        processNoisyFrames(processor, 12, 0.0d, 0.0d, 1800.0d, 0);
+        int thresholdAfterSampling = processor.snapshot().currentThreshold();
+
+        processNoisyFrames(processor, 12, 0.0d, 0.0d, 2600.0d, 12);
+        int thresholdAfterNoiseShift = processor.snapshot().currentThreshold();
+
+        assertEquals(1350, thresholdAfterSampling);
+        assertEquals(1350, thresholdAfterNoiseShift);
     }
 
     @Test

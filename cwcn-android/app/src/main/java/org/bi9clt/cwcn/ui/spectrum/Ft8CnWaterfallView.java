@@ -43,7 +43,6 @@ public final class Ft8CnWaterfallView extends View {
     private int trackingWindowCenterHz = -1;
     private int trackingWindowHalfWidthHz = 0;
     private int maxFrequencyHz = 3000;
-
     public Ft8CnWaterfallView(Context context) {
         super(context);
     }

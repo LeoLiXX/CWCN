@@ -33,7 +33,7 @@ public final class LiveRxTraceStore {
             object.put("sampleRateHz", artifact.sampleRateHz());
             object.put("sampleCount", artifact.sampleCount());
             object.put("preferredToneFrequencyHz", artifact.preferredToneFrequencyHz());
-            object.put("sqlPercent", artifact.sqlPercent());
+            object.put("sqlLevel", artifact.sqlLevel());
         } catch (JSONException exception) {
             throw new IllegalStateException("Failed to serialize live RX trace artifact", exception);
         }
@@ -59,7 +59,9 @@ public final class LiveRxTraceStore {
                     object.has("preferredToneFrequencyHz")
                             ? object.optInt("preferredToneFrequencyHz", -1)
                             : -1,
-                    object.has("sqlPercent")
+                    object.has("sqlLevel")
+                            ? object.optInt("sqlLevel", -1)
+                            : object.has("sqlPercent")
                             ? object.optInt("sqlPercent", -1)
                             : -1
             );

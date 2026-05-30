@@ -322,6 +322,11 @@ public final class CwSignalProcessor {
     private double noiseFloorEstimate;
     private double signalFloorEstimate;
     private int sqlPercent = DEFAULT_SQL_PERCENT;
+    private boolean manualSqlThresholdEnabled;
+    private int manualSqlThreshold = SqlThresholdModel.SAFETY_FLOOR_THRESHOLD;
+    private int lockedManualSqlThreshold;
+    private boolean manualSqlThresholdLocked;
+    private boolean manualSqlThresholdDirty = true;
     private int fixedToneLearningWindowHz = DEFAULT_FIXED_TONE_LEARNING_WINDOW_HZ;
     private double lastRmsAmplitude;
     private double lastToneRmsAmplitude;
@@ -1041,8 +1046,6 @@ public final class CwSignalProcessor {
         if (!initialized) {
             noiseFloorEstimate = backgroundObservationLevel;
             signalFloorEstimate = Math.max(backgroundObservationLevel, detectionLevel);
-            attackThreshold = currentThreshold();
-            releaseThreshold = currentReleaseThreshold();
             initialized = true;
         }
 
@@ -1069,6 +1072,7 @@ public final class CwSignalProcessor {
         lastRmsAmplitude = frameRms;
         lastToneRmsAmplitude = toneEstimate.toneRmsAmplitude;
         toneDominanceRatio = toneEstimate.dominanceRatio;
+        lockManualSqlThresholdIfNeeded();
         attackThreshold = currentThreshold();
         releaseThreshold = currentReleaseThreshold();
         ToneOnAdmissionContext toneOnContext = buildToneOnAdmissionContext(
@@ -3526,8 +3530,6 @@ public final class CwSignalProcessor {
         if (!initialized) {
             noiseFloorEstimate = backgroundObservationLevel;
             signalFloorEstimate = Math.max(backgroundObservationLevel, detectionLevel);
-            attackThreshold = currentThreshold();
-            releaseThreshold = currentReleaseThreshold();
             initialized = true;
         }
 
@@ -3555,6 +3557,7 @@ public final class CwSignalProcessor {
         lastWidebandResidualRmsAmplitude = toneEstimate.widebandResidualRmsAmplitude;
         toneDominanceRatio = toneEstimate.dominanceRatio;
         narrowbandIsolationRatio = toneEstimate.isolationRatio;
+        lockManualSqlThresholdIfNeeded();
         attackThreshold = currentThreshold();
         releaseThreshold = currentReleaseThreshold();
         ToneOnAdmissionContext toneOnContext = buildToneOnAdmissionContext(
@@ -3665,6 +3668,9 @@ public final class CwSignalProcessor {
 
     public synchronized void reset() {
         initialized = false;
+        lockedManualSqlThreshold = 0;
+        manualSqlThresholdLocked = false;
+        manualSqlThresholdDirty = true;
         toneActive = false;
         targetToneLocked = false;
         noiseFloorEstimate = 0.0d;
@@ -3829,6 +3835,26 @@ public final class CwSignalProcessor {
 
     public synchronized void setSqlPercent(int sqlPercent) {
         this.sqlPercent = SqlThresholdModel.clampSqlPercent(sqlPercent);
+        this.manualSqlThresholdEnabled = false;
+        this.manualSqlThresholdLocked = false;
+        this.lockedManualSqlThreshold = 0;
+        this.manualSqlThresholdDirty = true;
+    }
+
+    public synchronized void setManualSqlPercent(int sqlPercent) {
+        setSqlPercent(sqlPercent);
+    }
+
+    public synchronized void setManualSqlThreshold(int sqlThreshold) {
+        this.manualSqlThresholdEnabled = true;
+        this.manualSqlThreshold = SqlThresholdModel.clampManualThreshold(sqlThreshold);
+        this.manualSqlThresholdLocked = false;
+        this.lockedManualSqlThreshold = 0;
+        this.manualSqlThresholdDirty = true;
+    }
+
+    public synchronized int manualSqlThreshold() {
+        return manualSqlThreshold;
     }
 
     public synchronized void setFixedToneLearningWindowHz(int windowHz) {
@@ -4286,6 +4312,12 @@ public final class CwSignalProcessor {
     }
 
     private int currentThreshold() {
+        if (manualSqlThresholdEnabled) {
+            if (manualSqlThresholdLocked && !manualSqlThresholdDirty) {
+                return lockedManualSqlThreshold;
+            }
+            return manualSqlThreshold;
+        }
         return SqlThresholdModel.effectiveAttackThreshold(
                 sqlPercent,
                 noiseFloorEstimate,
@@ -4300,6 +4332,28 @@ public final class CwSignalProcessor {
                 currentThreshold(),
                 noiseFloorEstimate
         );
+    }
+
+    private void lockManualSqlThresholdIfNeeded() {
+        if (!manualSqlThresholdEnabled) {
+            return;
+        }
+        if (!manualSqlThresholdDirty || !canLockManualSqlThreshold()) {
+            return;
+        }
+        lockedManualSqlThreshold = manualSqlThreshold;
+        manualSqlThresholdLocked = true;
+        manualSqlThresholdDirty = false;
+    }
+
+    private boolean canLockManualSqlThreshold() {
+        if (!initialized) {
+            return false;
+        }
+        return noiseFloorEstimate > 0.0d
+                || signalFloorEstimate > 0.0d
+                || lastRmsAmplitude > 0.0d
+                || lastToneRmsAmplitude > 0.0d;
     }
 
     private double lowSqlRelaxationRatio() {

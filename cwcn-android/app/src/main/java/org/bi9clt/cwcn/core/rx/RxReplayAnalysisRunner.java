@@ -19,7 +19,7 @@ public final class RxReplayAnalysisRunner {
     public RxReplayAnalysisResult analyze(
             @Nullable List<AudioFrame> frames,
             int preferredToneFrequencyHz,
-            int sqlPercent,
+            int sqlLevel,
             int seedWpm
     ) {
         RxCoreComponents rxCoreComponents = new RxCoreComponents();
@@ -30,8 +30,8 @@ public final class RxReplayAnalysisRunner {
         if (preferredToneFrequencyHz > 0) {
             signalProcessor.setPreferredToneFrequencyHz(preferredToneFrequencyHz);
         }
-        if (sqlPercent >= 0) {
-            signalProcessor.setSqlPercent(sqlPercent);
+        if (sqlLevel >= 0) {
+            signalProcessor.setManualSqlThreshold(sqlLevel);
         }
 
         final int[] toneEventCount = {0};
@@ -121,11 +121,11 @@ public final class RxReplayAnalysisRunner {
         );
         replayTurnSessionController.finalizeAtStop(replayResult.flushTimestampMs());
         int appliedPreferredToneFrequencyHz = signalProcessor.snapshot().preferredToneFrequencyHz();
-        int appliedSqlPercent = sqlPercent < 0 ? -1 : Math.min(100, sqlPercent);
+        int appliedSqlLevel = sqlLevel < 0 ? -1 : sqlLevel;
 
         return new RxReplayAnalysisResult(
                 appliedPreferredToneFrequencyHz,
-                appliedSqlPercent,
+                appliedSqlLevel,
                 clampedSeedWpm,
                 replayResult.processedFrameCount(),
                 replayResult.flushTimestampMs(),

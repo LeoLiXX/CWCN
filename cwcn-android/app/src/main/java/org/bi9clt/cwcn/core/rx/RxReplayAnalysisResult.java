@@ -11,7 +11,7 @@ import java.util.List;
 
 public final class RxReplayAnalysisResult {
     private final int preferredToneFrequencyHz;
-    private final int sqlPercent;
+    private final int sqlLevel;
     private final int seedWpm;
     private final int processedFrameCount;
     private final long flushTimestampMs;
@@ -29,7 +29,7 @@ public final class RxReplayAnalysisResult {
 
     public RxReplayAnalysisResult(
             int preferredToneFrequencyHz,
-            int sqlPercent,
+            int sqlLevel,
             int seedWpm,
             int processedFrameCount,
             long flushTimestampMs,
@@ -46,7 +46,7 @@ public final class RxReplayAnalysisResult {
             CwInterpreterSnapshot interpreterSnapshot
     ) {
         this.preferredToneFrequencyHz = preferredToneFrequencyHz;
-        this.sqlPercent = sqlPercent;
+        this.sqlLevel = sqlLevel;
         this.seedWpm = seedWpm;
         this.processedFrameCount = Math.max(0, processedFrameCount);
         this.flushTimestampMs = Math.max(0L, flushTimestampMs);
@@ -71,8 +71,8 @@ public final class RxReplayAnalysisResult {
         return preferredToneFrequencyHz;
     }
 
-    public int sqlPercent() {
-        return sqlPercent;
+    public int sqlLevel() {
+        return sqlLevel;
     }
 
     public int seedWpm() {
