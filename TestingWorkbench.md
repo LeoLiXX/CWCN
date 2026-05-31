@@ -55,6 +55,8 @@ This page is the single entry for current CWCN testing and bench-validation docu
 - Project status / checkpoint:
 - [CurrentProgress.md](/D:/Workshop/CWCN/CurrentProgress.md)
 - [ContextCheckpoint.md](/D:/Workshop/CWCN/ContextCheckpoint.md)
+- RX bench pending limitations:
+- [RxBenchKnownLimitations.md](/D:/Workshop/CWCN/RxBenchKnownLimitations.md)
 - Rig integration direction:
 - [RigIntegrationUiPlan.md](/D:/Workshop/CWCN/RigIntegrationUiPlan.md)
 - Overall engineering plan:

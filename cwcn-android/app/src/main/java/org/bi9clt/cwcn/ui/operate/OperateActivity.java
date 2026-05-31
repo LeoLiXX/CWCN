@@ -26,6 +26,7 @@ import android.text.style.StyleSpan;
 import android.text.style.UpdateAppearance;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.inputmethod.BaseInputConnection;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
@@ -1161,7 +1162,23 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         binding.repeatCountdownProgressBar.setVisibility(
                 txRepeatWaiting ? View.VISIBLE : View.INVISIBLE
         );
+        if (shouldDeferComposerEditableMutations()) {
+            return;
+        }
         renderComposerPlaybackHighlight();
+    }
+
+    private boolean shouldDeferComposerEditableMutations() {
+        return binding.txComposeEditText.hasFocus()
+                && hasActiveImeComposition(binding.txComposeEditText.getText());
+    }
+
+    private boolean hasActiveImeComposition(@Nullable Editable editable) {
+        if (editable == null || editable.length() == 0) {
+            return false;
+        }
+        return BaseInputConnection.getComposingSpanStart(editable) >= 0
+                || BaseInputConnection.getComposingSpanEnd(editable) >= 0;
     }
 
     private void renderComposerPlaybackHighlight() {
@@ -1225,6 +1242,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void applyComposerStyledText(CharSequence styledText) {
+        if (shouldDeferComposerEditableMutations()) {
+            return;
+        }
         int selectionStart = Math.max(0, binding.txComposeEditText.getSelectionStart());
         int selectionEnd = Math.max(0, binding.txComposeEditText.getSelectionEnd());
         suppressComposerWatcher = true;
@@ -1469,12 +1489,16 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             StreamEntry entry = entries.get(index);
             binding.conversationList.addView(buildConversationCard(entry, index < entries.size() - 1));
         }
-        if (conversationAutoScrollPending) {
+        if (conversationAutoScrollPending && !shouldSuspendConversationAutoScroll()) {
             binding.conversationScrollView.post(() -> {
                 binding.conversationScrollView.fullScroll(View.FOCUS_DOWN);
                 conversationAutoScrollPending = false;
             });
         }
+    }
+
+    private boolean shouldSuspendConversationAutoScroll() {
+        return binding.txComposeEditText.hasFocus();
     }
 
     private View buildConversationCard(StreamEntry entry, boolean withBottomGap) {

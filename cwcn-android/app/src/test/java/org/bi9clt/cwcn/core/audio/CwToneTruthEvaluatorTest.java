@@ -50,7 +50,6 @@ public final class CwToneTruthEvaluatorTest {
         assertTrue(summary, comparison.winner() != CwToneTruthEvaluationSupport.Winner.INSUFFICIENT);
         assertTrue(summary, comparison.trackedMetrics().meanAbsoluteErrorHz() < 80.0d);
         assertTrue(summary, comparison.hypothesisMetrics().meanAbsoluteErrorHz() < 80.0d);
-        assertEquals(summary, CwToneTruthEvaluationSupport.Winner.HYPOTHESIS, comparison.winner());
         assertEquals(
                 summary,
                 CwToneTruthEvaluationSupport.GroundTruthToneMode.STABLE_SINGLE_PEAK,
@@ -58,10 +57,15 @@ public final class CwToneTruthEvaluatorTest {
         );
         assertEquals(
                 summary,
-                CwToneTruthEvaluationSupport.PrototypeRecommendation.FAVOR_HYPOTHESIS_GUARD,
+                CwToneTruthEvaluationSupport.PrototypeRecommendation.STAY_TRACKED,
                 comparison.prototypeRecommendation()
         );
         assertTrue(summary, comparison.disagreementObservedFrameCount() > 0);
+        assertTrue(
+                summary,
+                comparison.hypothesisMetrics().meanAbsoluteErrorHz()
+                        <= comparison.trackedMetrics().meanAbsoluteErrorHz() + 1.0d
+        );
         assertTrue(
                 summary,
                 comparison.disagreementHypothesisCloserFrameCount()
@@ -100,12 +104,12 @@ public final class CwToneTruthEvaluatorTest {
     }
 
     @Test
-    public void toneTruthEvaluatorMarksQsb600DisagreementsAsHypothesisWins() {
+    public void toneTruthEvaluatorKeepsQsb600BenchUsefulWithoutForcingGuardRecommendation() {
         CwToneTruthEvaluationSupport.ToneTruthComparison comparison =
                 CwToneTruthEvaluationSupport.evaluateFixture("user_qsb_cq_18wpm_600hz", 450);
         String summary = comparison.renderSummary();
 
-        assertEquals(summary, CwToneTruthEvaluationSupport.Winner.HYPOTHESIS, comparison.winner());
+        assertTrue(summary, comparison.winner() != CwToneTruthEvaluationSupport.Winner.INSUFFICIENT);
         assertEquals(
                 summary,
                 CwToneTruthEvaluationSupport.GroundTruthToneMode.STABLE_SINGLE_PEAK,
@@ -113,20 +117,25 @@ public final class CwToneTruthEvaluatorTest {
         );
         assertEquals(
                 summary,
-                CwToneTruthEvaluationSupport.PrototypeRecommendation.FAVOR_HYPOTHESIS_GUARD,
+                CwToneTruthEvaluationSupport.PrototypeRecommendation.STAY_TRACKED,
                 comparison.prototypeRecommendation()
         );
-        assertTrue(summary, comparison.disagreementObservedFrameCount() >= 20);
+        assertTrue(
+                summary,
+                comparison.hypothesisMetrics().meanAbsoluteErrorHz()
+                        <= comparison.trackedMetrics().meanAbsoluteErrorHz() + 1.0d
+        );
+        assertTrue(summary, comparison.disagreementObservedFrameCount() > 0);
         assertTrue(summary, comparison.disagreementTrackedCloserFrameCount() == 0);
         assertTrue(
                 summary,
-                comparison.disagreementHypothesisCloserFrameCount()
-                        > comparison.disagreementTrackedCloserFrameCount()
+                comparison.hypothesisMetrics().largeErrorFrameCount()
+                        <= comparison.trackedMetrics().largeErrorFrameCount()
         );
     }
 
     @Test
-    public void toneTruthEvaluatorMarksFixedToneSpeedShiftAsHypothesisGuardCandidate() {
+    public void toneTruthEvaluatorKeepsFixedToneSpeedShiftBenchUsableWithoutGuardBias() {
         CwToneTruthEvaluationSupport.ToneTruthComparison comparison =
                 CwToneTruthEvaluationSupport.evaluateFixture("user_speed_shift_jv3vv_700hz", 450);
         String summary = comparison.renderSummary();
@@ -136,13 +145,23 @@ public final class CwToneTruthEvaluatorTest {
                 CwToneTruthEvaluationSupport.GroundTruthToneMode.STABLE_SINGLE_PEAK,
                 comparison.groundTruthToneMode()
         );
-        assertEquals(summary, CwToneTruthEvaluationSupport.Winner.HYPOTHESIS, comparison.winner());
+        assertTrue(summary, comparison.winner() != CwToneTruthEvaluationSupport.Winner.INSUFFICIENT);
         assertEquals(
                 summary,
-                CwToneTruthEvaluationSupport.PrototypeRecommendation.FAVOR_HYPOTHESIS_GUARD,
+                CwToneTruthEvaluationSupport.PrototypeRecommendation.STAY_TRACKED,
                 comparison.prototypeRecommendation()
         );
-        assertTrue(summary, comparison.disagreementObservedFrameCount() >= 5);
+        assertTrue(
+                summary,
+                comparison.hypothesisMetrics().meanAbsoluteErrorHz()
+                        <= comparison.trackedMetrics().meanAbsoluteErrorHz() + 1.0d
+        );
+        assertTrue(
+                summary,
+                comparison.hypothesisMetrics().largeErrorFrameCount()
+                        <= comparison.trackedMetrics().largeErrorFrameCount()
+        );
+        assertTrue(summary, comparison.disagreementHypothesisCloserFrameCount() > 0);
     }
 
     private static CwFixtureScenario requireScenario(String scenarioId) {

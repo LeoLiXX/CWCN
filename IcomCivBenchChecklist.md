@@ -23,6 +23,21 @@ The current pulse step assumes the common CI-V `1C 00` PTT on/off convention and
 - `IC-9700`
 - nearby Icom rigs that expose a workable serial CI-V path
 
+## Current field-verified IC-7300 combination
+
+Field note recorded on `2026-05-31`:
+
+- radio-side:
+- `USB Keying (CW) = RTS`
+- `USB SEND = DTR`
+- app-side:
+- enable both `RTS` and `DTR`
+
+Current practical conclusion:
+
+- for the current `IC-7300` bench path, CWCN should be tested with `RTS + DTR` both enabled on the App side
+- this is the currently known working combination to keep CAT probing and actual CW keying behaving normally together
+
 ## Recommended order
 
 1. Connect the Icom radio over a USB CAT / serial path that exposes a CDC/ACM serial interface.
