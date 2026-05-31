@@ -64,6 +64,8 @@ import org.bi9clt.cwcn.core.interpreter.CwInterpreter;
 import org.bi9clt.cwcn.core.interpreter.CwInterpreterSnapshot;
 import org.bi9clt.cwcn.core.log.LogDisplayFormatter;
 import org.bi9clt.cwcn.core.log.LocalLogRepository;
+import org.bi9clt.cwcn.core.qso.CwRstAutoEvaluator;
+import org.bi9clt.cwcn.core.qso.CwTxReportExtractor;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoPhase;
 import org.bi9clt.cwcn.core.qso.QsoStateEvent;
@@ -200,6 +202,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private static final String STATE_TRANSCRIPT_ENTRY_WPM = "wpm";
     private static final String STATE_SELECTED_OPERATE_REMOTE_CALLSIGN =
             "selected_operate_remote_callsign";
+    private static final String STATE_OPERATE_RST_RESET_AT_EPOCH_MS =
+            "operate_rst_reset_at_epoch_ms";
+    private static final String STATE_OPERATE_RST_REFERENCE_VALUE =
+            "operate_rst_reference_value";
     private static WeakReference<OperateActivity> sharedActiveInstance =
             new WeakReference<>(null);
 
@@ -286,6 +292,93 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             this.active = true;
             this.toneFrequencyHz = 0;
             this.wpm = 0;
+        }
+    }
+
+    private static final class OperateTurnRstEvidence {
+        @Nullable private final SpectrumSnapshotData spectrumSnapshot;
+        private final boolean inputLevelHot;
+        private final boolean inputLevelClipping;
+
+        private OperateTurnRstEvidence(
+                @Nullable SpectrumSnapshotData spectrumSnapshot,
+                boolean inputLevelHot,
+                boolean inputLevelClipping
+        ) {
+            this.spectrumSnapshot = spectrumSnapshot;
+            this.inputLevelHot = inputLevelHot;
+            this.inputLevelClipping = inputLevelClipping;
+        }
+    }
+
+    private static final class OperateTurnRstTracker {
+        private boolean trackingActive;
+        @Nullable private SpectrumSnapshotData bestSpectrumSnapshot;
+        private double bestScore = Double.NEGATIVE_INFINITY;
+        private boolean inputLevelHotObserved;
+        private boolean inputLevelClippingObserved;
+
+        private void begin() {
+            trackingActive = true;
+            bestSpectrumSnapshot = null;
+            bestScore = Double.NEGATIVE_INFINITY;
+            inputLevelHotObserved = false;
+            inputLevelClippingObserved = false;
+        }
+
+        private void note(
+                @Nullable SpectrumSnapshotData spectrumSnapshot,
+                @Nullable AudioInputHealthSnapshot inputHealthSnapshot
+        ) {
+            if (!trackingActive || spectrumSnapshot == null) {
+                return;
+            }
+            if (inputHealthSnapshot != null) {
+                inputLevelHotObserved |= inputHealthSnapshot.recentHotFrameRatio() >= 0.50d;
+                inputLevelClippingObserved |= inputHealthSnapshot.recentClippingFrameRatio() >= 0.10d;
+            }
+            double rankingScore = rank(spectrumSnapshot);
+            if (bestSpectrumSnapshot == null || rankingScore > bestScore) {
+                bestSpectrumSnapshot = spectrumSnapshot;
+                bestScore = rankingScore;
+            }
+        }
+
+        @Nullable
+        private OperateTurnRstEvidence finishAndReset() {
+            if (!trackingActive && bestSpectrumSnapshot == null) {
+                return null;
+            }
+            OperateTurnRstEvidence evidence = new OperateTurnRstEvidence(
+                    bestSpectrumSnapshot,
+                    inputLevelHotObserved,
+                    inputLevelClippingObserved
+            );
+            reset();
+            return evidence;
+        }
+
+        private void reset() {
+            trackingActive = false;
+            bestSpectrumSnapshot = null;
+            bestScore = Double.NEGATIVE_INFINITY;
+            inputLevelHotObserved = false;
+            inputLevelClippingObserved = false;
+        }
+
+        private static double rank(SpectrumSnapshotData spectrumSnapshot) {
+            double tone = spectrumSnapshot.sqlToneRmsAmplitude();
+            double manualThreshold = spectrumSnapshot.sqlManualThreshold();
+            double recommendedThreshold = spectrumSnapshot.sqlRecommendedThreshold();
+            double threshold = manualThreshold > 0.0d
+                    ? manualThreshold
+                    : Math.max(1.0d, recommendedThreshold);
+            double clearRatio = tone / Math.max(1.0d, threshold);
+            double frame = spectrumSnapshot.sqlFrameRmsAmplitude();
+            return (clearRatio * 1000.0d)
+                    + tone
+                    + (frame * 0.25d)
+                    - (spectrumSnapshot.syntheticFallback() ? 80.0d : 0.0d);
         }
     }
 
@@ -443,6 +536,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private boolean transcriptUseUtc = true;
     private boolean transcriptTimelineActive;
     private String selectedOperateRemoteCallsign;
+    private QsoDraftSnapshot activeQsoDraftSnapshot;
+    private long operateRstResetAtEpochMs;
+    private final OperateTurnRstTracker operateTurnRstTracker = new OperateTurnRstTracker();
+    private String operateRstReferenceValue;
     private boolean conversationAutoScrollPending = true;
     private boolean transcriptRxSuppressedDuringTx;
     private boolean immediateTxPausedRxCapture;
@@ -571,6 +668,8 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             outState.putBoolean(STATE_TRANSCRIPT_USE_UTC, transcriptUseUtc);
             outState.putParcelableArrayList(STATE_TRANSCRIPT_ENTRIES, saveTranscriptEntries());
             outState.putString(STATE_SELECTED_OPERATE_REMOTE_CALLSIGN, selectedOperateRemoteCallsign);
+            outState.putLong(STATE_OPERATE_RST_RESET_AT_EPOCH_MS, operateRstResetAtEpochMs);
+            outState.putString(STATE_OPERATE_RST_REFERENCE_VALUE, operateRstReferenceValue);
         }
     }
 
@@ -947,6 +1046,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         synchronized (operateRxRuntimeLock) {
             lastRxSessionSnapshot = rxSessionStore.load();
         }
+        activeQsoDraftSnapshot = localLogRepository == null ? null : localLogRepository.loadDraft();
         lastUiSpectrumSnapshot = latestSpectrumSnapshotForUi();
         binding.statusMainText.setText(renderStatusMain(lastRxSessionSnapshot));
         binding.statusDetailText.setText(renderStatusDetail(lastRxSessionSnapshot));
@@ -956,6 +1056,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         boolean callsignHintAvailable = hasMeaningfulText(resolvePrimaryCallsignHint(lastRxSessionSnapshot))
                 || hasMeaningfulText(selectedOperateRemoteCallsign);
         binding.callsignHintText.setText(renderCallsignHint(lastRxSessionSnapshot));
+        applyRstReferenceChipState();
         binding.rxFootnoteText.setText(renderRxFootnote(lastRxSessionSnapshot));
         binding.callsignHintText.setEnabled(callsignHintAvailable);
         binding.callsignHintText.setAlpha(callsignHintAvailable ? 1.0f : 0.62f);
@@ -964,6 +1065,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 : R.drawable.operate_chip_background);
         setVisibleWhenHasText(binding.rigFrequencyChip);
         setVisibleWhenHasText(binding.callsignHintText);
+        setVisibleWhenHasText(binding.rstSentChipText);
         setVisibleWhenHasText(binding.rxFootnoteText);
         binding.rxFootnoteText.setClickable(
                 (shouldUsePhoneMicrophoneRx() && !hasMicrophonePermission())
@@ -2249,6 +2351,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             lastOperateStableDecodeAtElapsedMs = -1L;
             lastOperateTimingResetAtElapsedMs = -1L;
             lastRxSessionSnapshot = null;
+            operateTurnRstTracker.reset();
             resetActiveRxTranscriptRuntime();
             transcriptRxSuppressedDuringTx = false;
             immediateTxPausedRxCapture = false;
@@ -2268,6 +2371,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             }
             lastRxSessionSnapshot = null;
             lastOperateRxPublishAtElapsedMs = 0L;
+            operateTurnRstTracker.reset();
             resetActiveRxTranscriptRuntime();
         }
     }
@@ -2300,6 +2404,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             lastOperateTimingResetAtElapsedMs = -1L;
             lastOperateRxPublishAtElapsedMs = 0L;
             lastRxSessionSnapshot = null;
+            operateTurnRstTracker.reset();
             resetActiveRxTranscriptRuntime();
         }
     }
@@ -2869,6 +2974,123 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         startActivity(intent);
     }
 
+    private void captureOperateDraftFromSuccessfulTxTurn(
+            @Nullable String transmittedText,
+            long timestampMs
+    ) {
+        if (localLogRepository == null || !hasMeaningfulText(transmittedText)) {
+            return;
+        }
+        String rstSent = trimToNull(CwTxReportExtractor.extractSentRst(transmittedText));
+        if (rstSent == null) {
+            return;
+        }
+        QsoDraftSnapshot existingDraft = localLogRepository.loadDraft();
+        String remoteCallsign = resolveOperateDraftRemoteCallsign(existingDraft);
+        if (remoteCallsign == null) {
+            return;
+        }
+        QsoDraftSnapshot updatedDraft = buildOperateDraftFromSuccessfulTxTurn(
+                existingDraft,
+                remoteCallsign,
+                rstSent,
+                transmittedText,
+                timestampMs
+        );
+        localLogRepository.saveDraft(updatedDraft);
+        activeQsoDraftSnapshot = updatedDraft;
+    }
+
+    @Nullable
+    private String resolveOperateDraftRemoteCallsign(@Nullable QsoDraftSnapshot existingDraft) {
+        if (existingDraft != null
+                && existingDraft.remoteCallsignManuallySet()
+                && hasMeaningfulText(existingDraft.remoteCallsignCandidate())) {
+            return existingDraft.remoteCallsignCandidate().trim().toUpperCase(Locale.US);
+        }
+        String selected = trimToNull(selectedOperateRemoteCallsign);
+        if (selected != null) {
+            return selected.toUpperCase(Locale.US);
+        }
+        if (existingDraft != null && hasMeaningfulText(existingDraft.remoteCallsignCandidate())) {
+            return existingDraft.remoteCallsignCandidate().trim().toUpperCase(Locale.US);
+        }
+        return null;
+    }
+
+    private QsoDraftSnapshot buildOperateDraftFromSuccessfulTxTurn(
+            @Nullable QsoDraftSnapshot existingDraft,
+            String remoteCallsign,
+            String rstSent,
+            String transmittedText,
+            long timestampMs
+    ) {
+        String stationCallsign = resolveOperateDraftStationCallsign(existingDraft);
+        String normalizedText = hasMeaningfulText(existingDraft == null ? null : existingDraft.normalizedText())
+                ? existingDraft.normalizedText().trim()
+                : safeTranscriptText(transmittedText);
+        ArrayList<String> hints = new ArrayList<>();
+        if (existingDraft != null && existingDraft.hints() != null) {
+            hints.addAll(existingDraft.hints());
+        }
+        if (!hints.contains("operate-tx-rst-sent")) {
+            hints.add("operate-tx-rst-sent");
+        }
+        QsoPhase phase = existingDraft == null || existingDraft.phase() == null
+                ? QsoPhase.REPORT_EXCHANGE
+                : existingDraft.phase();
+        if (phase.ordinal() < QsoPhase.REPORT_EXCHANGE.ordinal()) {
+            phase = QsoPhase.REPORT_EXCHANGE;
+        }
+        boolean stationManuallySet = existingDraft != null && existingDraft.stationCallsignManuallySet();
+        boolean remoteManuallySet = existingDraft != null && existingDraft.remoteCallsignManuallySet();
+        boolean rstRcvdManuallySet = existingDraft != null && existingDraft.rstRcvdManuallySet();
+        boolean nameManuallySet = existingDraft != null && existingDraft.nameManuallySet();
+        boolean qthManuallySet = existingDraft != null && existingDraft.qthManuallySet();
+        String rstRcvd = trimToNull(existingDraft == null ? null : existingDraft.rstRcvdCandidate());
+        String name = trimToNull(existingDraft == null ? null : existingDraft.nameCandidate());
+        String qth = trimToNull(existingDraft == null ? null : existingDraft.qthCandidate());
+        boolean readyForDraftConfirmation = remoteCallsign != null && rstSent != null;
+        boolean needManualReview = remoteCallsign.contains("?");
+        return new QsoDraftSnapshot(
+                phase,
+                stationCallsign,
+                remoteCallsign,
+                rstSent,
+                rstRcvd,
+                name,
+                qth,
+                stationManuallySet,
+                remoteManuallySet,
+                false,
+                rstRcvdManuallySet,
+                nameManuallySet,
+                qthManuallySet,
+                normalizedText,
+                hints,
+                readyForDraftConfirmation,
+                needManualReview,
+                timestampMs,
+                new QsoStateEvent(
+                        timestampMs,
+                        phase,
+                        "operate tx rst-sent=" + rstSent + " captured from actual tx turn"
+                )
+        );
+    }
+
+    @Nullable
+    private String resolveOperateDraftStationCallsign(@Nullable QsoDraftSnapshot existingDraft) {
+        if (existingDraft != null && hasMeaningfulText(existingDraft.stationCallsignUsed())) {
+            return existingDraft.stationCallsignUsed().trim().toUpperCase(Locale.US);
+        }
+        String stationCallsign = trimToNull(resolveStationCallsign());
+        if (stationCallsign == null || stationCallsign.startsWith("<")) {
+            return null;
+        }
+        return stationCallsign.toUpperCase(Locale.US);
+    }
+
     private void selectOperateRemoteCallsign(String callsign, boolean showToast) {
         String normalized = trimToNull(callsign);
         if (normalized == null) {
@@ -3082,7 +3304,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (populateComposer) {
             selectTemplate(selectedTemplateId, true);
         } else {
-            refreshAutoPopulatedComposerTemplateIfNeeded();
             updateTemplateButtonStates();
             updateComposerUi();
             updateOverlayContent();
@@ -3099,21 +3320,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 : binding.txComposeEditText.getText().length();
         binding.txComposeEditText.setSelection(length);
         suppressComposerWatcher = false;
-    }
-
-    private void refreshAutoPopulatedComposerTemplateIfNeeded() {
-        String composeText = binding.txComposeEditText.getText() == null
-                ? ""
-                : binding.txComposeEditText.getText().toString();
-        if (!sameText(composeText, lastAutoPopulatedTemplateText)) {
-            return;
-        }
-        String refreshedTemplate = buildTemplateText(selectedTemplateId);
-        lastAutoPopulatedTemplateText = refreshedTemplate;
-        if (sameText(composeText, refreshedTemplate)) {
-            return;
-        }
-        applyComposerStyledText(refreshedTemplate);
     }
 
     private String normalizeSelectedTemplateId(@Nullable String candidateId) {
@@ -3184,7 +3390,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         rendered = replaceTemplateAliases(rendered, resolveStationCallsign(), "MYCALL", "MYCALLSIGN");
         rendered = replaceTemplateAliases(rendered, resolveRemoteCallsign(), "CALL", "CALLSIGN", "HISCALL");
         rendered = replaceTemplateAliases(rendered, resolveRstReceived(), "RST_RECV", "RST_RCVD", "MYRST");
-        rendered = replaceTemplateAliases(rendered, resolveRstSent(), "RST", "RST_SENT", "URRST");
+        rendered = replaceTemplateAliases(rendered, resolveRstTemplateReference(), "RST", "RST_SENT", "URRST");
         rendered = replaceTemplateAliases(rendered, resolveStationName(), "NAME");
         rendered = replaceTemplateAliases(rendered, resolveStationQth(), "QTH");
         rendered = replaceTemplateAliases(rendered, resolveStationGrid(), "GRID", "MYGRID");
@@ -3229,12 +3435,64 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         return "<CALL>";
     }
 
-    private String resolveRstSent() {
-        return "<RST>";
+    private String resolveRstTemplateReference() {
+        String autoSuggested = trimToNull(operateRstReferenceValue);
+        return autoSuggested != null ? autoSuggested : "<RST>";
     }
 
     private String resolveRstReceived() {
-        return "<RST_RCVD>";
+        String draftRstReceived = trimToNull(
+                activeQsoDraftSnapshot == null ? null : activeQsoDraftSnapshot.rstRcvdCandidate()
+        );
+        boolean draftRstReceivedManuallySet = activeQsoDraftSnapshot != null
+                && activeQsoDraftSnapshot.rstRcvdManuallySet();
+        return shouldUseActiveDraftRstCandidate(draftRstReceived, draftRstReceivedManuallySet)
+                ? draftRstReceived
+                : "<RST_RCVD>";
+    }
+
+    private void applyRstReferenceChipState() {
+        String rstReference = trimToNull(resolveRstTemplateReference());
+        if (!hasMeaningfulText(rstReference) || "<RST>".equals(rstReference)) {
+            binding.rstSentChipText.setText("");
+            binding.rstSentChipText.setEnabled(false);
+            binding.rstSentChipText.setAlpha(0.62f);
+            binding.rstSentChipText.setBackgroundResource(R.drawable.operate_chip_background);
+            binding.rstSentChipText.setTextColor(ContextCompat.getColor(this, R.color.cwcn_body));
+            return;
+        }
+        binding.rstSentChipText.setText(
+                getString(R.string.operate_rst_reference_chip, rstReference)
+        );
+        binding.rstSentChipText.setEnabled(false);
+        binding.rstSentChipText.setAlpha(1.0f);
+        binding.rstSentChipText.setBackgroundResource(R.drawable.operate_chip_active_background);
+        binding.rstSentChipText.setTextColor(ContextCompat.getColor(
+                this,
+                R.color.cwcn_accent
+        ));
+    }
+
+    private boolean shouldUseActiveDraftRstCandidate(
+            @Nullable String draftCandidate,
+            boolean manuallySet
+    ) {
+        if (!hasMeaningfulText(draftCandidate)) {
+            return false;
+        }
+        if (manuallySet) {
+            return true;
+        }
+        if (activeQsoDraftSnapshot == null || operateRstResetAtEpochMs <= 0L) {
+            return true;
+        }
+        return activeQsoDraftSnapshot.updatedAtEpochMs() > operateRstResetAtEpochMs;
+    }
+
+    private void markOperateRstResetBoundary() {
+        operateRstResetAtEpochMs = System.currentTimeMillis();
+        operateRstReferenceValue = null;
+        operateTurnRstTracker.reset();
     }
 
     private String resolveStationQth() {
@@ -3633,7 +3891,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                         frameSignalResult.signalSnapshotAfterProcess(),
                         frameEndTimestampMs
                 );
-                captureOperateSpectrumSnapshot(frame);
+                captureOperateSpectrumSnapshot(frame, inputHealthSnapshot);
                 for (CwToneEvent toneEvent : frameSignalResult.toneEvents()) {
                     routeOperateToneEvent(toneEvent, inputHealthSnapshot);
                 }
@@ -3661,7 +3919,10 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
     }
 
-    private void captureOperateSpectrumSnapshot(AudioFrame frame) {
+    private void captureOperateSpectrumSnapshot(
+            AudioFrame frame,
+            @Nullable AudioInputHealthSnapshot inputHealthSnapshot
+    ) {
         if (frame == null || operateSignalProcessor == null || operateAudioSpectrumAnalyzer == null) {
             return;
         }
@@ -3682,12 +3943,14 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 signalSnapshot.hypothesisGuardAppliedFrequencyHz(),
                 signalSnapshot.hypothesisGuardDecision()
         );
-        publishOperateSpectrumSnapshot();
+        SpectrumSnapshotData snapshotData = publishOperateSpectrumSnapshot();
+        operateTurnRstTracker.note(snapshotData, inputHealthSnapshot);
     }
 
-    private void publishOperateSpectrumSnapshot() {
+    @Nullable
+    private SpectrumSnapshotData publishOperateSpectrumSnapshot() {
         if (spectrumHistoryStore == null || lastOperateSpectrumSnapshot == null) {
-            return;
+            return null;
         }
         SpectrumSnapshotData snapshotData = SpectrumSnapshotData.fromAudioSnapshot(
                 lastOperateSpectrumSnapshot,
@@ -3698,6 +3961,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (snapshotData != null) {
             spectrumHistoryStore.append(snapshotData);
         }
+        return snapshotData;
     }
 
     @Override
@@ -4181,6 +4445,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 referenceWpm
         );
         if (observation.startedNewTurn()) {
+            operateTurnRstTracker.begin();
             syncOperateRxToneMode(nowElapsedMs);
             if (activeRxTranscriptEntryId != -1L) {
                 finalizeActiveRxTranscriptEntryFromCurrentSnapshot(System.currentTimeMillis());
@@ -4192,6 +4457,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             beginActiveRxTranscriptTurn(System.currentTimeMillis());
             traceOperateMarker("turn-start", observation.reason(), nowElapsedMs);
         } else if (observation.endedTurn()) {
+            updateOperateRstReferenceFromTurnFinalization(observation.turnFinalization());
             applyTurnFinalizationToActiveTranscript(observation.turnFinalization());
             traceOperateTurnFinalization(
                     observation.turnFinalization(),
@@ -4209,6 +4475,72 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 syncOperateSql();
             }
         }
+    }
+
+    private void updateOperateRstReferenceFromTurnFinalization(
+            @Nullable RxTurnSessionFinalizer.TurnFinalization turnFinalization
+    ) {
+        OperateTurnRstEvidence turnEvidence = operateTurnRstTracker.finishAndReset();
+        if (turnFinalization == null || turnEvidence == null || turnEvidence.spectrumSnapshot == null) {
+            return;
+        }
+        String turnText = renderTranscriptTextFromDecodeEvents(turnFinalization.currentTurnDecodeEvents());
+        if (!hasMeaningfulText(turnText)) {
+            return;
+        }
+        RxSessionSnapshot turnSessionSnapshot = buildRstReferenceSessionSnapshot(turnText, turnEvidence);
+        CwRstAutoEvaluator.Assessment assessment = CwRstAutoEvaluator.evaluateSentSuggestion(
+                turnSessionSnapshot,
+                turnEvidence.spectrumSnapshot
+        );
+        if (assessment.hasSuggestion()) {
+            operateRstReferenceValue = assessment.suggestedRstSent();
+        }
+    }
+
+    private RxSessionSnapshot buildRstReferenceSessionSnapshot(
+            String turnText,
+            OperateTurnRstEvidence turnEvidence
+    ) {
+        SpectrumSnapshotData spectrumSnapshot = turnEvidence.spectrumSnapshot;
+        RxSessionSnapshot baseSnapshot = lastRxSessionSnapshot;
+        int preferredToneHz = spectrumSnapshot == null || spectrumSnapshot.preferredToneHz() <= 0
+                ? (baseSnapshot == null ? 0 : baseSnapshot.preferredToneFrequencyHz())
+                : spectrumSnapshot.preferredToneHz();
+        int trackedToneHz = spectrumSnapshot == null || spectrumSnapshot.trackedToneHz() <= 0
+                ? (baseSnapshot == null ? 0 : baseSnapshot.targetToneFrequencyHz())
+                : spectrumSnapshot.trackedToneHz();
+        int effectiveToneHz = trackedToneHz > 0
+                ? trackedToneHz
+                : (baseSnapshot == null ? 0 : baseSnapshot.effectiveToneFrequencyHz());
+        int estimatedWpm = baseSnapshot == null ? 0 : Math.max(0, baseSnapshot.estimatedWpm());
+        int stableEstimatedWpm = baseSnapshot == null ? estimatedWpm : Math.max(0, baseSnapshot.stableEstimatedWpm());
+        String primaryCallsign = trimToNull(selectedOperateRemoteCallsign);
+        if (primaryCallsign == null && baseSnapshot != null) {
+            primaryCallsign = trimToNull(baseSnapshot.primaryCallsignCandidate());
+        }
+        return new RxSessionSnapshot(
+                System.currentTimeMillis(),
+                baseSnapshot == null ? "RX Input" : baseSnapshot.sourceLabel(),
+                "TURN_FINALIZED",
+                false,
+                preferredToneHz,
+                trackedToneHz,
+                effectiveToneHz,
+                estimatedWpm,
+                stableEstimatedWpm,
+                turnText,
+                "",
+                turnText,
+                primaryCallsign == null ? "" : primaryCallsign,
+                baseSnapshot == null ? "" : baseSnapshot.inputHealthLabel(),
+                baseSnapshot == null ? "" : baseSnapshot.inputHealthHint(),
+                turnEvidence.inputLevelHot,
+                turnEvidence.inputLevelClipping,
+                "",
+                "",
+                ""
+        );
     }
 
     private void traceOperateTurnFinalization(
@@ -4697,6 +5029,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 txStopRequested = false;
                 txPauseRequested = false;
                 txDeliveryStatus = resetRequested ? "" : status;
+                if (sent && !resetRequested) {
+                    captureOperateDraftFromSuccessfulTxTurn(txText, System.currentTimeMillis());
+                }
                 activeTxAdapter = null;
                 activeTxPlaybackSnapshot = resetRequested
                         ? null
@@ -5437,6 +5772,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             transcriptTimelineActive = true;
             activeTxTranscriptEntryId = -1L;
             resetOperateRxRuntimeForManualClear();
+            markOperateRstResetBoundary();
             conversationAutoScrollPending = true;
             markConversationDirty();
         }
@@ -5624,6 +5960,13 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         selectedOperateRemoteCallsign = restoredSelectedCallsign == null
                 ? null
                 : restoredSelectedCallsign.toUpperCase(Locale.US);
+        operateRstResetAtEpochMs = savedInstanceState.getLong(
+                STATE_OPERATE_RST_RESET_AT_EPOCH_MS,
+                operateRstResetAtEpochMs
+        );
+        operateRstReferenceValue = trimToNull(
+                savedInstanceState.getString(STATE_OPERATE_RST_REFERENCE_VALUE)
+        );
         transcriptUseUtc = savedInstanceState.getBoolean(STATE_TRANSCRIPT_USE_UTC, transcriptUseUtc);
         transcriptTimelineActive = savedInstanceState.getBoolean(
                 STATE_TRANSCRIPT_TIMELINE_ACTIVE,

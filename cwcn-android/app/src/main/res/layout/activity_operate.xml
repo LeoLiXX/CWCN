@@ -181,6 +181,24 @@
                     android:textStyle="bold"
                     android:visibility="gone" />
 
+                <TextView
+                    android:id="@+id/rstSentChipText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/operate_chip_background"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:minHeight="22dp"
+                    android:paddingStart="6dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="3dp"
+                    android:textColor="@color/cwcn_accent"
+                    android:textSize="8sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
                 <ScrollView
                     android:id="@+id/conversationScrollView"
                     android:layout_width="match_parent"

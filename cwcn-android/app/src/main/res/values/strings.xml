@@ -428,6 +428,7 @@
     <string name="operate_callsign_picker_clear_selected">清除已选</string>
     <string name="operate_callsign_toast_selected">已选对方呼号: %1$s</string>
     <string name="operate_callsign_toast_cleared">已清除人工选择的对方呼号。</string>
+    <string name="operate_rst_reference_chip">RST 参考 %1$s</string>
     <string name="operate_tx_status_no_text">没有可发射的文本</string>
     <string name="operate_tx_status_phone_unavailable">手机发射链路不可用</string>
     <string name="operate_tx_status_no_route">设置中没有可用发射链路</string>
