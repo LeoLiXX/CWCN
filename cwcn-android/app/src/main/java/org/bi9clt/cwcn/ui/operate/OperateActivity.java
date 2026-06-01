@@ -69,6 +69,7 @@ import org.bi9clt.cwcn.core.qso.CwTxReportExtractor;
 import org.bi9clt.cwcn.core.qso.QsoDraftSnapshot;
 import org.bi9clt.cwcn.core.qso.QsoPhase;
 import org.bi9clt.cwcn.core.qso.QsoStateEvent;
+import org.bi9clt.cwcn.core.qso.QsoStateMachine;
 import org.bi9clt.cwcn.core.rx.LiveRxTraceRecorder;
 import org.bi9clt.cwcn.core.rx.LiveRxTraceStore;
 import org.bi9clt.cwcn.core.rx.LiveRxWpmGuard;
@@ -441,7 +442,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private RxToneTimingRunner operateToneTimingRunner;
     private CwDecoder operateDecoder;
     private CwInterpreter operateRawInterpreter;
+    private CwInterpreter operateSemanticInterpreter;
     private CwInterpreter operatePreviewInterpreter;
+    private QsoStateMachine operateQsoStateMachine;
     private RxUnknownFallbackTracker operateUnknownFallbackTracker;
     private AudioSpectrumAnalyzer operateAudioSpectrumAnalyzer;
     private LiveRxTraceRecorder operateLiveRxTraceRecorder;
@@ -2065,13 +2068,15 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         syncOperateTimingSeedWpm();
         operateDecoder = operateRxCore.decoder();
         operateRawInterpreter = operateRxCore.rawInterpreter();
+        operateSemanticInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.SEMANTIC_RECOVERY);
         operatePreviewInterpreter = new CwInterpreter(CwInterpreter.RecoveryMode.RAW_COPY_FOCUS);
+        operateQsoStateMachine = new QsoStateMachine();
         operateUnknownFallbackTracker = new RxUnknownFallbackTracker();
         operateCommittedOutputController = new RxCommittedOutputController(
                 operateRawInterpreter,
                 operateUnknownFallbackTracker,
-                null,
-                null,
+                operateSemanticInterpreter,
+                operateQsoStateMachine,
                 operateRawCommitGate
         );
         operateTurnSessionFinalizer = new RxTurnSessionFinalizer(
@@ -2879,16 +2884,16 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
         String selectedCallsign = trimToNull(selectedOperateRemoteCallsign);
         if (selectedCallsign != null) {
-            openQsoEditorForCallsign(selectedCallsign);
+            openQsoEditorFromOperateContext(selectedCallsign, null);
             return;
         }
         List<String> candidates = resolveUiFriendlyCallsignCandidates(lastRxSessionSnapshot);
         if (candidates.isEmpty()) {
-            Toast.makeText(this, R.string.operate_callsign_toast_no_available, Toast.LENGTH_SHORT).show();
+            openQsoEditorFromOperateContext(null, null);
             return;
         }
         if (candidates.size() == 1) {
-            openQsoEditorForCallsign(candidates.get(0));
+            openQsoEditorFromOperateContext(candidates.get(0), null);
             return;
         }
         showCallsignCandidatePicker(candidates, true);
@@ -2922,50 +2927,94 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     }
 
     private void openQsoEditorForCallsign(String callsign) {
-        openQsoEditorForCallsign(callsign, null);
+        openQsoEditorFromOperateContext(callsign, null);
     }
 
     private void openQsoEditorForCallsign(String callsign, @Nullable String commentSeed) {
+        openQsoEditorFromOperateContext(callsign, commentSeed);
+    }
+
+    private void openQsoEditorFromOperateContext(
+            @Nullable String callsign,
+            @Nullable String commentSeed
+    ) {
         if (localLogRepository == null) {
             Toast.makeText(this, R.string.operate_callsign_toast_log_repo_unavailable, Toast.LENGTH_SHORT).show();
             return;
         }
         String normalizedCallsign = trimToNull(callsign);
-        if (normalizedCallsign == null) {
+        if (callsign != null && normalizedCallsign == null) {
             Toast.makeText(this, R.string.operate_callsign_toast_invalid, Toast.LENGTH_SHORT).show();
             return;
         }
-        selectedOperateRemoteCallsign = normalizedCallsign.toUpperCase(Locale.US);
+        String normalizedRemoteCallsign = normalizedCallsign == null
+                ? null
+                : normalizedCallsign.toUpperCase(Locale.US);
+        if (normalizedRemoteCallsign != null) {
+            selectedOperateRemoteCallsign = normalizedRemoteCallsign;
+        }
         long seedTimestamp = resolveCallsignHintTimestamp(lastRxSessionSnapshot);
-        String stationCallsign = trimToNull(
-                stationProfileStore == null ? null : stationProfileStore.stationCallsign()
-        );
+        QsoDraftSnapshot existingDraft = localLogRepository.loadDraft();
+        QsoDraftSnapshot liveQsoSnapshot = operateCommittedOutputController == null
+                ? null
+                : operateCommittedOutputController.qsoSnapshot();
+        String stationCallsign = resolveOperateDraftStationCallsign(existingDraft);
         String rawContext = resolveCallsignHintRawContext(lastRxSessionSnapshot);
+        String rstReference = trimToNull(operateRstReferenceValue);
+        String remoteCallsign = chooseOperateContextRemoteCallsign(
+                normalizedRemoteCallsign,
+                existingDraft,
+                liveQsoSnapshot
+        );
+        String rstSent = chooseOperateContextRstSent(existingDraft, liveQsoSnapshot, rstReference);
+        String rstRcvd = chooseOperateContextRstRcvd(existingDraft, liveQsoSnapshot);
+        String name = chooseOperateContextName(existingDraft, liveQsoSnapshot);
+        String qth = chooseOperateContextQth(existingDraft, liveQsoSnapshot);
         ArrayList<String> hints = new ArrayList<>();
         hints.add("seeded-from-operate");
-        hints.add("candidate-selected-manually");
+        if (normalizedRemoteCallsign != null) {
+            hints.add("candidate-selected-manually");
+        }
+        if (rstReference != null) {
+            hints.add("operate-rst-reference-seeded");
+        }
+        if (liveQsoSnapshot != null && liveQsoSnapshot.hints() != null) {
+            for (String hint : liveQsoSnapshot.hints()) {
+                if (hasMeaningfulText(hint) && !hints.contains(hint)) {
+                    hints.add(hint);
+                }
+            }
+        }
+        QsoPhase phase = chooseOperateContextPhase(existingDraft, liveQsoSnapshot, rstSent, rstRcvd);
         QsoDraftSnapshot seededDraft = new QsoDraftSnapshot(
-                QsoPhase.IDLE,
+                phase,
                 stationCallsign,
-                normalizedCallsign,
-                null,
-                null,
-                null,
-                null,
+                remoteCallsign,
+                rstSent,
+                rstRcvd,
+                name,
+                qth,
                 stationCallsign != null,
-                true,
+                remoteCallsign != null,
                 false,
                 false,
                 false,
                 false,
                 rawContext == null ? "" : rawContext,
                 hints,
-                false,
-                normalizedCallsign.contains("?"),
+                remoteCallsign != null && (rstSent != null || rstRcvd != null),
+                remoteCallsign == null || remoteCallsign.contains("?"),
                 seedTimestamp,
-                new QsoStateEvent(seedTimestamp, QsoPhase.IDLE, "seeded from operate callsign hint")
+                new QsoStateEvent(
+                        seedTimestamp,
+                        phase,
+                        remoteCallsign == null
+                                ? "seeded from operate context"
+                                : "seeded from operate callsign hint"
+                )
         );
         localLogRepository.saveDraft(seededDraft);
+        activeQsoDraftSnapshot = seededDraft;
         refreshUi();
         Intent intent = new Intent(this, QsoEditorActivity.class);
         if (hasMeaningfulText(commentSeed)) {
@@ -2987,9 +3036,6 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         }
         QsoDraftSnapshot existingDraft = localLogRepository.loadDraft();
         String remoteCallsign = resolveOperateDraftRemoteCallsign(existingDraft);
-        if (remoteCallsign == null) {
-            return;
-        }
         QsoDraftSnapshot updatedDraft = buildOperateDraftFromSuccessfulTxTurn(
                 existingDraft,
                 remoteCallsign,
@@ -3015,12 +3061,16 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         if (existingDraft != null && hasMeaningfulText(existingDraft.remoteCallsignCandidate())) {
             return existingDraft.remoteCallsignCandidate().trim().toUpperCase(Locale.US);
         }
+        if (lastRxSessionSnapshot != null
+                && hasMeaningfulText(lastRxSessionSnapshot.primaryCallsignCandidate())) {
+            return lastRxSessionSnapshot.primaryCallsignCandidate().trim().toUpperCase(Locale.US);
+        }
         return null;
     }
 
     private QsoDraftSnapshot buildOperateDraftFromSuccessfulTxTurn(
             @Nullable QsoDraftSnapshot existingDraft,
-            String remoteCallsign,
+            @Nullable String remoteCallsign,
             String rstSent,
             String transmittedText,
             long timestampMs
@@ -3051,7 +3101,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
         String name = trimToNull(existingDraft == null ? null : existingDraft.nameCandidate());
         String qth = trimToNull(existingDraft == null ? null : existingDraft.qthCandidate());
         boolean readyForDraftConfirmation = remoteCallsign != null && rstSent != null;
-        boolean needManualReview = remoteCallsign.contains("?");
+        boolean needManualReview = remoteCallsign == null || remoteCallsign.contains("?");
         return new QsoDraftSnapshot(
                 phase,
                 stationCallsign,
@@ -3089,6 +3139,133 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
             return null;
         }
         return stationCallsign.toUpperCase(Locale.US);
+    }
+
+    @Nullable
+    private String chooseOperateContextRemoteCallsign(
+            @Nullable String explicitCallsign,
+            @Nullable QsoDraftSnapshot existingDraft,
+            @Nullable QsoDraftSnapshot liveQsoSnapshot
+    ) {
+        String liveCandidate = trimToNull(liveQsoSnapshot == null ? null : liveQsoSnapshot.remoteCallsignCandidate());
+        if (explicitCallsign == null) {
+            return resolvePreferredCallsignCandidate(liveCandidate, resolveOperateDraftRemoteCallsign(existingDraft));
+        }
+        return resolvePreferredCallsignCandidate(explicitCallsign, liveCandidate);
+    }
+
+    @Nullable
+    private String chooseOperateContextRstSent(
+            @Nullable QsoDraftSnapshot existingDraft,
+            @Nullable QsoDraftSnapshot liveQsoSnapshot,
+            @Nullable String rstReference
+    ) {
+        String draftValue = trimToNull(existingDraft == null ? null : existingDraft.rstSentCandidate());
+        String liveValue = trimToNull(liveQsoSnapshot == null ? null : liveQsoSnapshot.rstSentCandidate());
+        String preferred = firstNonBlank(rstReference, draftValue, liveValue);
+        return normalizeRstValue(preferred);
+    }
+
+    @Nullable
+    private String chooseOperateContextRstRcvd(
+            @Nullable QsoDraftSnapshot existingDraft,
+            @Nullable QsoDraftSnapshot liveQsoSnapshot
+    ) {
+        return normalizeRstValue(firstNonBlank(
+                existingDraft == null ? null : existingDraft.rstRcvdCandidate(),
+                liveQsoSnapshot == null ? null : liveQsoSnapshot.rstRcvdCandidate()
+        ));
+    }
+
+    @Nullable
+    private String chooseOperateContextName(
+            @Nullable QsoDraftSnapshot existingDraft,
+            @Nullable QsoDraftSnapshot liveQsoSnapshot
+    ) {
+        return trimToNull(firstNonBlank(
+                existingDraft == null ? null : existingDraft.nameCandidate(),
+                liveQsoSnapshot == null ? null : liveQsoSnapshot.nameCandidate()
+        ));
+    }
+
+    @Nullable
+    private String chooseOperateContextQth(
+            @Nullable QsoDraftSnapshot existingDraft,
+            @Nullable QsoDraftSnapshot liveQsoSnapshot
+    ) {
+        return trimToNull(firstNonBlank(
+                existingDraft == null ? null : existingDraft.qthCandidate(),
+                liveQsoSnapshot == null ? null : liveQsoSnapshot.qthCandidate()
+        ));
+    }
+
+    private QsoPhase chooseOperateContextPhase(
+            @Nullable QsoDraftSnapshot existingDraft,
+            @Nullable QsoDraftSnapshot liveQsoSnapshot,
+            @Nullable String rstSent,
+            @Nullable String rstRcvd
+    ) {
+        QsoPhase livePhase = liveQsoSnapshot == null ? null : liveQsoSnapshot.phase();
+        if (livePhase != null && livePhase != QsoPhase.IDLE) {
+            return livePhase;
+        }
+        QsoPhase draftPhase = existingDraft == null ? null : existingDraft.phase();
+        if (draftPhase != null && draftPhase != QsoPhase.IDLE) {
+            return draftPhase;
+        }
+        if (rstSent != null || rstRcvd != null) {
+            return QsoPhase.REPORT_EXCHANGE;
+        }
+        return QsoPhase.IDLE;
+    }
+
+    @Nullable
+    private String resolvePreferredCallsignCandidate(@Nullable String primary, @Nullable String fallback) {
+        String normalizedPrimary = normalizeCallsignCandidate(primary);
+        String normalizedFallback = normalizeCallsignCandidate(fallback);
+        if (normalizedPrimary == null) {
+            return normalizedFallback;
+        }
+        if (normalizedFallback == null) {
+            return normalizedPrimary;
+        }
+        if (normalizedPrimary.contains("?") && !normalizedFallback.contains("?")) {
+            return normalizedFallback;
+        }
+        return normalizedPrimary;
+    }
+
+    @Nullable
+    private String normalizeCallsignCandidate(@Nullable String value) {
+        String normalized = trimToNull(value);
+        return normalized == null ? null : normalized.toUpperCase(Locale.US);
+    }
+
+    @Nullable
+    private String normalizeRstValue(@Nullable String value) {
+        String normalized = trimToNull(value);
+        if (normalized == null) {
+            return null;
+        }
+        String upper = normalized.toUpperCase(Locale.US);
+        if ("5NN".equals(upper) || "ENN".equals(upper)) {
+            return "599";
+        }
+        return upper;
+    }
+
+    @Nullable
+    private String firstNonBlank(@Nullable String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String normalized = trimToNull(value);
+            if (normalized != null) {
+                return normalized;
+            }
+        }
+        return null;
     }
 
     private void selectOperateRemoteCallsign(String callsign, boolean showToast) {
@@ -3454,7 +3631,9 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
     private void applyRstReferenceChipState() {
         String rstReference = trimToNull(resolveRstTemplateReference());
         if (!hasMeaningfulText(rstReference) || "<RST>".equals(rstReference)) {
-            binding.rstSentChipText.setText("");
+            binding.rstSentChipText.setText(
+                    getString(R.string.operate_rst_reference_chip_empty)
+            );
             binding.rstSentChipText.setEnabled(false);
             binding.rstSentChipText.setAlpha(0.62f);
             binding.rstSentChipText.setBackgroundResource(R.drawable.operate_chip_background);

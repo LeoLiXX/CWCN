@@ -17,23 +17,47 @@ import java.util.UUID;
 
 public final class TxTemplateStore {
     public static final String TEMPLATE_CQ = "CQ";
-    public static final String TEMPLATE_REPLY = "基本应答";
-    public static final String TEMPLATE_QRZ = "设备信息";
-    public static final String TEMPLATE_TU73 = "73 收尾";
+    public static final String TEMPLATE_CQ_X2 = "CQ ×2";
+    public static final String TEMPLATE_QRZ = "QRZ";
+    public static final String TEMPLATE_RESPONSE_CQ = "Response CQ";
+    public static final String TEMPLATE_RESPONSE_CALL = "Response CALL";
+    public static final String TEMPLATE_QTH = "QTH";
+    public static final String TEMPLATE_RIG = "RIG";
+    public static final String TEMPLATE_QSO_73 = "QSO & 73";
 
     private static final String LEGACY_TEMPLATE_REPLY = "应答";
     private static final String LEGACY_TEMPLATE_QRZ = "设备";
+    private static final String LEGACY_TEMPLATE_QRZ_VERBOSE = "设备信息";
     private static final String LEGACY_TEMPLATE_TU73 = "73";
+    private static final String LEGACY_TEMPLATE_TU73_VERBOSE = "73 收尾";
+    private static final String LEGACY_TEMPLATE_REPLY_VERBOSE = "基本应答";
 
-    public static final String DEFAULT_CQ = "CQ CQ DE <MYCALL> K";
-    public static final String DEFAULT_REPLY = "<CALL> DE <MYCALL> TNX FER CALL UR RST <RST_SENT> NAME <NAME> QTH <QTH> BK";
-    public static final String DEFAULT_QRZ = "RIG <RIG> ANT <ANT> WX <WX> BK";
-    public static final String DEFAULT_TU73 = "TU FER QSO 73 DE <MYCALL> SK";
+    public static final String DEFAULT_CQ =
+            "CQ CQ CQ DE <MYCALL> <MYCALL> <MYCALL> PSE K.";
+    public static final String DEFAULT_CQ_X2 =
+            "CQ CQ DE <MYCALL> <MYCALL>\n"
+                    + "CQ CQ DE <MYCALL> <MYCALL>\n"
+                    + "PSE K.";
+    public static final String DEFAULT_QRZ = "QRZ? DE <MYCALL> <MYCALL> BK.";
+    public static final String DEFAULT_RESPONSE_CQ =
+            "<CALL> <CALL> <CALL> DE <MYCALL> <MYCALL> <MYCALL> UR <RST> <RST> BK.";
+    public static final String DEFAULT_RESPONSE_CALL =
+            "R R <CALL> DE <MYCALL> <MYCALL> TU UR <RST> <RST> BK.";
+    public static final String DEFAULT_QTH =
+            "<CALL> DE <MYCALL> QTH <QTH> GRID <GRID> WX <WX> BK.";
+    public static final String DEFAULT_RIG =
+            "<CALL> DE <MYCALL> RIG <RIG> ANT <ANT> BK.";
+    public static final String DEFAULT_QSO_73 =
+            "<CALL> TU QSO 73 DE <MYCALL> SK.";
 
     public static final String TEMPLATE_ID_CQ = "builtin_cq";
-    public static final String TEMPLATE_ID_REPLY = "builtin_reply";
+    public static final String TEMPLATE_ID_CQ_X2 = "builtin_cq_x2";
     public static final String TEMPLATE_ID_QRZ = "builtin_qrz";
-    public static final String TEMPLATE_ID_TU73 = "builtin_tu73";
+    public static final String TEMPLATE_ID_RESPONSE_CQ = "builtin_response_cq";
+    public static final String TEMPLATE_ID_RESPONSE_CALL = "builtin_response_call";
+    public static final String TEMPLATE_ID_QTH = "builtin_qth";
+    public static final String TEMPLATE_ID_RIG = "builtin_rig";
+    public static final String TEMPLATE_ID_QSO_73 = "builtin_qso_73";
 
     private static final String PREFS_NAME = "cwcn_tx_templates";
     private static final String KEY_CQ = "template_cq";
@@ -205,9 +229,9 @@ public final class TxTemplateStore {
         return entry == null ? DEFAULT_CQ : entry.body();
     }
 
-    public String cqDxTemplate() {
-        TxTemplateEntry entry = findTemplateById(TEMPLATE_ID_REPLY);
-        return entry == null ? DEFAULT_REPLY : entry.body();
+    public String cqX2Template() {
+        TxTemplateEntry entry = findTemplateById(TEMPLATE_ID_CQ_X2);
+        return entry == null ? DEFAULT_CQ_X2 : entry.body();
     }
 
     public String qrzTemplate() {
@@ -215,9 +239,29 @@ public final class TxTemplateStore {
         return entry == null ? DEFAULT_QRZ : entry.body();
     }
 
-    public String tu73Template() {
-        TxTemplateEntry entry = findTemplateById(TEMPLATE_ID_TU73);
-        return entry == null ? DEFAULT_TU73 : entry.body();
+    public String responseCqTemplate() {
+        TxTemplateEntry entry = findTemplateById(TEMPLATE_ID_RESPONSE_CQ);
+        return entry == null ? DEFAULT_RESPONSE_CQ : entry.body();
+    }
+
+    public String responseCallTemplate() {
+        TxTemplateEntry entry = findTemplateById(TEMPLATE_ID_RESPONSE_CALL);
+        return entry == null ? DEFAULT_RESPONSE_CALL : entry.body();
+    }
+
+    public String qthTemplate() {
+        TxTemplateEntry entry = findTemplateById(TEMPLATE_ID_QTH);
+        return entry == null ? DEFAULT_QTH : entry.body();
+    }
+
+    public String rigTemplate() {
+        TxTemplateEntry entry = findTemplateById(TEMPLATE_ID_RIG);
+        return entry == null ? DEFAULT_RIG : entry.body();
+    }
+
+    public String qso73Template() {
+        TxTemplateEntry entry = findTemplateById(TEMPLATE_ID_QSO_73);
+        return entry == null ? DEFAULT_QSO_73 : entry.body();
     }
 
     public String resolveTemplate(String templateLabel) {
@@ -225,14 +269,32 @@ public final class TxTemplateStore {
         if (byId != null) {
             return byId.body();
         }
-        if (TEMPLATE_REPLY.equals(templateLabel) || LEGACY_TEMPLATE_REPLY.equals(templateLabel)) {
-            return cqDxTemplate();
+        if (TEMPLATE_CQ_X2.equals(templateLabel)) {
+            return cqX2Template();
         }
-        if (TEMPLATE_QRZ.equals(templateLabel) || LEGACY_TEMPLATE_QRZ.equals(templateLabel)) {
+        if (TEMPLATE_QRZ.equals(templateLabel)) {
             return qrzTemplate();
         }
-        if (TEMPLATE_TU73.equals(templateLabel) || LEGACY_TEMPLATE_TU73.equals(templateLabel)) {
-            return tu73Template();
+        if (TEMPLATE_RESPONSE_CQ.equals(templateLabel)
+                || LEGACY_TEMPLATE_REPLY.equals(templateLabel)
+                || LEGACY_TEMPLATE_REPLY_VERBOSE.equals(templateLabel)) {
+            return responseCqTemplate();
+        }
+        if (TEMPLATE_RESPONSE_CALL.equals(templateLabel)) {
+            return responseCallTemplate();
+        }
+        if (TEMPLATE_QTH.equals(templateLabel)) {
+            return qthTemplate();
+        }
+        if (TEMPLATE_RIG.equals(templateLabel)
+                || LEGACY_TEMPLATE_QRZ.equals(templateLabel)
+                || LEGACY_TEMPLATE_QRZ_VERBOSE.equals(templateLabel)) {
+            return rigTemplate();
+        }
+        if (TEMPLATE_QSO_73.equals(templateLabel)
+                || LEGACY_TEMPLATE_TU73.equals(templateLabel)
+                || LEGACY_TEMPLATE_TU73_VERBOSE.equals(templateLabel)) {
+            return qso73Template();
         }
         TxTemplateEntry byName = findTemplateByName(templateLabel);
         if (byName != null) {
@@ -337,19 +399,39 @@ public final class TxTemplateStore {
                 normalizeOrDefault(preferences.getString(KEY_CQ, null), DEFAULT_CQ)
         ));
         migrated.add(new TxTemplateEntry(
-                TEMPLATE_ID_REPLY,
-                TEMPLATE_REPLY,
-                normalizeOrDefault(preferences.getString(KEY_CQ_DX, null), DEFAULT_REPLY)
+                TEMPLATE_ID_CQ_X2,
+                TEMPLATE_CQ_X2,
+                DEFAULT_CQ_X2
         ));
         migrated.add(new TxTemplateEntry(
                 TEMPLATE_ID_QRZ,
                 TEMPLATE_QRZ,
-                normalizeOrDefault(preferences.getString(KEY_QRZ, null), DEFAULT_QRZ)
+                DEFAULT_QRZ
         ));
         migrated.add(new TxTemplateEntry(
-                TEMPLATE_ID_TU73,
-                TEMPLATE_TU73,
-                normalizeOrDefault(preferences.getString(KEY_TU73, null), DEFAULT_TU73)
+                TEMPLATE_ID_RESPONSE_CQ,
+                TEMPLATE_RESPONSE_CQ,
+                normalizeOrDefault(preferences.getString(KEY_CQ_DX, null), DEFAULT_RESPONSE_CQ)
+        ));
+        migrated.add(new TxTemplateEntry(
+                TEMPLATE_ID_RESPONSE_CALL,
+                TEMPLATE_RESPONSE_CALL,
+                DEFAULT_RESPONSE_CALL
+        ));
+        migrated.add(new TxTemplateEntry(
+                TEMPLATE_ID_QTH,
+                TEMPLATE_QTH,
+                DEFAULT_QTH
+        ));
+        migrated.add(new TxTemplateEntry(
+                TEMPLATE_ID_RIG,
+                TEMPLATE_RIG,
+                normalizeOrDefault(preferences.getString(KEY_QRZ, null), DEFAULT_RIG)
+        ));
+        migrated.add(new TxTemplateEntry(
+                TEMPLATE_ID_QSO_73,
+                TEMPLATE_QSO_73,
+                normalizeOrDefault(preferences.getString(KEY_TU73, null), DEFAULT_QSO_73)
         ));
         return migrated;
     }
@@ -357,9 +439,21 @@ public final class TxTemplateStore {
     private List<TxTemplateEntry> defaultTemplates() {
         ArrayList<TxTemplateEntry> defaults = new ArrayList<>();
         defaults.add(new TxTemplateEntry(TEMPLATE_ID_CQ, TEMPLATE_CQ, DEFAULT_CQ));
-        defaults.add(new TxTemplateEntry(TEMPLATE_ID_REPLY, TEMPLATE_REPLY, DEFAULT_REPLY));
+        defaults.add(new TxTemplateEntry(TEMPLATE_ID_CQ_X2, TEMPLATE_CQ_X2, DEFAULT_CQ_X2));
         defaults.add(new TxTemplateEntry(TEMPLATE_ID_QRZ, TEMPLATE_QRZ, DEFAULT_QRZ));
-        defaults.add(new TxTemplateEntry(TEMPLATE_ID_TU73, TEMPLATE_TU73, DEFAULT_TU73));
+        defaults.add(new TxTemplateEntry(
+                TEMPLATE_ID_RESPONSE_CQ,
+                TEMPLATE_RESPONSE_CQ,
+                DEFAULT_RESPONSE_CQ
+        ));
+        defaults.add(new TxTemplateEntry(
+                TEMPLATE_ID_RESPONSE_CALL,
+                TEMPLATE_RESPONSE_CALL,
+                DEFAULT_RESPONSE_CALL
+        ));
+        defaults.add(new TxTemplateEntry(TEMPLATE_ID_QTH, TEMPLATE_QTH, DEFAULT_QTH));
+        defaults.add(new TxTemplateEntry(TEMPLATE_ID_RIG, TEMPLATE_RIG, DEFAULT_RIG));
+        defaults.add(new TxTemplateEntry(TEMPLATE_ID_QSO_73, TEMPLATE_QSO_73, DEFAULT_QSO_73));
         return defaults;
     }
 
