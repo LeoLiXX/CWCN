@@ -3635,7 +3635,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                     getString(R.string.operate_rst_reference_chip_empty)
             );
             binding.rstSentChipText.setEnabled(false);
-            binding.rstSentChipText.setAlpha(0.62f);
+            binding.rstSentChipText.setAlpha(0.54f);
             binding.rstSentChipText.setBackgroundResource(R.drawable.operate_chip_background);
             binding.rstSentChipText.setTextColor(ContextCompat.getColor(this, R.color.cwcn_body));
             return;
@@ -3644,7 +3644,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 getString(R.string.operate_rst_reference_chip, rstReference)
         );
         binding.rstSentChipText.setEnabled(false);
-        binding.rstSentChipText.setAlpha(1.0f);
+        binding.rstSentChipText.setAlpha(0.92f);
         binding.rstSentChipText.setBackgroundResource(R.drawable.operate_chip_active_background);
         binding.rstSentChipText.setTextColor(ContextCompat.getColor(
                 this,
