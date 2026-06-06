@@ -18,7 +18,7 @@ android {
         minSdk 26
         targetSdk 33
         versionCode 1
-        versionName "0.1.0-alpha01"
+        versionName "0.1.0"
         buildConfigField "String", "AUTHOR_CALLSIGN", "\"BI9CLT\""
         buildConfigField "String", "BUILD_TIME", "\"${cwcnBuildTime}\""
 
