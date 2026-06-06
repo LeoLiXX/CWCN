@@ -426,7 +426,7 @@ public final class SpectrumActivity extends AppCompatActivity {
 
     private String renderSqlHint(@Nullable SpectrumSnapshotData latestSpectrum) {
         if (latestSpectrum == null || latestSpectrum.sqlAttackThreshold() <= 0) {
-            return "MAN 是手动门限，IN 是当前输入，REC 是推荐门限。";
+            return getString(R.string.sql_hint_legend);
         }
         float frameLevel = latestSpectrum.sqlFrameRmsAmplitude();
         float toneLevel = latestSpectrum.sqlToneRmsAmplitude();
@@ -439,19 +439,17 @@ public final class SpectrumActivity extends AppCompatActivity {
                 : "";
         if (frameLevel < threshold) {
             if ((threshold - frameLevel) <= Math.max(4f, threshold * 0.08f)) {
-                return "MAN 是手动门限，IN 刚好在线下方，适合等有效 CW 过线。" + recommendationSuffix;
+                return getString(R.string.sql_hint_near_below, recommendationSuffix);
             }
-            return "MAN 是手动门限，IN 比它低 " + Math.abs(delta) + "；背景噪声应被压住。" + recommendationSuffix;
+            return getString(R.string.sql_hint_below, Math.abs(delta), recommendationSuffix);
         }
         if (toneLevel > threshold) {
-            return "MAN 是手动门限，Tone 比它高 " + Math.abs(toneDelta) + "；应允许有效 CW 通过。"
-                    + recommendationSuffix;
+            return getString(R.string.sql_hint_tone_above, Math.abs(toneDelta), recommendationSuffix);
         }
         if (noise >= threshold) {
-            return "MAN 是手动门限；当前噪声已经贴近或越过它，建议继续上调门限。" + recommendationSuffix;
+            return getString(R.string.sql_hint_noise_near, recommendationSuffix);
         }
-        return "MAN 是手动门限，IN 比它高 " + Math.abs(delta) + "；若不是 CW，可继续提高门限。"
-                + recommendationSuffix;
+        return getString(R.string.sql_hint_input_above, Math.abs(delta), recommendationSuffix);
     }
 
     private int clampSqlThreshold(int threshold) {
@@ -460,18 +458,21 @@ public final class SpectrumActivity extends AppCompatActivity {
 
     private String buildSqlRecommendationHintSuffix(SpectrumSnapshotData snapshotData) {
         StringBuilder builder = new StringBuilder();
-        builder.append(" 推荐线 ").append(snapshotData.sqlRecommendedThreshold())
-                .append("，噪声 ").append(snapshotData.sqlNoiseFloorEstimate());
+        builder.append(getString(
+                R.string.sql_hint_recommendation_base,
+                snapshotData.sqlRecommendedThreshold(),
+                snapshotData.sqlNoiseFloorEstimate()
+        ));
         SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(snapshotData);
         if (recommendation.limitedBySafetyFloor()) {
-            builder.append("，当前受系统下限保护。");
+            builder.append(getString(R.string.sql_hint_recommendation_floor));
             return builder.toString();
         }
         if (recommendation.limitedByToneHeadroom()) {
-            builder.append("，已给弱 CW 留出过线空间。");
+            builder.append(getString(R.string.sql_hint_recommendation_headroom));
             return builder.toString();
         }
-        builder.append("，当前按略高于噪声估计。");
+        builder.append(getString(R.string.sql_hint_recommendation_estimated));
         return builder.toString();
     }
 
@@ -504,7 +505,9 @@ public final class SpectrumActivity extends AppCompatActivity {
         if (snapshot == null) {
             return source;
         }
-        return (snapshot.captureActive() ? "RAW 接收中" : "RAW 保持中")
+        return (snapshot.captureActive()
+                ? getString(R.string.status_raw_receiving)
+                : getString(R.string.status_raw_holding))
                 + "  |  "
                 + source
                 + "  |  "

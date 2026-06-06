@@ -3862,7 +3862,7 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
 
     private String renderOperateSqlMeterHint(@Nullable SpectrumSnapshotData latestSpectrum) {
         if (latestSpectrum == null) {
-            return "MAN 是手动门限，IN 是当前输入，REC 是推荐门限。";
+            return getString(R.string.sql_hint_legend);
         }
         float frameLevel = latestSpectrum.sqlFrameRmsAmplitude();
         float toneLevel = latestSpectrum.sqlToneRmsAmplitude();
@@ -3877,32 +3877,33 @@ public final class OperateActivity extends AppCompatActivity implements RxAudioS
                 : "";
         if (frameLevel < manualThreshold) {
             if ((manualThreshold - frameLevel) <= Math.max(4f, manualThreshold * 0.08f)) {
-                return "MAN 在线上，IN 刚好压在下方，适合等有效 CW 过线。" + recommendationSuffix;
+                return getString(R.string.sql_hint_near_below, recommendationSuffix);
             }
-            return "MAN 高于当前输入 " + Math.abs(delta) + "，背景噪声应被压住。" + recommendationSuffix;
+            return getString(R.string.sql_hint_below, Math.abs(delta), recommendationSuffix);
         }
         if (toneLevel > manualThreshold) {
-            return "Tone 高于 MAN " + Math.abs(toneDelta) + "，有效 CW 应该可以通过。"
-                    + recommendationSuffix;
+            return getString(R.string.sql_hint_tone_above, Math.abs(toneDelta), recommendationSuffix);
         }
         if (noise >= manualThreshold) {
-            return "当前噪声已经贴近或越过 MAN，建议继续上调门限。" + recommendationSuffix;
+            return getString(R.string.sql_hint_noise_near, recommendationSuffix);
         }
-        return "IN 高于 MAN " + Math.abs(delta) + "；若这不是 CW，建议继续提高门限。"
-                + recommendationSuffix;
+        return getString(R.string.sql_hint_input_above, Math.abs(delta), recommendationSuffix);
     }
 
     private String buildOperateSqlRecommendationHintSuffix(SpectrumSnapshotData snapshotData) {
         StringBuilder builder = new StringBuilder();
-        builder.append(" 推荐 ").append(snapshotData.sqlRecommendedThreshold())
-                .append("，噪声 ").append(snapshotData.sqlNoiseFloorEstimate());
+        builder.append(getString(
+                R.string.sql_hint_recommendation_base,
+                snapshotData.sqlRecommendedThreshold(),
+                snapshotData.sqlNoiseFloorEstimate()
+        ));
         SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(snapshotData);
         if (recommendation.limitedBySafetyFloor()) {
-            builder.append("，当前受系统下限保护。");
+            builder.append(getString(R.string.sql_hint_recommendation_floor));
             return builder.toString();
         }
         if (recommendation.limitedByToneHeadroom()) {
-            builder.append("，已给弱 CW 留出过线空间。");
+            builder.append(getString(R.string.sql_hint_recommendation_headroom));
             return builder.toString();
         }
         return builder.toString();

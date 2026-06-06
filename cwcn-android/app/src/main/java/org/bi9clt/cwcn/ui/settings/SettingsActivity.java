@@ -30,6 +30,7 @@ import androidx.core.content.ContextCompat;
 
 import org.bi9clt.cwcn.R;
 import org.bi9clt.cwcn.BuildConfig;
+import org.bi9clt.cwcn.core.app.AppLanguageStore;
 import org.bi9clt.cwcn.core.app.DeveloperModeStore;
 import org.bi9clt.cwcn.core.app.OperateRouteModeStore;
 import org.bi9clt.cwcn.core.app.RouteFallbackStore;
@@ -132,6 +133,7 @@ public final class SettingsActivity extends AppCompatActivity {
     }
 
     private ActivitySettingsBinding binding;
+    private AppLanguageStore appLanguageStore;
     private DeveloperModeStore developerModeStore;
     private StationProfileStore stationProfileStore;
     private RigSelectionStore rigSelectionStore;
@@ -154,12 +156,14 @@ public final class SettingsActivity extends AppCompatActivity {
     private ArrayAdapter<UsbSerialDeviceOption> usbDeviceAdapter;
     private boolean syncingUsbDeviceSelection;
     private String usbRouteStatusMessage = "";
+    private boolean syncingLanguageSelection;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivitySettingsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        appLanguageStore = new AppLanguageStore(this);
         developerModeStore = new DeveloperModeStore(this);
         stationProfileStore = new StationProfileStore(this);
         rigSelectionStore = new RigSelectionStore(this);
@@ -174,6 +178,7 @@ public final class SettingsActivity extends AppCompatActivity {
         setupRouteEditorControls();
         setupRouteFallbackControls();
         setupRxInputControls();
+        setupLanguageControls();
         setupInfoButtons();
         setupActions();
         refreshUi();
@@ -397,6 +402,63 @@ public final class SettingsActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> parent) {
             }
         });
+    }
+
+    private void setupLanguageControls() {
+        ArrayAdapter<AppLanguageStore.LanguageMode> languageModeAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                AppLanguageStore.LanguageMode.values()
+        ) {
+            @Override
+            public View getView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                bindLanguageModeLabel(view, getItem(position));
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, @Nullable View convertView, ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                bindLanguageModeLabel(view, getItem(position));
+                return view;
+            }
+        };
+        languageModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.languageModeSpinner.setAdapter(languageModeAdapter);
+        binding.languageModeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (syncingLanguageSelection) {
+                    return;
+                }
+                AppLanguageStore.LanguageMode selectedMode = selectedSpinnerValue(
+                        binding.languageModeSpinner,
+                        AppLanguageStore.LanguageMode.FOLLOW_SYSTEM
+                );
+                if (selectedMode == appLanguageStore.languageMode()) {
+                    return;
+                }
+                appLanguageStore.setLanguageMode(selectedMode);
+                boolean changed = appLanguageStore.applyLanguageMode(selectedMode);
+                if (changed) {
+                    recreate();
+                } else {
+                    refreshUi();
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+    }
+
+    private void bindLanguageModeLabel(View view, @Nullable AppLanguageStore.LanguageMode mode) {
+        if (!(view instanceof TextView)) {
+            return;
+        }
+        ((TextView) view).setText(renderLanguageModeLabel(mode));
     }
 
     private void bindFixedTonePresetLabel(View view, @Nullable FixedToneLearningWindowPreset preset) {
@@ -659,6 +721,7 @@ public final class SettingsActivity extends AppCompatActivity {
         AppOverviewSnapshot overview = localLogRepository.loadOverview();
         boolean showRouteEditorControls = shouldShowRouteEditorControls();
         String catKeyingHint = renderCatKeyingHintText();
+        syncLanguageEditor();
         syncStationProfileEditors(overview);
         syncCwDefaultsEditors();
         syncRouteEditors();
@@ -680,9 +743,12 @@ public final class SettingsActivity extends AppCompatActivity {
         binding.txTemplatesStatusText.setText(renderTxTemplatesEditorStatus());
         binding.routeSettingsStatusText.setText(renderRouteSettingsEditorStatus());
         binding.routeFallbackStatusText.setText(renderRouteFallbackEditorStatus());
+        binding.languageSummaryText.setText(getString(R.string.settings_language_summary));
+        binding.languageStatusText.setText(renderLanguageStatusText());
         setVisibleWhenHasText(binding.stationProfileStatusText);
         setVisibleWhenHasText(binding.cwDefaultsStatusText);
         setVisibleWhenHasText(binding.txTemplatesStatusText);
+        setVisibleWhenHasText(binding.languageStatusText);
         if (showRouteEditorControls) {
             setVisibleWhenHasText(binding.routeSettingsStatusText);
         } else {
@@ -698,6 +764,35 @@ public final class SettingsActivity extends AppCompatActivity {
                 ? R.string.settings_developer_tools_note_visible
                 : R.string.settings_developer_tools_note_hidden);
         syncUsbRouteState();
+    }
+
+    private void syncLanguageEditor() {
+        syncingLanguageSelection = true;
+        selectSpinnerValue(binding.languageModeSpinner, appLanguageStore.languageMode());
+        syncingLanguageSelection = false;
+    }
+
+    private String renderLanguageStatusText() {
+        AppLanguageStore.LanguageMode mode = appLanguageStore.languageMode();
+        if (mode == AppLanguageStore.LanguageMode.FOLLOW_SYSTEM) {
+            return getString(R.string.settings_language_status_follow_system);
+        }
+        return getString(R.string.settings_language_status_selected, renderLanguageModeLabel(mode));
+    }
+
+    private String renderLanguageModeLabel(@Nullable AppLanguageStore.LanguageMode mode) {
+        if (mode == null) {
+            return "";
+        }
+        switch (mode) {
+            case ENGLISH:
+                return getString(R.string.settings_language_english);
+            case SIMPLIFIED_CHINESE:
+                return getString(R.string.settings_language_simplified_chinese);
+            case FOLLOW_SYSTEM:
+            default:
+                return getString(R.string.settings_language_follow_system);
+        }
     }
 
     private void syncRouteEditorHints() {

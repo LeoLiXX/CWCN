@@ -8,6 +8,7 @@ import android.os.Looper;
 
 import androidx.annotation.NonNull;
 
+import org.bi9clt.cwcn.core.app.AppLanguageStore;
 import org.bi9clt.cwcn.ui.operate.OperateActivity;
 
 public final class CwcnApplication extends Application {
@@ -27,6 +28,7 @@ public final class CwcnApplication extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        new AppLanguageStore(this).applyLanguageMode();
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override
             public void onActivityCreated(@NonNull Activity activity, Bundle savedInstanceState) {
