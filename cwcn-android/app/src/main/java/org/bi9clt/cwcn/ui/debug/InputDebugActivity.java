@@ -3336,6 +3336,9 @@ public final class InputDebugActivity extends AppCompatActivity implements RxAud
                 inputHealthSnapshot == null ? "" : AudioInputHealthFormatter.coachHint(inputHealthSnapshot),
                 inputHealthSnapshot != null && inputHealthSnapshot.recentHotFrameRatio() >= 0.50d,
                 inputHealthSnapshot != null && inputHealthSnapshot.recentClippingFrameRatio() >= 0.10d,
+                inputHealthSnapshot == null ? 0 : inputHealthSnapshot.lastPeakAmplitude(),
+                inputHealthSnapshot == null ? 0.0d : inputHealthSnapshot.lastRmsAmplitude(),
+                inputHealthSnapshot == null ? 0.0d : inputHealthSnapshot.lastClippedSampleRatio(),
                 currentTurnDebugSummary(),
                 renderRawCommitGateSummary(),
                 renderExperimentalFrontEndDetail()

@@ -14,6 +14,8 @@ public final class SqlLevelStore {
     private static final String PREFS_NAME = "operate_ui";
     private static final String KEY_SQL_LEVEL = "sql_level";
     private static final String KEY_SQL_DISPLAY_MAX = "sql_display_max";
+    private static final String KEY_SQL_DISPLAY_SCALED = "sql_display_scaled";
+    private static final String KEY_SQL_REFERENCE_TRIM_DB = "sql_reference_trim_db";
 
     private final SharedPreferences preferences;
 
@@ -42,12 +44,108 @@ public final class SqlLevelStore {
         preferences.edit().putInt(KEY_SQL_DISPLAY_MAX, clampDisplayMax(displayMax)).apply();
     }
 
+    public boolean loadDisplayScaled() {
+        return preferences.getBoolean(KEY_SQL_DISPLAY_SCALED, true);
+    }
+
+    public void saveDisplayScaled(boolean displayScaled) {
+        preferences.edit().putBoolean(KEY_SQL_DISPLAY_SCALED, displayScaled).apply();
+    }
+
+    public int loadReferenceTrimDb(int currentTrimDb, int sqlLevel) {
+        if (!preferences.contains(KEY_SQL_REFERENCE_TRIM_DB)) {
+            int inferred = inferReferenceTrimDb(currentTrimDb, sqlLevel);
+            saveReferenceTrimDb(inferred);
+            return inferred;
+        }
+        return RxInputSettingsStore.sanitizeInputTrimDb(
+                preferences.getInt(KEY_SQL_REFERENCE_TRIM_DB, currentTrimDb)
+        );
+    }
+
+    public void saveReferenceTrimDb(int trimDb) {
+        preferences.edit()
+                .putInt(KEY_SQL_REFERENCE_TRIM_DB, RxInputSettingsStore.sanitizeInputTrimDb(trimDb))
+                .apply();
+    }
+
     private int clamp(int sqlLevel) {
         return Math.max(MIN_SQL_LEVEL, Math.min(MAX_SQL_LEVEL, sqlLevel));
     }
 
+    public static int rescaleSqlLevel(int sqlLevel, double oldLinearGain, double newLinearGain) {
+        int clampedSqlLevel = Math.max(MIN_SQL_LEVEL, Math.min(MAX_SQL_LEVEL, sqlLevel));
+        if (oldLinearGain <= 0.0d || newLinearGain <= 0.0d) {
+            return clampedSqlLevel;
+        }
+        double scaled = clampedSqlLevel * (newLinearGain / oldLinearGain);
+        return Math.max(MIN_SQL_LEVEL, Math.min(MAX_SQL_LEVEL, (int) Math.round(scaled)));
+    }
+
     public static int clampDisplayMax(int displayMax) {
         return Math.max(DEFAULT_SQL_DISPLAY_MAX, Math.min(MAX_SQL_LEVEL, displayMax));
+    }
+
+    public static int inferReferenceTrimDb(int currentTrimDb, int sqlLevel) {
+        int sanitizedCurrentTrimDb = RxInputSettingsStore.sanitizeInputTrimDb(currentTrimDb);
+        int clampedSqlLevel = Math.max(MIN_SQL_LEVEL, Math.min(MAX_SQL_LEVEL, sqlLevel));
+        int bestTrimDb = sanitizedCurrentTrimDb;
+        int bestDistance = Math.abs(
+                convertInternalLevelToDisplay(clampedSqlLevel, sanitizedCurrentTrimDb, bestTrimDb)
+                        - DEFAULT_SQL_LEVEL
+        );
+        for (int candidateTrimDb : RxInputSettingsStore.supportedInputTrimDbValues()) {
+            int candidateDisplayLevel = convertInternalLevelToDisplay(
+                    clampedSqlLevel,
+                    sanitizedCurrentTrimDb,
+                    candidateTrimDb
+            );
+            int candidateDistance = Math.abs(candidateDisplayLevel - DEFAULT_SQL_LEVEL);
+            if (candidateDistance < bestDistance) {
+                bestTrimDb = candidateTrimDb;
+                bestDistance = candidateDistance;
+            }
+        }
+        return bestTrimDb;
+    }
+
+    public static int convertInternalLevelToDisplay(
+            int internalLevel,
+            int currentTrimDb,
+            int referenceTrimDb
+    ) {
+        double scaled = convertInternalLevelToDisplay(
+                (double) Math.max(0, internalLevel),
+                currentTrimDb,
+                referenceTrimDb
+        );
+        return Math.max(0, Math.min(MAX_SQL_LEVEL, (int) Math.round(scaled)));
+    }
+
+    public static float convertInternalLevelToDisplay(
+            float internalLevel,
+            int currentTrimDb,
+            int referenceTrimDb
+    ) {
+        return (float) convertInternalLevelToDisplay(
+                (double) Math.max(0.0f, internalLevel),
+                currentTrimDb,
+                referenceTrimDb
+        );
+    }
+
+    public static int convertDisplayLevelToInternal(
+            int displayLevel,
+            int currentTrimDb,
+            int referenceTrimDb
+    ) {
+        double currentGain = RxInputSettingsStore.inputTrimLinearGain(currentTrimDb);
+        double referenceGain = RxInputSettingsStore.inputTrimLinearGain(referenceTrimDb);
+        if (currentGain <= 0.0d || referenceGain <= 0.0d) {
+            return Math.max(MIN_SQL_LEVEL, Math.min(MAX_SQL_LEVEL, displayLevel));
+        }
+        double scaled = Math.max(0, displayLevel) * (currentGain / referenceGain);
+        return Math.max(MIN_SQL_LEVEL, Math.min(MAX_SQL_LEVEL, (int) Math.round(scaled)));
     }
 
     public static int ensureDisplayMaxCoversLevel(int displayMax, int sqlLevel) {
@@ -100,5 +198,18 @@ public final class SqlLevelStore {
             return DEFAULT_SQL_DISPLAY_MAX;
         }
         return clampDisplayMax((int) Math.floor(clampedDisplayMax / SQL_DISPLAY_SCALE_FACTOR));
+    }
+
+    private static double convertInternalLevelToDisplay(
+            double internalLevel,
+            int currentTrimDb,
+            int referenceTrimDb
+    ) {
+        double currentGain = RxInputSettingsStore.inputTrimLinearGain(currentTrimDb);
+        double referenceGain = RxInputSettingsStore.inputTrimLinearGain(referenceTrimDb);
+        if (currentGain <= 0.0d || referenceGain <= 0.0d) {
+            return internalLevel;
+        }
+        return internalLevel * (referenceGain / currentGain);
     }
 }

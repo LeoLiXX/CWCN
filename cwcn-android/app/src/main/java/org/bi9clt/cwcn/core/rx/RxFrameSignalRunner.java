@@ -88,21 +88,30 @@ public final class RxFrameSignalRunner {
             @Nullable AudioFrame frame,
             long nullFrameTimestampFallbackMs
     ) {
-        if (frame == null || signalProcessor == null) {
+        return processFrame(frame, frame, nullFrameTimestampFallbackMs);
+    }
+
+    @Nullable
+    public Result processFrame(
+            @Nullable AudioFrame rawFrame,
+            @Nullable AudioFrame analysisFrame,
+            long nullFrameTimestampFallbackMs
+    ) {
+        if (analysisFrame == null || signalProcessor == null) {
             return null;
         }
-        if (inputHealthTracker != null) {
-            inputHealthTracker.process(frame);
+        if (inputHealthTracker != null && rawFrame != null) {
+            inputHealthTracker.process(rawFrame);
         }
         AudioInputHealthSnapshot inputHealthSnapshot = inputHealthTracker == null
                 ? null
                 : inputHealthTracker.snapshot();
         CwSignalSnapshot signalSnapshotBeforeProcess = signalProcessor.snapshot();
         long frameEndTimestampMs = RxPendingCharacterFlushDecider.resolveFrameEndTimestampMs(
-                frame,
+                analysisFrame,
                 nullFrameTimestampFallbackMs
         );
-        List<CwToneEvent> toneEvents = signalProcessor.process(frame);
+        List<CwToneEvent> toneEvents = signalProcessor.process(analysisFrame);
         return new Result(
                 frameEndTimestampMs,
                 inputHealthSnapshot,

@@ -13,6 +13,9 @@ public final class RxInputSettingsStore {
     private static final String KEY_MIC_SOURCE_MODE = "mic_source_mode";
     private static final String KEY_RX_TONE_MODE = "rx_tone_mode";
     private static final String KEY_FIXED_TONE_LEARNING_WINDOW_HZ = "fixed_tone_learning_window_hz";
+    private static final String KEY_INPUT_TRIM_DB = "input_trim_db";
+    public static final int DEFAULT_INPUT_TRIM_DB = 0;
+    private static final int[] SUPPORTED_INPUT_TRIM_DB_VALUES = new int[] {0, -6, -12, -18};
 
     public enum RxInputMode {
         AUTO(
@@ -186,6 +189,38 @@ public final class RxInputSettingsStore {
                         org.bi9clt.cwcn.core.signal.CwSignalProcessor.clampFixedToneLearningWindowHz(windowHz)
                 )
                 .apply();
+    }
+
+    public int inputTrimDb() {
+        return sanitizeInputTrimDb(preferences.getInt(KEY_INPUT_TRIM_DB, DEFAULT_INPUT_TRIM_DB));
+    }
+
+    public void setInputTrimDb(int trimDb) {
+        preferences.edit()
+                .putInt(KEY_INPUT_TRIM_DB, sanitizeInputTrimDb(trimDb))
+                .apply();
+    }
+
+    public static int sanitizeInputTrimDb(int trimDb) {
+        int closest = SUPPORTED_INPUT_TRIM_DB_VALUES[0];
+        int closestDistance = Math.abs(trimDb - closest);
+        for (int value : SUPPORTED_INPUT_TRIM_DB_VALUES) {
+            int distance = Math.abs(trimDb - value);
+            if (distance < closestDistance) {
+                closest = value;
+                closestDistance = distance;
+            }
+        }
+        return closest;
+    }
+
+    public static int[] supportedInputTrimDbValues() {
+        return SUPPORTED_INPUT_TRIM_DB_VALUES.clone();
+    }
+
+    public static double inputTrimLinearGain(int trimDb) {
+        int sanitized = sanitizeInputTrimDb(trimDb);
+        return Math.pow(10.0d, sanitized / 20.0d);
     }
 
     private <T extends Enum<T>> T parseMode(String stored, T fallback, Class<T> enumType) {

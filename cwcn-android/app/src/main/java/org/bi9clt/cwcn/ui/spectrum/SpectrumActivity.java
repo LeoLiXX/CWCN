@@ -9,6 +9,7 @@ import android.view.View;
 import android.widget.SeekBar;
 
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.bi9clt.cwcn.R;
@@ -21,6 +22,7 @@ import org.bi9clt.cwcn.core.rig.RigProfile;
 import org.bi9clt.cwcn.core.rig.RigProfileSettings;
 import org.bi9clt.cwcn.core.rig.RigSelectionStore;
 import org.bi9clt.cwcn.core.spectrum.SpectrumHistoryStore;
+import org.bi9clt.cwcn.core.spectrum.SqlObservationFormatter;
 import org.bi9clt.cwcn.core.spectrum.SpectrumSnapshotData;
 import org.bi9clt.cwcn.core.spectrum.SqlThresholdAdvisor;
 import org.bi9clt.cwcn.databinding.ActivitySpectrumBinding;
@@ -51,6 +53,10 @@ public final class SpectrumActivity extends AppCompatActivity {
     private int manualFocusFrequencyHz = -1;
     private int sqlLevel = SqlLevelStore.DEFAULT_SQL_LEVEL;
     private int sqlDisplayMax = SqlLevelStore.DEFAULT_SQL_DISPLAY_MAX;
+    private int inputTrimDb = RxInputSettingsStore.DEFAULT_INPUT_TRIM_DB;
+    private int sqlReferenceTrimDb = RxInputSettingsStore.DEFAULT_INPUT_TRIM_DB;
+    private boolean sqlDisplayScaled = true;
+    private boolean suppressSqlDisplayScaledCallback;
     private boolean suppressSqlSeekbarCallback;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Runnable liveRefreshRunnable = new Runnable() {
@@ -73,6 +79,9 @@ public final class SpectrumActivity extends AppCompatActivity {
         spectrumHistoryStore = new SpectrumHistoryStore(this);
         sqlLevel = sqlLevelStore.load();
         sqlDisplayMax = sqlLevelStore.loadDisplayMax(sqlLevel);
+        syncInputTrimFromSettings();
+        sqlDisplayScaled = sqlLevelStore.loadDisplayScaled();
+        sqlReferenceTrimDb = sqlLevelStore.loadReferenceTrimDb(inputTrimDb, sqlLevel);
         binding.rulerFrequencyView.setMaxFrequencyHz(DISPLAY_MAX_FREQUENCY_HZ);
         binding.columnarView.setMaxFrequencyHz(DISPLAY_MAX_FREQUENCY_HZ);
         binding.waterfallView.setMaxFrequencyHz(DISPLAY_MAX_FREQUENCY_HZ);
@@ -84,6 +93,11 @@ public final class SpectrumActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         OperateActivity.requestSharedOperateRxResume();
+        syncInputTrimFromSettings();
+        sqlDisplayScaled = sqlLevelStore == null ? true : sqlLevelStore.loadDisplayScaled();
+        sqlReferenceTrimDb = sqlLevelStore == null
+                ? inputTrimDb
+                : sqlLevelStore.loadReferenceTrimDb(inputTrimDb, sqlLevel);
         refreshUi();
         mainHandler.removeCallbacks(liveRefreshRunnable);
         mainHandler.postDelayed(liveRefreshRunnable, LIVE_SPECTRUM_REFRESH_INTERVAL_MS);
@@ -145,6 +159,8 @@ public final class SpectrumActivity extends AppCompatActivity {
         binding.spectrumStatusMainText.setText(renderStatusMain(snapshot, profile, latestSpectrum));
         binding.spectrumStatusDetailText.setText(renderStatusDetail(snapshot, spectrumHistory, latestSpectrum));
         binding.spectrumSqlValueText.setText(renderSqlValue(latestSpectrum));
+        binding.spectrumTrimChip.setText(renderInputTrimChipText());
+        syncSqlDisplayScaledSwitch();
         binding.spectrumSqlDetailText.setText(renderSqlDetail(latestSpectrum));
         binding.spectrumSqlHintText.setText(renderSqlHint(latestSpectrum));
         String summaryText = renderSummary(snapshot, latestSpectrum);
@@ -155,9 +171,10 @@ public final class SpectrumActivity extends AppCompatActivity {
         binding.emptySpectrumStateText.setText(latestSpectrum == null ? "Waiting for live spectrum" : "");
         binding.emptySpectrumStateText.setVisibility(latestSpectrum == null ? View.VISIBLE : View.GONE);
         syncSqlSeekBarRange();
-        if (binding.spectrumSqlSeekBar.getProgress() != sqlLevel) {
+        int displayedSqlLevel = resolveDisplayedSqlLevel(sqlLevel);
+        if (binding.spectrumSqlSeekBar.getProgress() != displayedSqlLevel) {
             suppressSqlSeekbarCallback = true;
-            binding.spectrumSqlSeekBar.setProgress(sqlLevel);
+            binding.spectrumSqlSeekBar.setProgress(displayedSqlLevel);
             suppressSqlSeekbarCallback = false;
         }
 
@@ -202,20 +219,32 @@ public final class SpectrumActivity extends AppCompatActivity {
 
     private void setupSqlControls() {
         syncSqlSeekBarRange();
-        binding.spectrumSqlSeekBar.setProgress(sqlLevel);
+        binding.spectrumSqlSeekBar.setProgress(resolveDisplayedSqlLevel(sqlLevel));
         binding.spectrumSqlValueText.setText(renderSqlValue(null));
+        binding.spectrumTrimChip.setText(renderInputTrimChipText());
+        syncSqlDisplayScaledSwitch();
+        binding.spectrumTrimChip.setOnClickListener(view -> openInputTrimPicker());
+        binding.spectrumSqlDisplayScaledSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (suppressSqlDisplayScaledCallback) {
+                return;
+            }
+            applySqlDisplayScaledSelection(isChecked);
+        });
+        binding.spectrumObservationChip.setOnClickListener(view -> showSqlObservationDialog());
         binding.spectrumSqlSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (!fromUser || suppressSqlSeekbarCallback) {
                     return;
                 }
-                sqlLevel = clampSqlThreshold(progress);
+                sqlReferenceTrimDb = inputTrimDb;
+                sqlLevel = resolveInternalSqlLevelFromDisplayed(progress);
                 binding.spectrumSqlValueText.setText(renderSqlValue(latestSpectrum(loadSpectrumHistory(rxSessionStore.load()))));
                 if (sqlLevelStore != null) {
                     sqlLevelStore.save(sqlLevel);
+                    sqlLevelStore.saveReferenceTrimDb(sqlReferenceTrimDb);
                 }
-                OperateActivity.requestSharedOperateSqlUpdate(sqlLevel);
+                OperateActivity.requestSharedOperateSqlUpdate(sqlLevel, sqlReferenceTrimDb);
             }
 
             @Override
@@ -237,13 +266,14 @@ public final class SpectrumActivity extends AppCompatActivity {
                 sqlLevelStore.saveDisplayMax(sqlDisplayMax);
             }
         }
-        if (binding.spectrumSqlSeekBar.getMax() != sqlDisplayMax) {
-            binding.spectrumSqlSeekBar.setMax(sqlDisplayMax);
+        int displayedSqlDisplayMax = resolveDisplayedSqlDisplayMax();
+        if (binding.spectrumSqlSeekBar.getMax() != displayedSqlDisplayMax) {
+            binding.spectrumSqlSeekBar.setMax(displayedSqlDisplayMax);
         }
     }
 
     private void updateSqlDisplayMaxAfterRelease(int releasedProgress) {
-        int releasedSqlLevel = clampSqlThreshold(releasedProgress);
+        int releasedSqlLevel = resolveInternalSqlLevelFromDisplayed(releasedProgress);
         int adjustedDisplayMax = SqlLevelStore.adjustDisplayMaxForReleasedLevel(sqlDisplayMax, releasedSqlLevel);
         if (adjustedDisplayMax == sqlDisplayMax) {
             return;
@@ -254,8 +284,135 @@ public final class SpectrumActivity extends AppCompatActivity {
         }
         syncSqlSeekBarRange();
         suppressSqlSeekbarCallback = true;
-        binding.spectrumSqlSeekBar.setProgress(sqlLevel);
+        binding.spectrumSqlSeekBar.setProgress(resolveDisplayedSqlLevel(sqlLevel));
         suppressSqlSeekbarCallback = false;
+    }
+
+    private void syncInputTrimFromSettings() {
+        inputTrimDb = rxInputSettingsStore == null
+                ? RxInputSettingsStore.DEFAULT_INPUT_TRIM_DB
+                : rxInputSettingsStore.inputTrimDb();
+    }
+
+    private int resolveDisplayedSqlLevel(int internalSqlLevel) {
+        if (!sqlDisplayScaled) {
+            return Math.max(0, Math.min(SqlLevelStore.MAX_SQL_LEVEL, internalSqlLevel));
+        }
+        return SqlLevelStore.convertInternalLevelToDisplay(
+                internalSqlLevel,
+                inputTrimDb,
+                sqlReferenceTrimDb
+        );
+    }
+
+    private float resolveDisplayedSqlLevel(float internalSqlLevel) {
+        if (!sqlDisplayScaled) {
+            return Math.max(0.0f, internalSqlLevel);
+        }
+        return SqlLevelStore.convertInternalLevelToDisplay(
+                internalSqlLevel,
+                inputTrimDb,
+                sqlReferenceTrimDb
+        );
+    }
+
+    private int resolveInternalSqlLevelFromDisplayed(int displayedSqlLevel) {
+        int clampedDisplayedSqlLevel = Math.max(
+                SqlLevelStore.MIN_SQL_LEVEL,
+                Math.min(SqlLevelStore.MAX_SQL_LEVEL, displayedSqlLevel)
+        );
+        if (!sqlDisplayScaled) {
+            return clampSqlThreshold(clampedDisplayedSqlLevel);
+        }
+        return SqlLevelStore.convertDisplayLevelToInternal(
+                clampedDisplayedSqlLevel,
+                inputTrimDb,
+                sqlReferenceTrimDb
+        );
+    }
+
+    private int resolveDisplayedSqlDisplayMax() {
+        int displayedMax = resolveDisplayedSqlLevel(sqlDisplayMax);
+        return Math.max(SqlLevelStore.DEFAULT_SQL_DISPLAY_MAX, displayedMax);
+    }
+
+    private void syncSqlDisplayScaledSwitch() {
+        suppressSqlDisplayScaledCallback = true;
+        binding.spectrumSqlDisplayScaledSwitch.setChecked(sqlDisplayScaled);
+        suppressSqlDisplayScaledCallback = false;
+    }
+
+    private void applySqlDisplayScaledSelection(boolean displayScaled) {
+        if (sqlDisplayScaled == displayScaled) {
+            return;
+        }
+        sqlDisplayScaled = displayScaled;
+        if (sqlLevelStore != null) {
+            sqlLevelStore.saveDisplayScaled(sqlDisplayScaled);
+            sqlLevelStore.saveReferenceTrimDb(sqlReferenceTrimDb);
+        }
+        refreshUi();
+    }
+
+    private String renderInputTrimChipText() {
+        return getString(R.string.sql_trim_chip, formatTrimDb(inputTrimDb));
+    }
+
+    private String formatTrimDb(int trimDb) {
+        return String.format(Locale.US, "%d dB", RxInputSettingsStore.sanitizeInputTrimDb(trimDb));
+    }
+
+    private void openInputTrimPicker() {
+        int[] supportedTrimValues = RxInputSettingsStore.supportedInputTrimDbValues();
+        String[] displayItems = new String[supportedTrimValues.length];
+        int checkedItem = 0;
+        for (int index = 0; index < supportedTrimValues.length; index++) {
+            int value = supportedTrimValues[index];
+            displayItems[index] = formatTrimDb(value);
+            if (value == inputTrimDb) {
+                checkedItem = index;
+            }
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.sql_trim_dialog_title)
+                .setSingleChoiceItems(displayItems, checkedItem, (dialog, which) -> {
+                    if (which >= 0 && which < supportedTrimValues.length) {
+                        applyInputTrimSelection(supportedTrimValues[which]);
+                    }
+                    dialog.dismiss();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void applyInputTrimSelection(int requestedTrimDb) {
+        int sanitizedTrimDb = RxInputSettingsStore.sanitizeInputTrimDb(requestedTrimDb);
+        if (sanitizedTrimDb == inputTrimDb) {
+            return;
+        }
+        double oldLinearGain = RxInputSettingsStore.inputTrimLinearGain(inputTrimDb);
+        double newLinearGain = RxInputSettingsStore.inputTrimLinearGain(sanitizedTrimDb);
+        inputTrimDb = sanitizedTrimDb;
+        if (rxInputSettingsStore != null) {
+            rxInputSettingsStore.setInputTrimDb(inputTrimDb);
+        }
+        sqlLevel = clampSqlThreshold(SqlLevelStore.rescaleSqlLevel(sqlLevel, oldLinearGain, newLinearGain));
+        sqlDisplayMax = SqlLevelStore.ensureDisplayMaxCoversLevel(sqlDisplayMax, sqlLevel);
+        if (sqlLevelStore != null) {
+            sqlLevelStore.save(sqlLevel);
+            sqlLevelStore.saveDisplayMax(sqlDisplayMax);
+        }
+        OperateActivity.requestSharedOperateInputTrimUpdate(
+                inputTrimDb,
+                sqlLevel,
+                sqlDisplayMax,
+                sqlReferenceTrimDb
+        );
+        suppressSqlSeekbarCallback = true;
+        syncSqlSeekBarRange();
+        binding.spectrumSqlSeekBar.setProgress(resolveDisplayedSqlLevel(sqlLevel));
+        suppressSqlSeekbarCallback = false;
+        refreshUi();
     }
 
     private void applyFocusFrequency(int focusFrequencyHz, int autoTrackedFrequencyHz) {
@@ -391,28 +548,32 @@ public final class SpectrumActivity extends AppCompatActivity {
         }
         SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(latestSpectrum);
         binding.spectrumSqlMeterView.setLevels(
-                latestSpectrum.sqlFrameRmsAmplitude(),
-                latestSpectrum.sqlToneRmsAmplitude(),
-                latestSpectrum.sqlNoiseFloorEstimate(),
-                latestSpectrum.sqlAttackThreshold(),
-                latestSpectrum.sqlReleaseThreshold(),
+                resolveDisplayedSqlLevel(latestSpectrum.sqlFrameRmsAmplitude()),
+                resolveDisplayedSqlLevel(latestSpectrum.sqlToneRmsAmplitude()),
+                resolveDisplayedSqlLevel((float) latestSpectrum.sqlNoiseFloorEstimate()),
+                resolveDisplayedSqlLevel(latestSpectrum.sqlAttackThreshold()),
+                resolveDisplayedSqlLevel((float) latestSpectrum.sqlReleaseThreshold()),
                 latestSpectrum.sqlRecommendedThreshold() > 0
-                        ? latestSpectrum.sqlRecommendedThreshold()
-                        : (recommendation.available() ? recommendation.recommendedThresholdLevel() : 0f)
+                        ? resolveDisplayedSqlLevel(latestSpectrum.sqlRecommendedThreshold())
+                        : (recommendation.available()
+                        ? resolveDisplayedSqlLevel((float) recommendation.recommendedThresholdLevel())
+                        : 0f)
         );
     }
 
     private String renderSqlValue(@Nullable SpectrumSnapshotData latestSpectrum) {
-        return "SQL " + sqlLevel;
+        return "SQL " + resolveDisplayedSqlLevel(sqlLevel);
     }
 
     private String renderSqlDetail(@Nullable SpectrumSnapshotData latestSpectrum) {
         if (latestSpectrum == null || latestSpectrum.sqlAttackThreshold() <= 0) {
             return "MAN -  |  IN -  |  REC -";
         }
-        int threshold = latestSpectrum.sqlAttackThreshold();
-        int current = Math.round(latestSpectrum.sqlFrameRmsAmplitude());
-        int recommendation = latestSpectrum.sqlRecommendedThreshold();
+        int threshold = resolveDisplayedSqlLevel(latestSpectrum.sqlAttackThreshold());
+        int current = resolveDisplayedSqlLevel(Math.round(latestSpectrum.sqlFrameRmsAmplitude()));
+        int recommendation = latestSpectrum.sqlRecommendedThreshold() > 0
+                ? resolveDisplayedSqlLevel(latestSpectrum.sqlRecommendedThreshold())
+                : 0;
         StringBuilder builder = new StringBuilder();
         builder.append("MAN ").append(threshold)
                 .append("  |  IN ").append(current);
@@ -432,8 +593,10 @@ public final class SpectrumActivity extends AppCompatActivity {
         float toneLevel = latestSpectrum.sqlToneRmsAmplitude();
         int threshold = latestSpectrum.sqlAttackThreshold();
         int noise = latestSpectrum.sqlNoiseFloorEstimate();
-        int delta = Math.round(frameLevel) - threshold;
-        int toneDelta = Math.round(toneLevel) - threshold;
+        int delta = resolveDisplayedSqlLevel(Math.round(frameLevel))
+                - resolveDisplayedSqlLevel(threshold);
+        int toneDelta = resolveDisplayedSqlLevel(Math.round(toneLevel))
+                - resolveDisplayedSqlLevel(threshold);
         String recommendationSuffix = latestSpectrum.sqlRecommendedThreshold() > 0
                 ? buildSqlRecommendationHintSuffix(latestSpectrum)
                 : "";
@@ -452,6 +615,92 @@ public final class SpectrumActivity extends AppCompatActivity {
         return getString(R.string.sql_hint_input_above, Math.abs(delta), recommendationSuffix);
     }
 
+    private void showSqlObservationDialog() {
+        RxSessionSnapshot snapshot = rxSessionStore.load();
+        SpectrumSnapshotData latestSpectrum = latestSpectrum(loadSpectrumHistory(snapshot));
+        boolean hasRawObservation = snapshot != null;
+        String message;
+        if (latestSpectrum == null && !hasRawObservation) {
+            message = getString(R.string.sql_observation_empty);
+        } else {
+            int trimDb = rxInputSettingsStore == null
+                    ? RxInputSettingsStore.DEFAULT_INPUT_TRIM_DB
+                    : rxInputSettingsStore.inputTrimDb();
+            StringBuilder builder = new StringBuilder();
+            builder.append(getString(R.string.sql_observation_section_raw))
+                    .append("\n")
+                    .append(renderRawObservationLevels(snapshot))
+                    .append("\n")
+                    .append(renderRawObservationHealth(snapshot));
+            String warningText = renderRawInputWarning(snapshot);
+            if (hasMeaningfulText(warningText)) {
+                builder.append("\n").append(warningText);
+            }
+            builder.append("\n\n")
+                    .append(getString(R.string.sql_observation_section_analysis))
+                    .append("\n")
+                    .append(getString(R.string.sql_observation_line_trim, formatTrimDb(trimDb)));
+            if (latestSpectrum == null) {
+                builder.append("\n").append(getString(R.string.sql_observation_empty));
+            } else {
+                int displayReferenceTrimDb = sqlDisplayScaled ? sqlReferenceTrimDb : inputTrimDb;
+                builder.append("\n")
+                        .append(SqlObservationFormatter.renderDetail(
+                                latestSpectrum,
+                                sqlLevel,
+                                displayReferenceTrimDb,
+                                inputTrimDb
+                        ))
+                        .append("\n")
+                        .append(SqlObservationFormatter.renderHint(
+                                latestSpectrum,
+                                sqlLevel,
+                                displayReferenceTrimDb,
+                                inputTrimDb
+                        ));
+            }
+            message = builder.toString();
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.sql_observation_title)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    private String renderRawObservationLevels(@Nullable RxSessionSnapshot snapshot) {
+        if (snapshot == null) {
+            return getString(R.string.sql_observation_line_raw_levels_empty);
+        }
+        return getString(
+                R.string.sql_observation_line_raw_levels,
+                snapshot.rawInputPeakAmplitude(),
+                snapshot.rawInputRmsAmplitude(),
+                Math.round(snapshot.rawInputClippedSampleRatio() * 100.0d)
+        );
+    }
+
+    private String renderRawObservationHealth(@Nullable RxSessionSnapshot snapshot) {
+        String label = snapshot == null ? "" : snapshot.inputHealthLabel();
+        return getString(
+                R.string.sql_observation_line_health,
+                hasMeaningfulText(label) ? label : "-"
+        );
+    }
+
+    private String renderRawInputWarning(@Nullable RxSessionSnapshot snapshot) {
+        if (snapshot == null) {
+            return "";
+        }
+        if (snapshot.inputLevelClipping()) {
+            return getString(R.string.sql_input_warning_clipping);
+        }
+        if (snapshot.inputLevelHot()) {
+            return getString(R.string.sql_input_warning_hot);
+        }
+        return "";
+    }
+
     private int clampSqlThreshold(int threshold) {
         return Math.max(SqlLevelStore.MIN_SQL_LEVEL, Math.min(SqlLevelStore.MAX_SQL_LEVEL, threshold));
     }
@@ -460,8 +709,8 @@ public final class SpectrumActivity extends AppCompatActivity {
         StringBuilder builder = new StringBuilder();
         builder.append(getString(
                 R.string.sql_hint_recommendation_base,
-                snapshotData.sqlRecommendedThreshold(),
-                snapshotData.sqlNoiseFloorEstimate()
+                resolveDisplayedSqlLevel(snapshotData.sqlRecommendedThreshold()),
+                resolveDisplayedSqlLevel(snapshotData.sqlNoiseFloorEstimate())
         ));
         SqlThresholdAdvisor.Recommendation recommendation = SqlThresholdAdvisor.recommend(snapshotData);
         if (recommendation.limitedBySafetyFloor()) {

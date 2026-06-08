@@ -40,6 +40,9 @@ public final class RxSessionStore {
             object.put("inputHealthHint", snapshot.inputHealthHint());
             object.put("inputLevelHot", snapshot.inputLevelHot());
             object.put("inputLevelClipping", snapshot.inputLevelClipping());
+            object.put("rawInputPeakAmplitude", snapshot.rawInputPeakAmplitude());
+            object.put("rawInputRmsAmplitude", snapshot.rawInputRmsAmplitude());
+            object.put("rawInputClippedSampleRatio", snapshot.rawInputClippedSampleRatio());
             object.put("currentTurnSummary", snapshot.currentTurnSummary());
             object.put("rawGateSummary", snapshot.rawGateSummary());
             object.put("developerFrontEndSummary", snapshot.developerFrontEndSummary());
@@ -74,6 +77,9 @@ public final class RxSessionStore {
                     object.optString("inputHealthHint", ""),
                     object.optBoolean("inputLevelHot", false),
                     object.optBoolean("inputLevelClipping", false),
+                    object.optInt("rawInputPeakAmplitude", 0),
+                    object.optDouble("rawInputRmsAmplitude", 0.0d),
+                    object.optDouble("rawInputClippedSampleRatio", 0.0d),
                     object.optString("currentTurnSummary", ""),
                     object.optString("rawGateSummary", ""),
                     object.optString("developerFrontEndSummary", "")

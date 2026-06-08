@@ -18,6 +18,9 @@ public final class RxSessionSnapshot {
     private final String inputHealthHint;
     private final boolean inputLevelHot;
     private final boolean inputLevelClipping;
+    private final int rawInputPeakAmplitude;
+    private final double rawInputRmsAmplitude;
+    private final double rawInputClippedSampleRatio;
     private final String currentTurnSummary;
     private final String rawGateSummary;
     private final String developerFrontEndSummary;
@@ -40,6 +43,9 @@ public final class RxSessionSnapshot {
             String inputHealthHint,
             boolean inputLevelHot,
             boolean inputLevelClipping,
+            int rawInputPeakAmplitude,
+            double rawInputRmsAmplitude,
+            double rawInputClippedSampleRatio,
             String currentTurnSummary,
             String rawGateSummary,
             String developerFrontEndSummary
@@ -61,6 +67,9 @@ public final class RxSessionSnapshot {
         this.inputHealthHint = safeText(inputHealthHint);
         this.inputLevelHot = inputLevelHot;
         this.inputLevelClipping = inputLevelClipping;
+        this.rawInputPeakAmplitude = Math.max(0, rawInputPeakAmplitude);
+        this.rawInputRmsAmplitude = Math.max(0.0d, rawInputRmsAmplitude);
+        this.rawInputClippedSampleRatio = Math.max(0.0d, Math.min(1.0d, rawInputClippedSampleRatio));
         this.currentTurnSummary = safeText(currentTurnSummary);
         this.rawGateSummary = safeText(rawGateSummary);
         this.developerFrontEndSummary = safeText(developerFrontEndSummary);
@@ -153,6 +162,18 @@ public final class RxSessionSnapshot {
 
     public boolean inputLevelClipping() {
         return inputLevelClipping;
+    }
+
+    public int rawInputPeakAmplitude() {
+        return rawInputPeakAmplitude;
+    }
+
+    public double rawInputRmsAmplitude() {
+        return rawInputRmsAmplitude;
+    }
+
+    public double rawInputClippedSampleRatio() {
+        return rawInputClippedSampleRatio;
     }
 
     public String currentTurnSummary() {
