@@ -1,0 +1,4 @@
+cwcnReleaseStoreFile=keystore/cwcn-release.jks
+cwcnReleaseStorePassword=CHANGE_ME
+cwcnReleaseKeyAlias=cwcn-release
+cwcnReleaseKeyPassword=CHANGE_ME

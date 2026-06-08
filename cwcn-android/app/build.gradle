@@ -1,8 +1,50 @@
+import java.util.Properties
+import java.util.Locale
+
 plugins {
     id 'com.android.application'
 }
 
 def cwcnBuildTime = new Date().format("yyyy-MM-dd HH:mm:ss Z")
+def releaseSigningProperties = new Properties()
+def releaseSigningPropertiesFile = rootProject.file("release-signing.properties")
+if (releaseSigningPropertiesFile.exists()) {
+    releaseSigningPropertiesFile.withInputStream { stream ->
+        releaseSigningProperties.load(stream)
+    }
+}
+
+def readReleaseSigningValue = { String propertyName, String envName ->
+    def projectValue = project.findProperty(propertyName)
+    if (projectValue != null && projectValue.toString().trim()) {
+        return projectValue.toString().trim()
+    }
+    def envValue = System.getenv(envName)
+    if (envValue != null && envValue.toString().trim()) {
+        return envValue.toString().trim()
+    }
+    def fileValue = releaseSigningProperties.getProperty(propertyName)
+    if (fileValue != null && fileValue.toString().trim()) {
+        return fileValue.toString().trim()
+    }
+    return null
+}
+
+def releaseStoreFilePath = readReleaseSigningValue("cwcnReleaseStoreFile", "CWCN_RELEASE_STORE_FILE")
+def releaseStorePassword = readReleaseSigningValue("cwcnReleaseStorePassword", "CWCN_RELEASE_STORE_PASSWORD")
+def releaseKeyAlias = readReleaseSigningValue("cwcnReleaseKeyAlias", "CWCN_RELEASE_KEY_ALIAS")
+def releaseKeyPassword = readReleaseSigningValue("cwcnReleaseKeyPassword", "CWCN_RELEASE_KEY_PASSWORD")
+def hasFormalReleaseSigning = [
+        releaseStoreFilePath,
+        releaseStorePassword,
+        releaseKeyAlias,
+        releaseKeyPassword
+].every { value -> value != null && value.toString().trim() }
+def allowDebugReleaseSigning = (
+        project.findProperty("cwcnUseDebugReleaseSigning")
+                ?: System.getenv("CWCN_USE_DEBUG_RELEASE_SIGNING")
+                ?: "false"
+).toString().toBoolean()
 
 configurations.configureEach {
     exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
@@ -12,6 +54,19 @@ configurations.configureEach {
 android {
     namespace 'org.bi9clt.cwcn'
     compileSdk 33
+
+    signingConfigs {
+        release {
+            if (hasFormalReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            } else if (allowDebugReleaseSigning) {
+                initWith signingConfigs.debug
+            }
+        }
+    }
 
     defaultConfig {
         applicationId "org.bi9clt.cwcn"
@@ -31,6 +86,9 @@ android {
             versionNameSuffix "-debug"
         }
         release {
+            if (hasFormalReleaseSigning || allowDebugReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -50,6 +108,22 @@ android {
         variant.outputs.all { output ->
             outputFileName = "cwcn-${variant.buildType.name}.apk"
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    boolean runningReleaseTask = graph.allTasks.any { task ->
+        String taskName = task.name == null ? "" : task.name.toLowerCase(Locale.US)
+        taskName.contains("release")
+    }
+    if (runningReleaseTask && !hasFormalReleaseSigning && !allowDebugReleaseSigning) {
+        throw new GradleException(
+                "Formal release signing is not configured. " +
+                        "Provide cwcnReleaseStoreFile / cwcnReleaseStorePassword / " +
+                        "cwcnReleaseKeyAlias / cwcnReleaseKeyPassword via " +
+                        "cwcn-android/release-signing.properties or environment variables. " +
+                        "For local test-only release builds, pass -PcwcnUseDebugReleaseSigning=true."
+        )
     }
 }
 

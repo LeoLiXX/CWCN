@@ -9,6 +9,10 @@
 /cwcn-android/app/build/
 /cwcn-android/app/cwcn-android/
 /cwcn-android/local.properties
+/cwcn-android/release-signing.properties
+/cwcn-android/*.jks
+/cwcn-android/*.keystore
+/cwcn-android/keystore/
 
 # Local RX/developer probe artifacts produced in cwcn-android root.
 /cwcn-android/*.log
